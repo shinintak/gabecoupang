@@ -316,24 +316,24 @@ body{padding:0!important;overflow:hidden;}
       <div id="outgoing-stats" style="display:flex;gap:12px;margin-bottom:8px;flex-wrap:wrap;"></div>
       <input id="outgoing-search" oninput="renderOutgoingTable()" placeholder="발주번호 · SKU ID · SKU 이름 · 날짜 검색..."
         style="width:100%;box-sizing:border-box;padding:6px 10px;font-size:12px;border:1px solid #E0E5FF;border-radius:6px;margin-bottom:8px;outline:none;">
-      <div class="tbl-scroll">
+      <div class="tbl-scroll" id="outgoing-tbl-scroll" style="max-height:calc(100vh - 290px);overflow-y:auto;">
         <table id="outgoing-tbl" style="font-size:11px;width:100%;table-layout:fixed;">
           <thead>
             <tr>
-              <th style="width:70px;text-align:center;">발주수</th>
-              <th style="width:100px;">SKU ID</th>
-              <th style="width:460px;">SKU 이름</th>
-              <th style="width:100px;">입고예정일</th>
-              <th style="width:75px;text-align:right;">수량(합계)</th>
-              <th style="width:110px;text-align:right;cursor:pointer;user-select:none;" onclick="toggleRemSort()">잔여수량<br><span style="font-weight:400;font-size:11px;">(PDA-발주)</span> <span id="rem-sort-icon" style="font-size:11px;color:#A0AEC0;">⇅</span></th>
-              <th style="width:90px;text-align:center;">마케팅1<button id="mkt1-filter-btn" onclick="toggleMktFilter(event,'mkt1')" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#A0AEC0;padding:0;">▼</button></th>
-              <th style="width:90px;text-align:center;">마케팅2<button id="mkt2-filter-btn" onclick="toggleMktFilter(event,'mkt2')" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#A0AEC0;padding:0;">▼</button></th>
+              <th style="width:70px;text-align:center;position:sticky;top:0;z-index:10;cursor:pointer;" onclick="toggleOutSort('pos')">발주수 <span id="sort-icon-pos" style="font-size:10px;color:#A0AEC0;">⇅</span></th>
+              <th style="width:100px;position:sticky;top:0;z-index:10;cursor:pointer;" onclick="toggleOutSort('skuId')">SKU ID <span id="sort-icon-skuId" style="font-size:10px;color:#A0AEC0;">⇅</span></th>
+              <th style="width:460px;position:sticky;top:0;z-index:10;cursor:pointer;" onclick="toggleOutSort('skuName')">SKU 이름 <span id="sort-icon-skuName" style="font-size:10px;color:#A0AEC0;">⇅</span></th>
+              <th style="width:100px;text-align:right;position:sticky;top:0;z-index:10;cursor:pointer;" onclick="toggleOutSort('date')">입고예정일 <span id="sort-icon-date" style="font-size:10px;color:#A0AEC0;">⇅</span></th>
+              <th style="width:75px;text-align:right;position:sticky;top:0;z-index:10;cursor:pointer;" onclick="toggleOutSort('qty')">수량(합계) <span id="sort-icon-qty" style="font-size:10px;color:#A0AEC0;">⇅</span></th>
+              <th style="width:110px;text-align:right;cursor:pointer;user-select:none;position:sticky;top:0;z-index:10;" onclick="toggleOutSort('rem')">잔여수량<br><span style="font-weight:400;font-size:11px;">(PDA-발주)</span> <span id="sort-icon-rem" style="font-size:10px;color:#A0AEC0;">⇅</span></th>
+              <th style="width:90px;text-align:center;position:sticky;top:0;z-index:10;">마케팅1<button id="mkt1-filter-btn" onclick="toggleMktFilter(event,'mkt1')" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#A0AEC0;padding:0;">▼</button></th>
+              <th style="width:90px;text-align:center;position:sticky;top:0;z-index:10;">마케팅2<button id="mkt2-filter-btn" onclick="toggleMktFilter(event,'mkt2')" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#A0AEC0;padding:0;">▼</button></th>
             </tr>
             <tr>
-              <th></th>
-              <th style="padding:3px 6px;"><input id="col-search-skuid" oninput="renderOutgoingTable()" placeholder="검색" style="width:100%;box-sizing:border-box;font-size:11px;padding:3px 6px;border:1px solid #E0E5FF;border-radius:4px;outline:none;font-weight:400;"></th>
-              <th style="padding:3px 6px;"><input id="col-search-skuname" oninput="renderOutgoingTable()" placeholder="검색" style="width:100%;box-sizing:border-box;font-size:11px;padding:3px 6px;border:1px solid #E0E5FF;border-radius:4px;outline:none;font-weight:400;"></th>
-              <th></th><th></th><th></th><th></th><th></th>
+              <th style="position:sticky;top:38px;z-index:10;"></th>
+              <th style="padding:3px 6px;position:sticky;top:38px;z-index:10;"><input id="col-search-skuid" oninput="renderOutgoingTable()" placeholder="검색" style="width:100%;box-sizing:border-box;font-size:11px;padding:3px 6px;border:1px solid #E0E5FF;border-radius:4px;outline:none;font-weight:400;"></th>
+              <th style="padding:3px 6px;position:sticky;top:38px;z-index:10;"><input id="col-search-skuname" oninput="renderOutgoingTable()" placeholder="검색" style="width:100%;box-sizing:border-box;font-size:11px;padding:3px 6px;border:1px solid #E0E5FF;border-radius:4px;outline:none;font-weight:400;"></th>
+              <th style="position:sticky;top:38px;z-index:10;"></th><th style="position:sticky;top:38px;z-index:10;"></th><th style="position:sticky;top:38px;z-index:10;"></th><th style="position:sticky;top:38px;z-index:10;"></th><th style="position:sticky;top:38px;z-index:10;"></th>
             </tr>
           </thead>
           <tbody id="outgoing-tbody"></tbody>
@@ -855,11 +855,15 @@ function toggleMktFilter(event, field) {
   renderOutgoingTable();
 }
 
-function toggleRemSort() {
-  const cur = window._remSort || null;
-  window._remSort = cur === null ? 'asc' : cur === 'asc' ? 'desc' : null;
+window._outSort={col:null,dir:null};
+function toggleOutSort(col){
+  const s=window._outSort||{col:null,dir:null};
+  if(s.col!==col) window._outSort={col,dir:'asc'};
+  else if(s.dir==='asc') window._outSort={col,dir:'desc'};
+  else window._outSort={col:null,dir:null};
   renderOutgoingTable();
 }
+function toggleRemSort(){ toggleOutSort('rem'); }
 
 function toggleMktCheck(event, date, skuId, field) {
   event.stopPropagation();
@@ -5237,7 +5241,8 @@ async function saveOutgoingData(){
       skuName:String(r[4]||''),
       center:String(r[6]||''),
       date:dateStr,
-      qty:parseFloat(String(r[8]||'').replace(/,/g,''))||0
+      qty:parseFloat(String(r[8]||'').replace(/,/g,''))||0,
+      amt:parseFloat(String(r[10]||'').replace(/,/g,''))||0
     });
   });
   if(!Object.keys(byDate).length){ alert('입고예정일 정보가 없어 저장할 수 없습니다.'); return; }
@@ -5299,8 +5304,9 @@ function renderOutgoingTable(){
   const skuMap={};
   rows.forEach(r=>{
     const k=r.skuName||'';
-    if(!skuMap[k]) skuMap[k]={skuId:r.skuId,skuName:k,date:r.date,qty:0,pos:[]};
+    if(!skuMap[k]) skuMap[k]={skuId:r.skuId,skuName:k,date:r.date,qty:0,amt:0,pos:[]};
     skuMap[k].qty+=(r.qty||0);
+    skuMap[k].amt+=(r.amt||0);
     if(!skuMap[k].pos.includes(r.po)) skuMap[k].pos.push(r.po);
   });
   let merged=Object.values(skuMap);
@@ -5318,9 +5324,11 @@ function renderOutgoingTable(){
   if(qId) merged=merged.filter(r=>r.skuId.toLowerCase().includes(qId));
   if(qName) merged=merged.filter(r=>r.skuName.toLowerCase().includes(qName));
   const totalQty=merged.reduce((s,r)=>s+r.qty,0);
+  const totalAmt=merged.reduce((s,r)=>s+(r.amt||0),0);
   statsEl.innerHTML=
     `<div class="stat"><div class="sl">총 SKU 수</div><div class="sv">${merged.length.toLocaleString('ko-KR')}</div></div>`+
-    `<div class="stat"><div class="sl">총 발주수량</div><div class="sv">${totalQty.toLocaleString('ko-KR')}</div></div>`;
+    `<div class="stat"><div class="sl">총 발주수량</div><div class="sv">${totalQty.toLocaleString('ko-KR')}</div></div>`+
+    (totalAmt>0?`<div class="stat"><div class="sl">총 금액</div><div class="sv" style="color:#c0392b;">₩${totalAmt.toLocaleString('ko-KR')}</div></div>`:'');
   const mktDb = mktLoad();
   const mktDateData = mktDb[outgoingSelMonth] || {};
   // 마케팅 필터 적용
@@ -5336,24 +5344,36 @@ function renderOutgoingTable(){
   const b2=document.getElementById('mkt2-filter-btn');
   if(b1){ b1.style.color=mf.mkt1?'#e74c3c':'#888'; b1.style.fontWeight=mf.mkt1?'700':'400'; b1.textContent=mf.mkt1?'▲':'▼'; }
   if(b2){ b2.style.color=mf.mkt2?'#e74c3c':'#888'; b2.style.fontWeight=mf.mkt2?'700':'400'; b2.textContent=mf.mkt2?'▲':'▼'; }
-  // 잔여수량 정렬
-  const remSortIcon = document.getElementById('rem-sort-icon');
-  if(window._remSort) {
-    merged = merged.map(r => {
-      const _id = normId(r.skuId);
-      const _spec = skuErpMap[_id] || '';
-      const _pda = _spec ? getEprQty(_spec) : getEprQty(_id);
-      return { ...r, _rem: _pda !== null ? _pda - r.qty : null };
-    });
-    merged.sort((a, b) => {
-      if(a._rem === null && b._rem === null) return 0;
-      if(a._rem === null) return 1;
-      if(b._rem === null) return -1;
-      return window._remSort === 'asc' ? a._rem - b._rem : b._rem - a._rem;
-    });
-    if(remSortIcon){ remSortIcon.textContent = window._remSort === 'asc' ? '▲' : '▼'; remSortIcon.style.color = '#fff'; }
-  } else {
-    if(remSortIcon){ remSortIcon.textContent = '⇅'; remSortIcon.style.color = '#A0AEC0'; }
+  // 전체 컬럼 정렬
+  const _os=window._outSort||{col:null,dir:null};
+  ['pos','skuId','skuName','date','qty','rem'].forEach(c=>{
+    const el=document.getElementById('sort-icon-'+c);
+    if(!el) return;
+    if(_os.col===c){el.textContent=_os.dir==='asc'?'▲':'▼';el.style.color='#fff';}
+    else{el.textContent='⇅';el.style.color='#A0AEC0';}
+  });
+  if(_os.col){
+    if(_os.col==='rem'){
+      merged=merged.map(r=>{
+        const _id=normId(r.skuId),_spec=skuErpMap[_id]||'';
+        const _pda=_spec?getEprQty(_spec):getEprQty(_id);
+        return{...r,_rem:_pda!==null?_pda-r.qty:null};
+      });
+      merged.sort((a,b)=>{
+        if(a._rem===null&&b._rem===null)return 0;
+        if(a._rem===null)return 1; if(b._rem===null)return -1;
+        return _os.dir==='asc'?a._rem-b._rem:b._rem-a._rem;
+      });
+    } else if(_os.col==='pos'){
+      merged.sort((a,b)=>_os.dir==='asc'?a.pos.length-b.pos.length:b.pos.length-a.pos.length);
+    } else if(_os.col==='qty'||_os.col==='amt'){
+      merged.sort((a,b)=>_os.dir==='asc'?a[_os.col]-b[_os.col]:b[_os.col]-a[_os.col]);
+    } else {
+      merged.sort((a,b)=>{
+        const va=String(a[_os.col]||''),vb=String(b[_os.col]||'');
+        return _os.dir==='asc'?va.localeCompare(vb,'ko'):vb.localeCompare(va,'ko');
+      });
+    }
   }
   tbody.innerHTML=merged.map(r=>{
     // 잔여수량: ERP 재고 PDA - 발주수량
