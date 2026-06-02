@@ -271,6 +271,7 @@ body{padding:0!important;overflow:hidden;}
         <span id="session-cur-label" style="font-size:11px;color:#4A5568;background:#EDF2F7;border:1px solid #ccd;padding:1px 6px;border-radius:12px;"></span>
         <button onclick="saveCurrentSession()" style="font-size:11px;padding:2px 8px;border:none;border-radius:6px;background:#4318FF;color:#fff;cursor:pointer;font-weight:600;">저장</button>
         <button id="session-cloud-sync-btn" onclick="syncAllSessionsToCloud()" style="font-size:11px;padding:2px 8px;border:none;border-radius:6px;background:#0891b2;color:#fff;cursor:pointer;font-weight:600;">☁ 클라우드 동기화</button>
+        <button onclick="clearUnreliableCancelData()" style="font-size:11px;padding:2px 8px;border:none;border-radius:6px;background:#6B7280;color:#fff;cursor:pointer;font-weight:600;" title="일괄재계산으로 잘못 저장된 발주취소 데이터 초기화">🗑 발주취소 초기화</button>
         <span id="session-save-msg" style="font-size:11px;color:#059669;display:none;">✓ 저장됨</span>
       </div>
       <div id="session-list"></div>
@@ -1723,6 +1724,143 @@ function parseAllInOne(buf, file){
   document.getElementById('fi-margin').value='';
 }
 
+// ── 잘못된 cancelData 초기화 (일괄재계산으로 저장된 non-reliable 데이터 제거) ──
+async function clearUnreliableCancelData(){
+  if(!confirm('일괄재계산으로 잘못 저장된 발주취소 데이터를 초기화합니다.\n(직접 저장한 데이터는 유지됩니다)\n진행하시겠습니까?')) return;
+  const store=ssLoad();
+  let count=0;
+  Object.values(store).forEach(rec=>{
+    if(rec.cancelData&&!rec.cancelData.reliable){
+      delete rec.cancelData;
+      count++;
+    }
+  });
+  if(!count){ alert('초기화할 데이터가 없습니다.'); return; }
+  if(ssSave(store)){
+    await _sharedWrite('gabe_sessions_v1',store);
+    alert(count+'개 세션의 잘못된 발주취소 데이터를 초기화했습니다.\n이제 납품현황이 정상 표시됩니다.');
+  }
+}
+
+// ── 납품저장: 세션 불러오기 + cancelData 포함 저장 (날짜별 버튼용) ──
+function loadAndSaveSession(dateKey, btn){
+  if(!confirm(dateKey+' 데이터를 불러와서 납품데이터로 저장합니다.\n현재 작업 중인 내용은 유지됩니다.\n진행하시겠습니까?')) return;
+  if(btn){btn.disabled=true;btn.textContent='저장중...';}
+  loadSession(dateKey);
+  saveCurrentSession();
+  if(btn){
+    btn.textContent='✓ 저장됨';
+    setTimeout(()=>{btn.disabled=false;btn.textContent='납품저장';},2000);
+  }
+}
+
+// ── 발주취소 데이터 일괄 재계산 (cancelData 없는 과거 세션 전체 처리) ──
+async function rebuildAllCancelData(btn){
+  if(!confirm('발주취소 데이터가 없는 과거 세션 전체를 재계산합니다.\n(5월20일 이전 세션 등 구버전 세션 자동 업데이트)\n진행하시겠습니까?')) return;
+  if(btn){btn.disabled=true;btn.textContent='⏳ 재계산 중...';}
+  const store=ssLoad();
+  let updated=0;
+  const _RN={'마진율 미달':'마진율미달','불량미납':'불량으로미납처리'};
+  const _isEx=c=>c==='KS0005'||extractSetCode(c)==='KS0005'||c.includes('캔디통')||c.includes('캔디동')||c==='108301'||c.includes('쌓기나무 미니북')||c==='108306'||c==='116905'||c==='116066'||c==='KS3220-1'||extractSetCode(c)==='KS3220-1'||c==='KS3220-2'||extractSetCode(c)==='KS3220-2';
+
+  Object.entries(store).forEach(([,rec])=>{
+    if(!rec.withNo||!rec.withNo.length) return;
+    if(rec.cancelData) return; // 이미 cancelData 있으면 스킵
+
+    const mRMap=rec.manualReasonMap||{}, mMap=rec.marginMap||{};
+    const discSet=new Set(rec.discontinuedSet||[]);
+    const eprMap=rec.eprQtyMap||{}, eprSpecArr=rec.eprSpecSet||[];
+    const skuErpM=rec.skuErpMap||{}, setCompMapL=rec.setComponentMap||{};
+
+    // totalQM 재계산
+    const totalQM={};
+    rec.withNo.forEach(row=>{ const id=normId(row[3]); totalQM[id]=(totalQM[id]||0)+(parseFloat(String(row[8]||'').replace(/,/g,''))||0); });
+
+    // skuIdSetComponents 재빌드
+    const setComps={};
+    rec.withNo.forEach(row=>{
+      const id=normId(row[3]); if(setComps[id]) return;
+      const spec=skuErpM[id]||'';
+      if(spec&&setCompMapL[spec]){setComps[id]=setCompMapL[spec];return;}
+      if(spec){const sc=extractSetCode(spec);if(sc){for(const[k,v]of Object.entries(setCompMapL)){if(extractSetCode(k)===sc){setComps[id]=v;return;}}}}
+      if(setCompMapL[id]){setComps[id]=setCompMapL[id];return;}
+      const ic=extractSetCode(id);if(ic){for(const[k,v]of Object.entries(setCompMapL)){if(extractSetCode(k)===ic){setComps[id]=v;return;}}}
+    });
+
+    // printSkuSet 재빌드
+    const printSkuL=new Set();
+    rec.withNo.forEach(row=>{
+      const id=normId(row[3]),nc=extractSetCode(String(row[4]||''));
+      if(PRINT_SPEC_CODES.has(nc)||PRINT_SPEC_CODES.has(extractSetCode(id))){printSkuL.add(id);return;}
+      if((setComps[id]||[]).some(c=>PRINT_SPEC_CODES.has(extractSetCode(c))))printSkuL.add(id);
+    });
+
+    // 재고 상태 계산 (getStockStatus 동일 로직)
+    const _chk=(cList,tq)=>{const hx=cList.some(_isEx);return cList.some(cs=>{if(_isEx(cs))return false;const p=eprMap[normId(cs)];if(p===null)return!hx;return p<=0||p<tq;});};
+    const _st=id=>{
+      const sp=skuErpM[id]||'',comps=setComps[id],tq=totalQM[id]||0;
+      if(EPR_FIRST_SKUS.has(id)||EPR_FIRST_SPECS.has(sp)){
+        const pda=eprMap[normId(sp)]??eprMap[sp]??0;
+        if(pda>0)return'ok';
+        if(comps&&comps.length>0)return _chk(comps,tq)?'short':'ok';
+        return'short';
+      }
+      if(comps&&comps.length>0)return _chk(comps,tq)?'short':'ok';
+      if(!sp||!eprSpecArr.includes(sp))return'check';
+      return(eprMap[normId(sp)]||0)-tq<=0?'short':'ok';
+    };
+
+    // 발주번호별 출고금액 합산
+    const poOut={};
+    rec.withNo.forEach((row,i)=>{
+      const ponum=String(row[1]||'').trim(),id=normId(row[3]);
+      const amt=parseFloat(String(row[10]||'').replace(/,/g,''))||0;
+      const rawPct=mMap[id],pct=(rawPct!=='단종'&&rawPct!=null)?Math.round(parseFloat(rawPct)*100):null;
+      const isGr=discSet.has(id)||(rawPct==='단종'),isOr=pct!==null&&!isNaN(pct)&&pct<17;
+      const st=_st(id);
+      const sysR=isGr?'단종':isOr?'마진율 미달':printSkuL.has(id)?'':st==='short'?'재고부족':st==='check'?'확인필요':'';
+      const rsn=mRMap[i]!==undefined?mRMap[i]:sysR;
+      if(!poOut[ponum])poOut[ponum]=0;
+      poOut[ponum]+=(rsn?0:amt);
+    });
+
+    // cancelData 생성
+    const cancelPoSet=new Set(Object.entries(poOut).filter(([,v])=>v===0).map(([k])=>k));
+    const cancelMap={};
+    rec.withNo.forEach((row,i)=>{
+      const ponum=String(row[1]||'').trim();
+      if(!cancelPoSet.has(ponum))return;
+      const id=normId(row[3]),amt=parseFloat(String(row[10]||'').replace(/,/g,''))||0;
+      const qty=parseFloat(String(row[8]||'').replace(/,/g,''))||0;
+      const rawPct=mMap[id],pct=(rawPct!=='단종'&&rawPct!=null)?Math.round(parseFloat(rawPct)*100):null;
+      const isGr=discSet.has(id)||(rawPct==='단종'),isOr=pct!==null&&!isNaN(pct)&&pct<17;
+      const st=_st(id);
+      const sysR=isGr?'단종':isOr?'마진율 미달':printSkuL.has(id)?'':st==='short'?'재고부족':st==='check'?'확인필요':'';
+      const rsn=mRMap[i]!==undefined?mRMap[i]:sysR;
+      if(!rsn)return;
+      const rn=_RN[rsn]||rsn;
+      if(!cancelMap[ponum])cancelMap[ponum]={ponum,center:String(row[6]||'').trim(),items:[]};
+      cancelMap[ponum].items.push({name:String(row[4]||'').trim(),qty,amt,reason:rn,skuid:String(row[3]||'').trim()});
+    });
+
+    rec.cancelData={orders:Object.values(cancelMap)};
+    updated++;
+  });
+
+  if(updated===0){
+    alert('재계산할 세션이 없습니다.\n(모든 세션에 cancelData가 이미 있음)');
+    if(btn){btn.disabled=false;btn.textContent='🔄 발주취소 일괄재계산';}
+    return;
+  }
+  if(!ssSave(store)){
+    if(btn){btn.disabled=false;btn.textContent='🔄 발주취소 일괄재계산';}
+    return;
+  }
+  await _sharedWrite('gabe_sessions_v1',store);
+  alert(updated+'개 세션 발주취소 데이터 재계산 완료!\n월별 팝업에서 정상 집계를 확인하세요.');
+  if(btn){btn.disabled=false;btn.textContent='🔄 발주취소 일괄재계산';}
+}
+
 // ═══════════════════════════════════════════════
 //  세션 저장 · 불러오기 (localStorage)
 // ═══════════════════════════════════════════════
@@ -1825,7 +1963,7 @@ function dateKeyShort(k){
 
 function saveCurrentSession(){
   if(!withNo.length){ alert('저장할 데이터가 없습니다.'); return; }
-  const dateKey=getSessionDateKey();
+  const dateKey=getSessionDateKey()||_loadedSessionDateKey;
   if(!dateKey){ alert('입고예정일 정보가 없어 저장할 수 없습니다.'); return; }
   // 발주금액·최종금액·미출고사유별 금액 + 발주량/납품량 계산
   const saveTAmt=withNo.reduce((s,r)=>s+(parseFloat(String(r[10]||'').replace(/,/g,''))||0),0);
@@ -1846,6 +1984,30 @@ function saveCurrentSession(){
       if(saveCatQtys[rsn]!==undefined) saveCatQtys[rsn]+=qty;
     } else{ saveTOut+=amt; saveOutQty+=qty; }
   });
+  // ── 발주취소 발주서 사전 계산 (calcSummary 기준 = 엑셀 다운로드와 동일 로직) ──
+  // 출고매입가 합이 0인 발주번호만 추출, 저장 시점의 완전한 컨텍스트 사용
+  const _savePoRows=calcSummary().poRows;
+  const _savePoOut={};
+  _savePoRows.forEach(r=>{if(!_savePoOut[r.ponum])_savePoOut[r.ponum]=0;_savePoOut[r.ponum]+=r.out;});
+  const _cancelPoSet=new Set(Object.entries(_savePoOut).filter(([,v])=>v===0).map(([k])=>k));
+  const _RN={'마진율 미달':'마진율미달','불량미납':'불량으로미납처리'};
+  const _cancelMap={};
+  withNo.forEach((row,i)=>{
+    const ponum=String(row[1]||'').trim();
+    if(!_cancelPoSet.has(ponum)) return;
+    const sid=normId(row[3]),pct=getMarginPct(sid);
+    const _st=getStockStatus(sid);
+    const sysR=discontinuedSet.has(sid)?'단종':(pct!==null&&pct<17)?'마진율 미달':printSkuSet.has(sid)?'':_st==='short'?'재고부족':_st==='check'?'확인필요':'';
+    const rsn=manualReasonMap[i]!==undefined?manualReasonMap[i]:sysR;
+    if(!rsn) return;
+    const rn=_RN[rsn]||rsn;
+    const qty=parseFloat(String(row[8]||'').replace(/,/g,''))||0;
+    const amt=parseFloat(String(row[10]||'').replace(/,/g,''))||0;
+    if(!_cancelMap[ponum])_cancelMap[ponum]={ponum,center:String(row[6]||'').trim(),items:[]};
+    _cancelMap[ponum].items.push({name:String(row[4]||'').trim(),qty,amt,reason:rn,skuid:String(row[3]||'').trim()});
+  });
+  const cancelData={orders:Object.values(_cancelMap),reliable:true}; // 신뢰할 수 있는 저장임을 표시
+
   const store=ssLoad();
   store[dateKey]={
     dateKey,
@@ -1857,6 +2019,7 @@ function saveCurrentSession(){
     outQty: saveOutQty,
     cats: saveCats,
     catQtys: saveCatQtys,
+    cancelData: cancelData,
     withNo: withNo,
     manualReasonMap: manualReasonMap,
     outAmtOverrides: outAmtOverrides,
@@ -1905,10 +2068,13 @@ async function syncAllSessionsToCloud(){
   }
 }
 
+let _loadedSessionDateKey=null; // 불러온 세션의 dateKey (구버전 세션 저장 폴백용)
+
 function loadSession(dateKey){
   const store=ssLoad();
   const rec=store[dateKey];
   if(!rec){ alert('저장 데이터를 찾을 수 없습니다.'); return; }
+  _loadedSessionDateKey=dateKey; // 불러온 dateKey 보관
   // 전역 변수 복원
   withNo           = rec.withNo||[];
   processed        = withNo.map(r=>r.slice(1));
@@ -1923,6 +2089,10 @@ function loadSession(dateKey){
   barcodeAttachMap = rec.barcodeAttachMap||{};
   skuBarcodeMap    = rec.skuBarcodeMap||{};
   poDeliveryMap    = rec.poDeliveryMap||{};
+  // 구버전 세션: poDeliveryMap 없을 때 dateKey에서 날짜 복원
+  if(!Object.keys(poDeliveryMap).length && withNo.length){
+    withNo.forEach(r=>{ const p=String(r[1]||'').trim(); if(p&&!poDeliveryMap[p]) poDeliveryMap[p]=dateKey; });
+  }
   setComponentMap  = rec.setComponentMap||{};
   // 재빌드: skuTotalQtyMap (withNo 기반)
   skuTotalQtyMap={};
@@ -2119,6 +2289,7 @@ function renderSessionList(){
       html+=`<div style="background:#fff;border:1px solid #e0e0e0;border-radius:4px;padding:3px 6px;">
         <div style="display:flex;align-items:center;gap:3px;flex-wrap:wrap;">
           <button onclick="loadSession('${k}')" style="font-size:11px;padding:2px 6px;border:1px solid #4318FF;border-radius:4px;background:#fff;color:#4318FF;cursor:pointer;white-space:nowrap;">불러오기</button>
+          <button onclick="loadAndSaveSession('${k}',this)" style="font-size:11px;padding:2px 6px;border:1px solid #059669;border-radius:4px;background:#fff;color:#059669;cursor:pointer;white-space:nowrap;" title="이 날짜 데이터를 불러와서 납품데이터로 저장">납품저장</button>
           <button onclick="deleteSession('${k}')" style="font-size:11px;padding:2px 6px;border:1px solid #c0392b;border-radius:4px;background:#fff;color:#c0392b;cursor:pointer;white-space:nowrap;">삭제</button>
           <span style="font-size:12px;font-weight:700;color:#1B2559;">${r.dateLabel}</span>
           <span style="font-size:11px;color:#A0AEC0;">${cnt}행 · ${r.savedAt}</span>
@@ -5816,10 +5987,12 @@ function showCancelDetail(event, title, dataStr){
 function _renderCancelTable(rows, title){
   const panel=document.getElementById('_cancel_detail_side_');
   if(!panel) return;
+  rows=rows.slice().sort((a,b)=>{ const c=(a.center||'').localeCompare(b.center||'','ko'); return c!==0?c:parseFloat(a.ponum||0)-parseFloat(b.ponum||0); });
   const totAmt=rows.reduce((s,r)=>s+(r.amt||0),0);
+  const uniquePonums=new Set(rows.map(r=>r.ponum)).size;
   const thS='padding:4px 5px;color:#fff;font-weight:700;font-size:10px;white-space:nowrap;border-right:1px solid #2a4070;';
   let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;border-bottom:1px solid #e0e6f0;padding-bottom:4px;">
-    <span style="font-size:10px;font-weight:700;color:#1B2559;">${title} (${rows.length}건)</span>
+    <span style="font-size:10px;font-weight:700;color:#1B2559;">${title} (발주번호 ${uniquePonums}건 / 상품 ${rows.length}행)</span>
     <button onclick="document.getElementById('_cancel_detail_side_').style.display='none'" style="border:none;background:#e8edf5;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:10px;line-height:18px;">✕</button>
   </div>
   <table style="width:100%;border-collapse:collapse;font-size:10px;">
@@ -6162,20 +6335,63 @@ function _renderMonthPopupContent(year, monthLabel){
     });
   }
 
-  // ── 세션 데이터에서 발주취소 현황 빌드 (실시간 반영) ──
+  // ── 세션 데이터에서 발주취소 현황 빌드 ──
   const REASON_NORM={'마진율 미달':'마진율미달','불량미납':'불량으로미납처리'};
   const CANCEL_SET=new Set(['재고부족','마진율미달','마케팅재고','단종','발주취소','불량으로미납처리','마진율 미달','불량미납']);
   sessions.forEach(([dk,r])=>{
     if(!r.withNo||!r.withNo.length) return;
     const day=parseInt(dk.split('-')[2]);
+
+    // ── 신규: reliable 마커가 있는 cancelData만 신뢰 (일괄재계산 잘못된 데이터 무시) ──
+    if(r.cancelData&&r.cancelData.reliable){
+      if(r.cancelData.orders&&r.cancelData.orders.length>0){
+        cancelDayMap[day]={pos:r.cancelData.orders.length,cats:{},detail:{},orders:r.cancelData.orders};
+        const cm=cancelDayMap[day];
+        r.cancelData.orders.forEach(e=>{
+          e.items.forEach(it=>{
+            const rc=it.reason;
+            if(!cm.cats[rc])cm.cats[rc]=0; cm.cats[rc]+=(it.amt||0);
+            if(!cm.detail[rc])cm.detail[rc]=[];
+            const ex=cm.detail[rc].find(x=>x.name===it.name);
+            if(ex){ex.qty+=(it.qty||0);ex.amt+=(it.amt||0);}
+            else cm.detail[rc].push({name:it.name||'-',qty:it.qty||0,amt:it.amt||0});
+          });
+        });
+      } else {
+        // 발주취소 0건 → 하드코딩 데이터도 제거
+        delete cancelDayMap[day];
+      }
+      return;
+    }
+    // ── 구버전 세션 폴백: 기존 재계산 로직 ──
     const mRMap=r.manualReasonMap||{};
     const mMap=r.marginMap||{};
     const discSet=new Set(r.discontinuedSet||[]);
     const eprMap=r.eprQtyMap||{};
     const eprSpecArr=r.eprSpecSet||[];
     const skuErpM=r.skuErpMap||{};
-    const totalQM=r.skuTotalQtyMap||{};
-    const setComps=r.skuIdSetComponents||{};
+    // skuTotalQtyMap은 세션에 저장되지 않으므로 withNo에서 직접 계산
+    const totalQM={};
+    r.withNo.forEach(row=>{ const id=normId(row[3]); totalQM[id]=(totalQM[id]||0)+(parseFloat(String(row[8]||'').replace(/,/g,''))||0); });
+    // skuIdSetComponents 재빌드 (setComponentMap + skuErpMap 기반, loadSession과 동일 로직)
+    const setCompMapLocal=r.setComponentMap||{};
+    const setComps={};
+    r.withNo.forEach(row=>{
+      const id=normId(row[3]); if(setComps[id]) return;
+      const spec=skuErpM[id]||'';
+      if(spec&&setCompMapLocal[spec]){setComps[id]=setCompMapLocal[spec];return;}
+      if(spec){const sc=extractSetCode(spec);if(sc){for(const[k,v]of Object.entries(setCompMapLocal)){if(extractSetCode(k)===sc){setComps[id]=v;return;}}}}
+      if(setCompMapLocal[id]){setComps[id]=setCompMapLocal[id];return;}
+      const ic=extractSetCode(id);if(ic){for(const[k,v]of Object.entries(setCompMapLocal)){if(extractSetCode(k)===ic){setComps[id]=v;return;}}}
+    });
+    // printSkuSet 재빌드 (calcSummary와 동일 기준: 출력상품은 재고 무관 정상 출고)
+    const printSkuSetLocal=new Set();
+    r.withNo.forEach(row=>{
+      const id=normId(row[3]);
+      const nc=extractSetCode(String(row[4]||''));
+      if(PRINT_SPEC_CODES.has(nc)||PRINT_SPEC_CODES.has(extractSetCode(id))){printSkuSetLocal.add(id);return;}
+      if((setComps[id]||[]).some(c=>PRINT_SPEC_CODES.has(extractSetCode(c))))printSkuSetLocal.add(id);
+    });
     const poMap={};
     r.withNo.forEach((row,i)=>{
       const id=normId(row[3]);
@@ -6186,28 +6402,44 @@ function _renderMonthPopupContent(year, monthLabel){
       const isGr=discSet.has(id)||(rawPct==='단종');
       const isOr=pct!==null&&!isNaN(pct)&&pct<17;
       let stockSt='ok';
+      const sp=skuErpM[id]||'';
       const comps=setComps[id];
-      if(comps&&comps.length>0){
+      // getStockStatus와 동일: 면제 구성품(재고0이어도 부족 처리 안 함)
+      const _isExempt=c=>c==='KS0005'||extractSetCode(c)==='KS0005'||c.includes('캔디통')||c.includes('캔디동')||c==='108301'||c.includes('쌓기나무 미니북')||c==='108306'||c==='116905'||c==='116066'||c==='KS3220-1'||extractSetCode(c)==='KS3220-1'||c==='KS3220-2'||extractSetCode(c)==='KS3220-2';
+      const _checkComps=(cList,tq)=>{const hasEx=cList.some(_isExempt);return cList.some(cs=>{if(_isExempt(cs))return false;const p=eprMap[normId(cs)];if(p===null)return!hasEx;return p<=0||p<tq;});};
+      // getStockStatus와 동일: EPR_FIRST_SKUS/SPECS는 EPR 직접재고 우선 확인
+      if(EPR_FIRST_SKUS.has(id)||EPR_FIRST_SPECS.has(sp)){
+        const pda=eprMap[normId(sp)]??eprMap[sp]??0;
+        if(pda>0){ stockSt='ok'; }
+        else if(comps&&comps.length>0){
+          const tq=totalQM[id]||0;
+          const short=_checkComps(comps,tq);
+          stockSt=short?'short':'ok';
+        } else { stockSt='short'; }
+      } else if(comps&&comps.length>0){
         const tq=totalQM[id]||0;
-        const short=comps.some(cs=>{ const pda=eprMap[normId(cs)]; return pda==null||pda<=0||pda<tq; });
+        const short=_checkComps(comps,tq);
         stockSt=short?'short':'ok';
       } else {
-        const sp=skuErpM[id]||'';
         if(!sp||!eprSpecArr.includes(sp)) stockSt='check';
         else { const pda=eprMap[normId(sp)]||0; stockSt=(pda-(totalQM[id]||0))<=0?'short':'ok'; }
       }
-      const sysR=isGr?'단종':isOr?'마진율 미달':stockSt==='short'?'재고부족':'';
+      // calcSummary와 동일: 출력상품(printSkuSet)은 재고 상태 무관 정상 출고
+      const sysR=isGr?'단종':isOr?'마진율 미달':printSkuSetLocal.has(id)?'':stockSt==='short'?'재고부족':'';
       let rsn=mRMap[i]!==undefined?mRMap[i]:sysR;
-      if(!rsn||!CANCEL_SET.has(rsn)) return;
-      rsn=REASON_NORM[rsn]||rsn;
       const ponum=String(row[1]||'').trim();
       const center=String(row[6]||'').trim();
+      const out=rsn?0:amt;
+      if(!poMap[ponum]) poMap[ponum]={ponum,center,items:[],outSum:0};
+      poMap[ponum].outSum+=out;
+      if(!rsn||!CANCEL_SET.has(rsn)) return;
+      rsn=REASON_NORM[rsn]||rsn;
       const name=String(row[4]||'').trim();
       const skuid=String(row[3]||'').trim();
-      if(!poMap[ponum]) poMap[ponum]={ponum,center,items:[]};
       poMap[ponum].items.push({name,qty,amt,reason:rsn,skuid});
     });
-    const entries=Object.values(poMap).filter(o=>o.items.length>0);
+    // 출고금액 합이 0인 발주번호만 발주취소 발주서로 분류 (calcSummary의 delPoSet과 동일 기준)
+    const entries=Object.values(poMap).filter(o=>o.items.length>0&&o.outSum===0);
     if(!entries.length) return;
     // 세션 데이터로 갱신 (하드코딩 _CANCEL_DATA_2026 덮어씀)
     cancelDayMap[day]={pos:entries.length, cats:{}, detail:{}, orders:[]};
