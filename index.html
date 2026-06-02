@@ -1026,6 +1026,7 @@ async function _onLoginSuccess() {
   if (!window._appInitDone) {
     window._appInitDone = true;
     await _initSessionStorage();
+    await _initSalesIdb(); // 판매데이터 IDB 초기화 (50MB+)
     _inject2026Data();
     renderSessionList();
   }
@@ -5489,32 +5490,71 @@ const SALES_COLS=[
 ];
 let salesSelYear='', salesSelMonth='';
 
-// 연도별 키 분리 저장으로 용량 제한 우회
-function _salesKeyForYear(y){ return SALES_LS_KEY+'_'+y; }
-function salesLoad(){
-  // 구버전 단일키 마이그레이션
-  let merged={};
-  try{
-    const old=localStorage.getItem(SALES_LS_KEY);
-    if(old){ const d=JSON.parse(old); Object.assign(merged,d); localStorage.removeItem(SALES_LS_KEY); salesSave(merged); }
-  }catch(e){}
-  // 연도별 키 병합
-  const years=new Set();
-  for(let i=0;i<localStorage.length;i++){
-    const k=localStorage.key(i);
-    if(k&&k.startsWith(SALES_LS_KEY+'_')) years.add(k.slice(SALES_LS_KEY.length+1));
-  }
-  years.forEach(y=>{ try{ const d=JSON.parse(localStorage.getItem(_salesKeyForYear(y))||'{}'); Object.assign(merged,d); }catch(e){} });
-  return merged;
-}
-function salesSave(d){
-  // 연도별로 분리해서 저장
-  const byYear={};
-  Object.entries(d).forEach(([k,v])=>{ const y=k.slice(0,4); if(!byYear[y])byYear[y]={}; byYear[y][k]=v; });
-  Object.entries(byYear).forEach(([y,yd])=>{
-    try{ localStorage.setItem(_salesKeyForYear(y),JSON.stringify(yd)); }
-    catch(e){ alert(`${y}년 데이터 저장 용량 초과.\n초기화 버튼으로 ${y}년 데이터를 삭제해주세요.`); }
+// ── 판매데이터 IndexedDB 저장 (50MB+ 지원) ──
+const SALES_IDB_NAME='coupang_sales_idb_v1';
+const SALES_IDB_STORE='sales_years';
+let _salesIdb=null;
+let _salesCache=null; // 메모리 캐시 (salesLoad 동기 반환용)
+
+function _initSalesIdb(){
+  return new Promise(resolve=>{
+    if(_salesIdb){resolve();return;}
+    try{
+      const req=indexedDB.open(SALES_IDB_NAME,1);
+      req.onupgradeneeded=e=>{ if(!e.target.result.objectStoreNames.contains(SALES_IDB_STORE)) e.target.result.createObjectStore(SALES_IDB_STORE,{keyPath:'year'}); };
+      req.onsuccess=e=>{
+        _salesIdb=e.target.result;
+        const allReq=_salesIdb.transaction(SALES_IDB_STORE,'readonly').objectStore(SALES_IDB_STORE).getAll();
+        allReq.onsuccess=()=>{
+          _salesCache={};
+          (allReq.result||[]).forEach(r=>Object.assign(_salesCache,r.data||{}));
+          // localStorage 구버전 마이그레이션
+          _salesMigrateFromLS();
+          resolve();
+        };
+        allReq.onerror=()=>{ _salesFallbackLoad(); resolve(); };
+      };
+      req.onerror=()=>{ _salesFallbackLoad(); resolve(); };
+    }catch(e){ _salesFallbackLoad(); resolve(); }
   });
+}
+function _salesFallbackLoad(){
+  _salesCache={};
+  try{
+    const keys=[];
+    for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&(k===SALES_LS_KEY||k.startsWith(SALES_LS_KEY+'_'))) keys.push(k); }
+    keys.forEach(k=>{ try{Object.assign(_salesCache,JSON.parse(localStorage.getItem(k)||'{}')); }catch(e){} });
+  }catch(e){}
+}
+function _salesMigrateFromLS(){
+  // localStorage → IDB 이전
+  const toRemove=[];
+  let migrated=false;
+  try{
+    for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&(k===SALES_LS_KEY||k.startsWith(SALES_LS_KEY+'_'))){ try{Object.assign(_salesCache,JSON.parse(localStorage.getItem(k)||'{}')); }catch(e){} toRemove.push(k); migrated=true; } }
+    if(migrated){ salesSave(_salesCache); toRemove.forEach(k=>localStorage.removeItem(k)); }
+  }catch(e){}
+}
+
+function salesLoad(){ if(_salesCache===null)_salesCache={}; return _salesCache; }
+
+function salesSave(d){
+  _salesCache=d;
+  if(_salesIdb){
+    // IDB에 연도별 저장 (50MB+)
+    const byYear={};
+    Object.entries(d).forEach(([k,v])=>{ const y=k.slice(0,4); if(!byYear[y])byYear[y]={}; byYear[y][k]=v; });
+    try{
+      const tx=_salesIdb.transaction(SALES_IDB_STORE,'readwrite');
+      const st=tx.objectStore(SALES_IDB_STORE);
+      Object.entries(byYear).forEach(([y,yd])=>st.put({year:y,data:yd}));
+    }catch(e){ console.warn('IDB save error',e); }
+  } else {
+    // IDB 없으면 localStorage 연도별 분리 폴백
+    const byYear={};
+    Object.entries(d).forEach(([k,v])=>{ const y=k.slice(0,4); if(!byYear[y])byYear[y]={}; byYear[y][k]=v; });
+    Object.entries(byYear).forEach(([y,yd])=>{ try{localStorage.setItem(SALES_LS_KEY+'_'+y,JSON.stringify(yd));}catch(e){ alert(`${y}년 저장 실패. 브라우저 저장 공간을 확인해주세요.`); } });
+  }
   _sharedWrite(SALES_LS_KEY,d);
 }
 
@@ -5573,6 +5613,10 @@ function handleSalesUpload(file){
 
 function salesClearAll(){
   if(!confirm('저장된 판매데이터를 모두 삭제하시겠습니까?')) return;
+  _salesCache={};
+  // IDB 삭제
+  if(_salesIdb){ try{ const tx=_salesIdb.transaction(SALES_IDB_STORE,'readwrite'); tx.objectStore(SALES_IDB_STORE).clear(); }catch(e){} }
+  // localStorage 삭제 (폴백 데이터)
   localStorage.removeItem(SALES_LS_KEY);
   const toRemove=[];
   for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.startsWith(SALES_LS_KEY+'_'))toRemove.push(k); }
