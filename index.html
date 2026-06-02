@@ -6768,6 +6768,7 @@ window.addEventListener('DOMContentLoaded',async ()=>{
     // 이미 로그인된 상태 → 바로 앱 진입
     window._appInitDone = true;
     await _initSessionStorage();
+    await _initSalesIdb(); // 판매데이터 IDB 초기화
     _inject2026Data();
     renderSessionList();
     await _onLoginSuccess();
