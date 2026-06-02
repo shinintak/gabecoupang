@@ -36,7 +36,7 @@ body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif
 .stat .sv{font-size:16px;font-weight:800;color:#1B2559;}
 .tbl-scroll{overflow-x:auto;border:1px solid #E0E5FF;border-radius:10px;box-shadow:0 2px 10px rgba(27,37,89,0.07);}
 table{border-collapse:collapse;font-size:13px;white-space:nowrap;min-width:100%;width:100%;}
-thead tr{background:linear-gradient(90deg,#1B2559 0%,#4318FF 100%);}
+thead tr{background:#E8ECFF;}
 th{padding:8px 11px;text-align:center;font-weight:700;color:#C3CBFF;border-bottom:none;cursor:pointer;user-select:none;white-space:nowrap;font-size:12px;}
 th:hover{color:#fff;background:rgba(255,255,255,0.09);}
 th.sorted-asc::after{content:' ▲';font-size:9px;}
@@ -302,9 +302,7 @@ body{padding:0!important;overflow:hidden;}
     <span style="font-size:12px;color:#A0AEC0;margin-left:8px;">영업팀 재고확인용</span>
     <button onclick="saveOutgoingData()" style="margin-left:12px;height:34px;padding:0 18px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#1B2559;color:#fff;cursor:pointer;">💾 저장</button>
     <button onclick="deleteOutgoingData()" style="height:34px;padding:0 18px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #e74c3c;background:#fff;color:#e74c3c;cursor:pointer;">🗑 삭제</button>
-    <button onclick="syncOutgoingFromServer()" style="height:34px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #059669;background:#fff;color:#059669;cursor:pointer;" title="서버에서 최신 데이터 불러오기">🔄 동기화</button>
     <button id="outgoing-mkt-save-btn" onclick="saveMktToServer()" style="height:34px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #8e44ad;background:#fff;color:#8e44ad;cursor:pointer;" title="마케팅1·2 수정사항 서버에 저장">📤 마케팅 저장</button>
-    <button onclick="backfillOutgoingAmt()" style="height:34px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #e67e22;background:#fff;color:#e67e22;cursor:pointer;" title="기존 저장 데이터에 총 금액 소급 적용">💰 금액 소급적용</button>
     <span id="outgoing-save-msg" style="display:none;font-size:12px;color:#059669;font-weight:600;">✓ 저장됨</span>
     <span id="outgoing-sync-msg" style="display:none;font-size:12px;color:#059669;font-weight:600;">✓ 동기화됨</span>
   </div>
@@ -321,20 +319,20 @@ body{padding:0!important;overflow:hidden;}
         <table id="outgoing-tbl" style="font-size:11px;width:100%;table-layout:fixed;">
           <thead>
             <tr>
-              <th style="width:70px;text-align:center;position:sticky;top:0;z-index:10;cursor:pointer;background:linear-gradient(90deg,#1B2559 0%,#4318FF 100%);" onclick="toggleOutSort('pos')">발주수 <span id="sort-icon-pos" style="font-size:10px;color:#A0AEC0;">⇅</span></th>
-              <th style="width:100px;position:sticky;top:0;z-index:10;cursor:pointer;background:linear-gradient(90deg,#1B2559 0%,#4318FF 100%);" onclick="toggleOutSort('skuId')">SKU ID <span id="sort-icon-skuId" style="font-size:10px;color:#A0AEC0;">⇅</span></th>
-              <th style="width:460px;position:sticky;top:0;z-index:10;cursor:pointer;background:linear-gradient(90deg,#1B2559 0%,#4318FF 100%);" onclick="toggleOutSort('skuName')">SKU 이름 <span id="sort-icon-skuName" style="font-size:10px;color:#A0AEC0;">⇅</span></th>
-              <th style="width:100px;text-align:right;position:sticky;top:0;z-index:10;cursor:pointer;background:linear-gradient(90deg,#1B2559 0%,#4318FF 100%);" onclick="toggleOutSort('date')">입고예정일 <span id="sort-icon-date" style="font-size:10px;color:#A0AEC0;">⇅</span></th>
-              <th style="width:75px;text-align:right;position:sticky;top:0;z-index:10;cursor:pointer;background:linear-gradient(90deg,#1B2559 0%,#4318FF 100%);" onclick="toggleOutSort('qty')">수량(합계) <span id="sort-icon-qty" style="font-size:10px;color:#A0AEC0;">⇅</span></th>
-              <th style="width:110px;text-align:right;cursor:pointer;user-select:none;position:sticky;top:0;z-index:10;background:linear-gradient(90deg,#1B2559 0%,#4318FF 100%);" onclick="toggleOutSort('rem')">잔여수량<br><span style="font-weight:400;font-size:11px;">(PDA-발주)</span> <span id="sort-icon-rem" style="font-size:10px;color:#A0AEC0;">⇅</span></th>
-              <th style="width:90px;text-align:center;position:sticky;top:0;z-index:10;background:linear-gradient(90deg,#1B2559 0%,#4318FF 100%);">마케팅1<button id="mkt1-filter-btn" onclick="toggleMktFilter(event,'mkt1')" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#A0AEC0;padding:0;">▼</button></th>
-              <th style="width:90px;text-align:center;position:sticky;top:0;z-index:10;background:linear-gradient(90deg,#1B2559 0%,#4318FF 100%);">마케팅2<button id="mkt2-filter-btn" onclick="toggleMktFilter(event,'mkt2')" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#A0AEC0;padding:0;">▼</button></th>
+              <th style="width:70px;text-align:center;position:sticky;top:0;z-index:10;cursor:pointer;background:#E8ECFF;color:#1B2559;" onclick="toggleOutSort('pos')">발주수 <span id="sort-icon-pos" style="font-size:10px;color:#4318FF;">⇅</span></th>
+              <th style="width:100px;position:sticky;top:0;z-index:10;cursor:pointer;background:#E8ECFF;color:#1B2559;" onclick="toggleOutSort('skuId')">SKU ID <span id="sort-icon-skuId" style="font-size:10px;color:#4318FF;">⇅</span></th>
+              <th style="width:460px;position:sticky;top:0;z-index:10;cursor:pointer;background:#E8ECFF;color:#1B2559;" onclick="toggleOutSort('skuName')">SKU 이름 <span id="sort-icon-skuName" style="font-size:10px;color:#4318FF;">⇅</span></th>
+              <th style="width:100px;text-align:right;position:sticky;top:0;z-index:10;cursor:pointer;background:#E8ECFF;color:#1B2559;" onclick="toggleOutSort('date')">입고예정일 <span id="sort-icon-date" style="font-size:10px;color:#4318FF;">⇅</span></th>
+              <th style="width:75px;text-align:right;position:sticky;top:0;z-index:10;cursor:pointer;background:#E8ECFF;color:#1B2559;" onclick="toggleOutSort('qty')">수량(합계) <span id="sort-icon-qty" style="font-size:10px;color:#4318FF;">⇅</span></th>
+              <th style="width:110px;text-align:right;cursor:pointer;user-select:none;position:sticky;top:0;z-index:10;background:#E8ECFF;color:#1B2559;" onclick="toggleOutSort('rem')">잔여수량<br><span style="font-weight:400;font-size:11px;">(PDA-발주)</span> <span id="sort-icon-rem" style="font-size:10px;color:#4318FF;">⇅</span></th>
+              <th style="width:90px;text-align:center;position:sticky;top:0;z-index:10;background:#E8ECFF;color:#1B2559;">마케팅1<button id="mkt1-filter-btn" onclick="toggleMktFilter(event,'mkt1')" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#A0AEC0;padding:0;">▼</button></th>
+              <th style="width:90px;text-align:center;position:sticky;top:0;z-index:10;background:#E8ECFF;color:#1B2559;">마케팅2<button id="mkt2-filter-btn" onclick="toggleMktFilter(event,'mkt2')" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#A0AEC0;padding:0;">▼</button></th>
             </tr>
             <tr>
-              <th style="position:sticky;top:38px;z-index:10;background:#1B2559;"></th>
-              <th style="padding:3px 6px;position:sticky;top:38px;z-index:10;background:#1B2559;"><input id="col-search-skuid" oninput="renderOutgoingTable()" placeholder="검색" style="width:100%;box-sizing:border-box;font-size:11px;padding:3px 6px;border:1px solid #E0E5FF;border-radius:4px;outline:none;font-weight:400;"></th>
-              <th style="padding:3px 6px;position:sticky;top:38px;z-index:10;background:#1B2559;"><input id="col-search-skuname" oninput="renderOutgoingTable()" placeholder="검색" style="width:100%;box-sizing:border-box;font-size:11px;padding:3px 6px;border:1px solid #E0E5FF;border-radius:4px;outline:none;font-weight:400;"></th>
-              <th style="position:sticky;top:38px;z-index:10;background:#1B2559;"></th><th style="position:sticky;top:38px;z-index:10;background:#1B2559;"></th><th style="position:sticky;top:38px;z-index:10;background:#1B2559;"></th><th style="position:sticky;top:38px;z-index:10;background:#1B2559;"></th><th style="position:sticky;top:38px;z-index:10;background:#1B2559;"></th>
+              <th style="position:sticky;top:38px;z-index:10;background:#E8ECFF;"></th>
+              <th style="padding:3px 6px;position:sticky;top:38px;z-index:10;background:#E8ECFF;"><input id="col-search-skuid" oninput="renderOutgoingTable()" placeholder="검색" style="width:100%;box-sizing:border-box;font-size:11px;padding:3px 6px;border:1px solid #E0E5FF;border-radius:4px;outline:none;font-weight:400;"></th>
+              <th style="padding:3px 6px;position:sticky;top:38px;z-index:10;background:#E8ECFF;"><input id="col-search-skuname" oninput="renderOutgoingTable()" placeholder="검색" style="width:100%;box-sizing:border-box;font-size:11px;padding:3px 6px;border:1px solid #E0E5FF;border-radius:4px;outline:none;font-weight:400;"></th>
+              <th style="position:sticky;top:38px;z-index:10;background:#E8ECFF;"></th><th style="position:sticky;top:38px;z-index:10;background:#E8ECFF;"></th><th style="position:sticky;top:38px;z-index:10;background:#E8ECFF;"></th><th style="position:sticky;top:38px;z-index:10;background:#E8ECFF;"></th><th style="position:sticky;top:38px;z-index:10;background:#E8ECFF;"></th>
             </tr>
           </thead>
           <tbody id="outgoing-tbody"></tbody>
@@ -5379,8 +5377,8 @@ function renderOutgoingTable(){
   ['pos','skuId','skuName','date','qty','rem'].forEach(c=>{
     const el=document.getElementById('sort-icon-'+c);
     if(!el) return;
-    if(_os.col===c){el.textContent=_os.dir==='asc'?'▲':'▼';el.style.color='#fff';}
-    else{el.textContent='⇅';el.style.color='#A0AEC0';}
+    if(_os.col===c){el.textContent=_os.dir==='asc'?'▲':'▼';el.style.color='#e74c3c';}
+    else{el.textContent='⇅';el.style.color='#4318FF';}
   });
   if(_os.col){
     if(_os.col==='rem'){
@@ -5491,8 +5489,34 @@ const SALES_COLS=[
 ];
 let salesSelYear='', salesSelMonth='';
 
-function salesLoad(){ try{return JSON.parse(localStorage.getItem(SALES_LS_KEY)||'{}')}catch(e){return{}} }
-function salesSave(d){ try{localStorage.setItem(SALES_LS_KEY,JSON.stringify(d))}catch(e){alert('저장 용량 초과. 오래된 데이터를 삭제해주세요.')} _sharedWrite(SALES_LS_KEY,d); }
+// 연도별 키 분리 저장으로 용량 제한 우회
+function _salesKeyForYear(y){ return SALES_LS_KEY+'_'+y; }
+function salesLoad(){
+  // 구버전 단일키 마이그레이션
+  let merged={};
+  try{
+    const old=localStorage.getItem(SALES_LS_KEY);
+    if(old){ const d=JSON.parse(old); Object.assign(merged,d); localStorage.removeItem(SALES_LS_KEY); salesSave(merged); }
+  }catch(e){}
+  // 연도별 키 병합
+  const years=new Set();
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(k&&k.startsWith(SALES_LS_KEY+'_')) years.add(k.slice(SALES_LS_KEY.length+1));
+  }
+  years.forEach(y=>{ try{ const d=JSON.parse(localStorage.getItem(_salesKeyForYear(y))||'{}'); Object.assign(merged,d); }catch(e){} });
+  return merged;
+}
+function salesSave(d){
+  // 연도별로 분리해서 저장
+  const byYear={};
+  Object.entries(d).forEach(([k,v])=>{ const y=k.slice(0,4); if(!byYear[y])byYear[y]={}; byYear[y][k]=v; });
+  Object.entries(byYear).forEach(([y,yd])=>{
+    try{ localStorage.setItem(_salesKeyForYear(y),JSON.stringify(yd)); }
+    catch(e){ alert(`${y}년 데이터 저장 용량 초과.\n초기화 버튼으로 ${y}년 데이터를 삭제해주세요.`); }
+  });
+  _sharedWrite(SALES_LS_KEY,d);
+}
 
 function _csvLine(line){
   const res=[]; let cur='', inQ=false;
@@ -5550,6 +5574,9 @@ function handleSalesUpload(file){
 function salesClearAll(){
   if(!confirm('저장된 판매데이터를 모두 삭제하시겠습니까?')) return;
   localStorage.removeItem(SALES_LS_KEY);
+  const toRemove=[];
+  for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.startsWith(SALES_LS_KEY+'_'))toRemove.push(k); }
+  toRemove.forEach(k=>localStorage.removeItem(k));
   salesSelYear=''; salesSelMonth='';
   const el=document.getElementById('sales-upload-status');
   if(el) el.style.display='none';
