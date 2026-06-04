@@ -37,7 +37,7 @@ body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif
 .tbl-scroll{overflow-x:auto;border:1px solid #E0E5FF;border-radius:10px;box-shadow:0 2px 10px rgba(27,37,89,0.07);}
 table{border-collapse:collapse;font-size:13px;white-space:nowrap;min-width:100%;width:100%;}
 thead tr{background:#E8ECFF;}
-th{padding:8px 11px;text-align:center;font-weight:700;color:#C3CBFF;border-bottom:none;cursor:pointer;user-select:none;white-space:nowrap;font-size:12px;}
+th{padding:8px 11px;text-align:center;font-weight:700;color:#1B2559;border-bottom:none;cursor:pointer;user-select:none;white-space:nowrap;font-size:12px;}
 th:hover{color:#fff;background:rgba(255,255,255,0.09);}
 th.sorted-asc::after{content:' ▲';font-size:9px;}
 th.sorted-desc::after{content:' ▼';font-size:9px;}
@@ -2865,7 +2865,9 @@ function getStockStatus(skuId){
       c==='116905'|| // 패턴블록 미니북
       c==='116066'|| // 레인보우 물통 눈금 스티커 (KS5808 세트)
       c==='KS3220-1'||extractSetCode(c)==='KS3220-1'|| // 시계워크지1 (LER3222 세트)
-      c==='KS3220-2'||extractSetCode(c)==='KS3220-2';  // 시계워크지2 (LER3222 세트)
+      c==='KS3220-2'||extractSetCode(c)==='KS3220-2'|| // 시계워크지2 (LER3222 세트)
+      c==='108305'||c.includes('종이케이스')||c.includes('소마케이스')||c.includes('쌓기케이스')|| // 종이케이스/소마케이스/쌓기케이스
+      c==='108365'; // 1.5L 캔디통/쌓기나무캔디통
     // 면제 구성품 포함 세트 → EPR 미등록 구성품도 OK 처리
     const hasExempt=components.some(isExempt);
     const hasShortage=components.some(childSpec=>{
@@ -6526,7 +6528,7 @@ function _renderMonthPopupContent(year, monthLabel){
       const sp=skuErpM[id]||'';
       const comps=setComps[id];
       // getStockStatus와 동일: 면제 구성품(재고0이어도 부족 처리 안 함)
-      const _isExempt=c=>c==='KS0005'||extractSetCode(c)==='KS0005'||c.includes('캔디통')||c.includes('캔디동')||c==='108301'||c.includes('쌓기나무 미니북')||c==='108306'||c==='116905'||c==='116066'||c==='KS3220-1'||extractSetCode(c)==='KS3220-1'||c==='KS3220-2'||extractSetCode(c)==='KS3220-2';
+      const _isExempt=c=>c==='KS0005'||extractSetCode(c)==='KS0005'||c.includes('캔디통')||c.includes('캔디동')||c==='108301'||c.includes('쌓기나무 미니북')||c==='108306'||c==='116905'||c==='116066'||c==='KS3220-1'||extractSetCode(c)==='KS3220-1'||c==='KS3220-2'||extractSetCode(c)==='KS3220-2'||c==='108305'||c.includes('종이케이스')||c.includes('소마케이스')||c.includes('쌓기케이스')||c==='108365';
       const _checkComps=(cList,tq)=>{const hasEx=cList.some(_isExempt);return cList.some(cs=>{if(_isExempt(cs))return false;const p=eprMap[normId(cs)];if(p===null)return!hasEx;return p<=0||p<tq;});};
       // getStockStatus와 동일: EPR_FIRST_SKUS/SPECS는 EPR 직접재고 우선 확인
       if(EPR_FIRST_SKUS.has(id)||EPR_FIRST_SPECS.has(sp)){
