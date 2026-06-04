@@ -294,6 +294,17 @@ body{padding:0!important;overflow:hidden;}
   </div>
 </div>
 
+<!-- ── 발주리스트 팝업 ── -->
+<div id="order-list-popup" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.6);overflow:hidden;">
+  <div style="position:absolute;top:18px;left:50%;transform:translateX(-50%);width:96vw;max-width:1500px;max-height:calc(100vh - 36px);background:#fff;border-radius:14px;box-shadow:0 12px 48px rgba(0,0,0,.35);display:flex;flex-direction:column;overflow:hidden;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 18px;background:#1B2559;border-radius:14px 14px 0 0;flex-shrink:0;">
+      <span id="order-list-popup-title" style="font-size:14px;font-weight:700;color:#fff;"></span>
+      <button onclick="closeOrderListPopup()" style="background:rgba(255,255,255,0.15);border:none;border-radius:6px;padding:5px 14px;color:#fff;cursor:pointer;font-size:12px;font-weight:700;">✕ 닫기</button>
+    </div>
+    <div id="order-list-popup-content" style="overflow:auto;flex:1;padding:16px;background:#F4F6F9;"></div>
+  </div>
+</div>
+
 <!-- ── 출고리스트 페이지 ── -->
 <div id="outgoing-page">
   <div class="delivery-header">
@@ -6212,6 +6223,162 @@ function closeMonthPopup(){
   document.body.style.overflow='';
 }
 
+// ── 납품일 클릭 → 발주리스트 팝업 ──
+function openOrderListPopup(dk, onlyMissing=false){
+  const store=ssLoad();
+  const rec=store[dk];
+  const [y,m,d]=dk.split('-');
+  const label=onlyMissing?'미납품 발주리스트':'발주리스트';
+  document.getElementById('order-list-popup-title').textContent=
+    `📋 ${label} — ${y}년 ${parseInt(m)}월 ${parseInt(d)}일 (저장된 데이터)`;
+  const el=document.getElementById('order-list-popup-content');
+  if(!rec||!rec.withNo||!rec.withNo.length){
+    el.innerHTML='<div style="color:#A0AEC0;font-size:13px;padding:24px;">저장된 발주리스트 데이터가 없습니다.</div>';
+  } else {
+    el.innerHTML=_buildOrderListHTML(rec, onlyMissing);
+  }
+  document.getElementById('order-list-popup').style.display='block';
+}
+function closeOrderListPopup(){
+  document.getElementById('order-list-popup').style.display='none';
+}
+
+function _buildOrderListHTML(rec, onlyMissing=false){
+  const rows=rec.withNo||[];
+  const mRMap=rec.manualReasonMap||{};
+  const outOvr=rec.outAmtOverrides||{};
+  const mMap=rec.marginMap||{};
+  const discSet=new Set((rec.discontinuedSet||[]).map(v=>normId(v)));
+  const eprMap=rec.eprQtyMap||{};
+  const eprSpecSet=new Set(rec.eprSpecSet||[]);
+  const skuErpM=rec.skuErpMap||{};
+  const setCompMap=rec.setComponentMap||{};
+
+  const _isExempt=c=>c==='KS0005'||c.includes('캔디통')||c.includes('캔디동')||
+    c==='108301'||c.includes('쌓기나무 미니북')||c==='108306'||c==='116905'||
+    c==='116066'||c==='KS3220-1'||c==='KS3220-2'||
+    c==='108305'||c.includes('종이케이스')||c.includes('소마케이스')||c.includes('쌓기케이스')||
+    c==='108365';
+
+  const _getEpr=s=>{
+    const v=eprMap[normId(s)]??eprMap[s];
+    return (v===undefined||v===null)?null:v;
+  };
+
+  const _getStatus=(id,qty)=>{
+    const nid=normId(id);
+    const spec=skuErpM[nid]||'';
+    if(_isExempt(spec)||_isExempt(nid)) return 'ok';
+    // 세트구성 체크
+    const comps=setCompMap[spec]||setCompMap[nid]||[];
+    if(comps.length>0){
+      const hasEx=comps.some(_isExempt);
+      const hasShort=comps.some(cs=>{
+        if(_isExempt(cs)) return false;
+        const p=_getEpr(cs);
+        if(p===null) return !hasEx;
+        return p<=0||p<qty;
+      });
+      return hasShort?'short':'ok';
+    }
+    if(!spec||!eprSpecSet.has(spec)) return 'check';
+    const pda=_getEpr(spec)??0;
+    return (pda-qty)<=0?'short':'ok';
+  };
+
+  const _getReason=(idx,row)=>{
+    if(mRMap[idx]!==undefined) return mRMap[idx];
+    const id=normId(row[3]);
+    if(discSet.has(id)) return '단종';
+    const pctRaw=mMap[id];
+    if(pctRaw!==undefined&&Math.round(pctRaw*100)<17) return '마진율 미달';
+    const qty=parseFloat(String(row[8]||'').replace(/,/g,''))||0;
+    const st=_getStatus(id,qty);
+    if(st==='short') return '재고부족';
+    if(st==='check') return '확인필요';
+    return '';
+  };
+
+  const hdrs=['미출고사유','no','발주번호','발주유형','SKU ID','SKU 이름','SKU Barcode','물류센터','발주일','발주수량','매입가','총발주 매입금','출고매입가','마진율'];
+  const thS='padding:7px 10px;text-align:center;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;border-right:1px solid #3d5066;background:#1B2559;';
+  const thR='padding:7px 10px;text-align:right;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;border-right:1px solid #3d5066;background:#1B2559;';
+  const hdrHtml=hdrs.map((h,i)=>`<th style="${[9,10,11,12].includes(i)?thR:thS}">${h}</th>`).join('');
+
+  // onlyMissing 모드: 이유 있는 행(미납품)만 추출, 원래 인덱스 유지
+  const targetRows=onlyMissing
+    ? rows.map((row,i)=>({row,i})).filter(({row,i})=>_getReason(i,row)!=='')
+    : rows.map((row,i)=>({row,i}));
+
+  // 합계 계산
+  let totQty=0, totAmt=0, totOut=0;
+  targetRows.forEach(({row,i})=>{
+    totQty+=(parseFloat(String(row[8]||'').replace(/,/g,''))||0);
+    totAmt+=(parseFloat(String(row[10]||'').replace(/,/g,''))||0);
+    const rsn=_getReason(i,row);
+    const base=rsn?0:(parseFloat(String(row[10]||'').replace(/,/g,''))||0);
+    totOut+=outOvr[i]!==undefined?outOvr[i]:base;
+  });
+  const sumStyle='padding:6px 10px;text-align:right;color:#fff;font-size:12px;font-weight:800;white-space:nowrap;border-right:1px solid #3d5066;background:#2C3E7A;';
+  const sumEmpty='padding:6px 8px;background:#2C3E7A;border-right:1px solid #3d5066;';
+  const sumHtml=`<tr>
+    <td colspan="9" style="${sumEmpty}"><span style="padding:0 8px;color:#A8B4D8;font-size:11px;font-weight:700;">합계</span></td>
+    <td style="${sumStyle}">${totQty.toLocaleString('ko-KR')}</td>
+    <td style="${sumEmpty}"></td>
+    <td style="${sumStyle}">${totAmt.toLocaleString('ko-KR')}</td>
+    <td style="${sumStyle}">${totOut.toLocaleString('ko-KR')}</td>
+    <td style="${sumEmpty}"></td>
+  </tr>`;
+
+  let tbody='';
+  targetRows.forEach(({row,i}, ri)=>{
+    const reason=_getReason(i,row);
+    const rc=REASON_COLORS[reason]||null;
+    const rowBg=ri%2===0?'background:#fff;':'background:#f7f9fc;';
+    const id=normId(row[3]);
+    const isGray=discSet.has(id);
+    const pctRaw=mMap[id];
+    const pct=pctRaw!==undefined?Math.round(pctRaw*100):null;
+    const isOrange=pct!==null&&pct<17;
+    const baseAmt=reason?0:(parseFloat(String(row[10]||'').replace(/,/g,''))||0);
+    const outAmt=outOvr[i]!==undefined?outOvr[i]:baseAmt;
+    const rsStyle=rc?`background:${rc.bg};color:${rc.fg};font-weight:600;font-size:11px;text-align:center;white-space:nowrap;padding:5px 8px;border-right:1px solid #f0f3f8;`:'font-size:11px;text-align:center;padding:5px 8px;border-right:1px solid #f0f3f8;color:#ccc;';
+    const skuNameStyle=rc?`background:${rc.bg};color:${rc.fg};`:'';
+    const td=(v,align='center',extra='')=>`<td style="padding:5px 8px;text-align:${align};${extra}">${v}</td>`;
+    const mgCell=isGray?`<td style="color:#bbb;font-size:11px;text-align:center;padding:5px 8px;">단종</td>`:
+      pct===null?`<td style="color:#bbb;font-size:11px;text-align:center;padding:5px 8px;">-</td>`:
+      `<td style="padding:5px 8px;text-align:right;${isOrange?'background:#FFB300;font-weight:600;':''}">${pct}%</td>`;
+    const numFmt=v=>(parseFloat(String(v||'').replace(/,/g,''))||0).toLocaleString('ko-KR');
+    tbody+=`<tr style="${rowBg}border-bottom:1px solid #e8edf5;">
+      <td style="${rsStyle}">${reason||'<span style="color:#ccc;">-</span>'}</td>
+      ${td(row[0],'center','font-weight:700;color:#A0AEC0;')}
+      ${td(row[1]||'')}
+      ${td(row[2]||'')}
+      ${td(row[3]||'')}
+      <td style="padding:5px 8px;text-align:left;${skuNameStyle}white-space:normal;max-width:300px;min-width:160px;">${row[4]||''}</td>
+      ${td(row[5]||'')}
+      ${td(row[6]||'')}
+      ${td(formatDate(row[7]))}
+      ${td(numFmt(row[8]),'right')}
+      ${td(numFmt(row[9]),'right')}
+      ${td(numFmt(row[10]),'right')}
+      ${td(outAmt.toLocaleString('ko-KR'),'right')}
+      ${mgCell}
+    </tr>`;
+  });
+
+  return `<div style="background:#fff;border-radius:10px;border:1px solid #E0E5FF;overflow:hidden;">
+    <div style="padding:10px 14px;background:#F4F6F9;border-bottom:1px solid #E0E5FF;font-size:11px;color:#A0AEC0;">
+      읽기 전용 — ${onlyMissing?`미납품 ${targetRows.length}행 / 전체 ${rows.length}행`:`총 ${targetRows.length}행`} | 수정은 발주리스트 페이지에서 진행 후 저장해 주세요.
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="border-collapse:collapse;font-size:12px;white-space:nowrap;min-width:100%;">
+        <thead>${sumHtml}<tr>${hdrHtml}</tr></thead>
+        <tbody>${tbody}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
 function saveMonthPopupAll(){
   if(!canEdit('delivery_view')){ alert('납품데이터 저장 권한이 없습니다.'); return; }
   // 팝업의 모든 입력값을 수집
@@ -6336,7 +6503,7 @@ function _renderMonthPopupContent(year, monthLabel){
 
   rows.forEach((r,i)=>{
     t1+=`<tr style="background:${rowBg(i)};border-bottom:1px solid #e8edf5;">
-      <td style="padding:5px 10px;text-align:center;font-weight:700;color:#4318FF;border-right:1px solid #e8edf5;white-space:nowrap;">${r.day}일</td>
+      <td onclick="openOrderListPopup('${r.dk}')" style="padding:5px 10px;text-align:center;font-weight:700;color:#4318FF;border-right:1px solid #e8edf5;white-space:nowrap;cursor:pointer;text-decoration:underline;" title="클릭하여 발주리스트 보기">${r.day}일</td>
       <td style="${tdS()}">${fmt(r.ordQty,'qty')}</td>
       <td style="${tdS()}">${fmt(r.tAmt,'amt')}</td>
       <td style="${tdS()}">${fmt(r.outQty,'qty')}</td>
@@ -6398,7 +6565,7 @@ function _renderMonthPopupContent(year, monthLabel){
   rows.forEach((r,i)=>{
     const rowTotal=CAT_KEYS.reduce((s,k)=>s+(r.cats[k]||0),0);
     t2+=`<tr style="background:${rowBg(i)};border-bottom:1px solid #e8edf5;">
-      <td style="padding:5px 10px;text-align:center;font-weight:700;color:#4318FF;border-right:1px solid #e8edf5;white-space:nowrap;">${r.day}일</td>`;
+      <td onclick="openOrderListPopup('${r.dk}',true)" style="padding:5px 10px;text-align:center;font-weight:700;color:#4318FF;border-right:1px solid #e8edf5;white-space:nowrap;cursor:pointer;text-decoration:underline;" title="클릭하여 미납품 발주리스트 보기">${r.day}일</td>`;
     CAT_KEYS.forEach(k=>{
       const v=r.cats[k]||0;
       t2+=`<td style="${tdS()}">${v?'₩'+v.toLocaleString('ko-KR'):'-'}</td>`;
