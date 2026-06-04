@@ -4265,9 +4265,10 @@ async function llSaveData(){
   const btn=document.getElementById('ll-save-btn');
   if(btn){ btn.textContent='저장 중...'; btn.disabled=true; }
   try{
-    // localStorage 백업
+    // localStorage 백업 — 세션 날짜별 키로 저장
+    const sk=_llSessionKey();
     const local={boxData:_llBoxData,palletCount:_llPalletCount,itemPallet:_llItemPallet};
-    localStorage.setItem(LL_SAVE_KEY,JSON.stringify(local));
+    localStorage.setItem(LL_SAVE_KEY+'_'+sk,JSON.stringify(local));
 
     // Supabase 저장
     const sb=_getSupabase();
@@ -4290,10 +4291,13 @@ async function llSaveData(){
 }
 
 async function llLoadData(){
+  // 세션 전환 시 항상 초기화 — 이전 세션 데이터가 남아있지 않도록
+  _llBoxData={}; _llPalletCount={}; _llItemPallet={};
+  const sk=_llSessionKey();
   try{
     const sb=_getSupabase();
     if(sb){
-      const {data,error}=await sb.from('ll_data').select('*').eq('session_key',_llSessionKey()).maybeSingle();
+      const {data,error}=await sb.from('ll_data').select('*').eq('session_key',sk).maybeSingle();
       if(!error&&data){
         if(data.box_data)     _llBoxData=data.box_data;
         if(data.pallet_count) _llPalletCount=data.pallet_count;
@@ -4302,9 +4306,9 @@ async function llLoadData(){
       }
     }
   }catch(e){ console.warn('Supabase 불러오기 실패, localStorage로 대체',e); }
-  // localStorage 폴백
+  // localStorage 폴백 — 세션 날짜별 키로 조회
   try{
-    const raw=localStorage.getItem(LL_SAVE_KEY);
+    const raw=localStorage.getItem(LL_SAVE_KEY+'_'+sk);
     if(!raw) return;
     const d=JSON.parse(raw);
     if(d.boxData)     _llBoxData=d.boxData;
