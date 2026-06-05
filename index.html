@@ -4541,8 +4541,9 @@ function downloadLoadingList(){
   if(!centers.length){ alert('밀크런 센터가 없습니다.'); return; }
   const S=typeof XLSXStyle!=='undefined'?XLSXStyle:XLSX;
   const wb=S.utils.book_new();
-  const now=new Date();
-  const month=now.getMonth()+1, day=now.getDate();
+  const _sk=_llSessionKey();
+  const _sd=new Date(_sk+'T00:00:00');
+  const month=_sd.getMonth()+1, day=_sd.getDate();
 
   centers.forEach(center=>{
     const items=_llItems[center]||[];
@@ -4577,18 +4578,18 @@ function downloadLoadingList(){
     const cs=(v,s)=>({v:v??'',t:'s',s:s||{}});
     const cn=(v,s)=>({v:typeof v==='number'?v:parseFloat(v)||0,t:'n',s:s||{}});
 
-    const S_TITLE={font:{name:'맑은 고딕',sz:20,bold:true,color:{rgb:'000000'}},alignment:{horizontal:'center',vertical:'center'}};
-    const S_PAL={font:{name:'맑은 고딕',sz:22,bold:true},alignment:{horizontal:'center',vertical:'center'}};
-    const S_DATE={font:{name:'맑은 고딕',sz:18,bold:true},alignment:{horizontal:'center',vertical:'center'}};
-    const S_DATE_L={font:{name:'맑은 고딕',sz:18,bold:true},alignment:{horizontal:'left',vertical:'center'}};
-    const S_LBL={font:{name:'맑은 고딕',sz:15,bold:true},alignment:{horizontal:'center',vertical:'center'}};
-    const S_VAL={font:{name:'맑은 고딕',sz:15,bold:true},alignment:{horizontal:'left',vertical:'center'}};
+    const S_TITLE={font:{name:'맑은 고딕',sz:21,bold:true,color:{rgb:'000000'}},alignment:{horizontal:'center',vertical:'center'}};
+    const S_PAL={font:{name:'맑은 고딕',sz:23,bold:true},alignment:{horizontal:'center',vertical:'center'}};
+    const S_DATE={font:{name:'맑은 고딕',sz:19,bold:true},alignment:{horizontal:'center',vertical:'center'}};
+    const S_DATE_L={font:{name:'맑은 고딕',sz:19,bold:true},alignment:{horizontal:'left',vertical:'center'}};
+    const S_LBL={font:{name:'맑은 고딕',sz:16,bold:true},alignment:{horizontal:'center',vertical:'center'}};
+    const S_VAL={font:{name:'맑은 고딕',sz:16,bold:true},alignment:{horizontal:'left',vertical:'center'}};
     const S_EMPTY={};
-    const S_HDR={font:{name:'맑은 고딕',sz:10,bold:true,color:{rgb:'000000'}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:BD};
-    const S_C={font:{name:'맑은 고딕',sz:10},alignment:{horizontal:'center',vertical:'center'},border:BD};
-    const S_CB={font:{name:'맑은 고딕',sz:10,bold:true},alignment:{horizontal:'center',vertical:'center'},border:BD};
-    const S_L={font:{name:'맑은 고딕',sz:10},alignment:{horizontal:'left',vertical:'center',wrapText:true},border:BD};
-    const S_RB={font:{name:'맑은 고딕',sz:10,bold:true},alignment:{horizontal:'right',vertical:'center'},border:BD};
+    const S_HDR={font:{name:'맑은 고딕',sz:11,bold:true,color:{rgb:'000000'}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:BD};
+    const S_C={font:{name:'맑은 고딕',sz:11},alignment:{horizontal:'center',vertical:'center'},border:BD};
+    const S_CB={font:{name:'맑은 고딕',sz:11,bold:true},alignment:{horizontal:'center',vertical:'center'},border:BD};
+    const S_L={font:{name:'맑은 고딕',sz:11},alignment:{horizontal:'left',vertical:'center',wrapText:true},border:BD};
+    const S_RB={font:{name:'맑은 고딕',sz:11,bold:true},alignment:{horizontal:'right',vertical:'center'},border:BD};
 
     // ── 같은 센터 = 한 시트 / 팔렛 섹션을 세로로 적층 ──
     const palNums=Array.from({length:totalPallets},(_,i)=>i+1);
