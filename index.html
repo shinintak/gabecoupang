@@ -4228,7 +4228,7 @@ let _llItems={};
 let _llBoxData={};
 let _llPalletNo={};
 let _llPalletCount={};  // safeKey → 센터별 총 파렛트 수량
-let _llItemPallet={};   // 'center/idx' → 파렛트 번호 배정
+let _llItemPallet={};   // 'center/idx/si' → BOX 행별 팔렛 번호 (이전 'center/idx' 키도 폴백으로 지원)
 
 function getMilkRunSKUs(center){
   const map=new Map(); // Map 사용 → withNo 정렬 순서(발주번호→SKU ID) 유지
@@ -4394,11 +4394,10 @@ function renderLoadingListTable(){
 
   const safeC=c.replace(/[^a-z0-9]/gi,'_');
   const palCount=_llPalletCount[safeC]||1;
-  const showPalCol=palCount>=2;
 
   const INP='width:52px;font-size:13px;text-align:center;border:1px solid #C0C8FF;border-radius:6px;padding:4px;outline:none;';
   const INP_R='width:64px;font-size:13px;text-align:right;border:1px solid #C0C8FF;border-radius:6px;padding:5px 6px;outline:none;';
-  const INP_P='width:36px;font-size:13px;text-align:center;border:1px solid #C0C8FF;border-radius:6px;padding:4px;outline:none;';
+  const INP_P='width:40px;font-size:13px;text-align:center;border:1.5px solid #C0C8FF;border-radius:6px;padding:4px 3px;outline:none;background:#fff;';
 
   let html='';
   items.forEach((item,idx)=>{
@@ -4406,19 +4405,17 @@ function renderLoadingListTable(){
     if(!_llBoxData[key]||!Array.isArray(_llBoxData[key])) _llBoxData[key]=[{}];
     const entries=_llBoxData[key];
     const safeKey=key.replace(/[^a-z0-9]/gi,'_');
-    const palVal=_llItemPallet[key]||1;
 
     entries.forEach((bd,si)=>{
       const isFirst=si===0;
       const safeIdx=`${safeKey}_${si}`;
       const subTotal=llSubTotal(bd);
       const keyEsc=key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      const rowPalKey=key+'/'+si;
+      const rowPalVal=_llItemPallet[rowPalKey]!==undefined?_llItemPallet[rowPalKey]:(_llItemPallet[key]||1);
 
       if(isFirst){
         html+=`<tr style="border-top:2px solid #E8ECFF;">`;
-        if(showPalCol){
-          html+=`<td rowspan="${entries.length}" style="padding:4px 6px;text-align:center;vertical-align:middle;"><input type="number" min="1" max="${palCount}" value="${palVal}" oninput="llSetItemPallet('${keyEsc}',this.value)" style="${INP_P}"></td>`;
-        }
         html+=`
           <td rowspan="${entries.length}" style="padding:8px 10px;font-size:13px;color:#1B2559;font-weight:600;white-space:nowrap;text-align:center;vertical-align:middle;">${item.skuId}</td>
           <td rowspan="${entries.length}" style="padding:8px 10px;font-size:13px;color:#1B2559;text-align:left;line-height:1.5;vertical-align:middle;max-width:300px;word-break:break-word;white-space:normal;">${item.skuName}</td>
@@ -4427,7 +4424,14 @@ function renderLoadingListTable(){
         html+=`<tr style="border-top:1px dashed #D0D8FF;">`;
       }
 
+      const rowPalEsc=rowPalKey.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       html+=`
+          <td style="padding:4px 6px;text-align:center;vertical-align:middle;">
+            <input type="number" min="1" value="${rowPalVal}"
+              oninput="llSetItemPallet('${rowPalEsc}',this.value)"
+              title="이 BOX 행의 팔렛 번호"
+              style="${INP_P}">
+          </td>
           <td style="padding:4px 6px;white-space:nowrap;">
             <div style="display:inline-flex;align-items:center;gap:4px;">
               <div style="display:inline-flex;align-items:center;border:1px solid #C0C8FF;border-radius:6px;overflow:hidden;background:#fff;">
@@ -4445,18 +4449,17 @@ function renderLoadingListTable(){
     });
   });
 
-  const palColHdr=showPalCol?`<th style="padding:8px 6px;text-align:center;white-space:nowrap;color:#1B2559;">Pallet</th>`:'';
   const palBadge=`<div style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;padding:6px 14px;background:#EDE9FF;border-radius:20px;border:1px solid #C4B5FD;">
     <span style="font-size:12px;color:#7B2FBE;font-weight:700;">총 ${palCount} Pallet</span>
-    ${palCount>=2?`<span style="font-size:11px;color:#A0AEC0;">Pallet 번호를 각 상품에 배정하세요</span>`:''}
+    <span style="font-size:11px;color:#A0AEC0;">BOX 행마다 Pallet 번호를 자유롭게 지정하세요</span>
   </div>`;
   area.innerHTML=palBadge+`
   <table style="font-size:13px;width:100%;border-collapse:collapse;min-width:600px;">
     <thead><tr style="background:#F4F7FE;border-bottom:2px solid #7B2FBE;">
-      ${palColHdr}
       <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#1B2559;">SKU No</th>
       <th style="padding:8px 10px;text-align:left;color:#1B2559;">SKU 이름</th>
       <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#1B2559;">발주수량</th>
+      <th style="padding:8px 6px;text-align:center;white-space:nowrap;color:#7B2FBE;">Pallet</th>
       <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#1B2559;">BOX</th>
       <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#1B2559;">1박스 수량</th>
       <th style="padding:8px 10px;text-align:right;white-space:nowrap;color:#E74C3C;">합계</th>
@@ -4554,9 +4557,10 @@ function downloadLoadingList(){
     items.forEach((item,idx)=>{
       item.pos.forEach(p=>allPOs.add(p));
       const key=center+'/'+idx;
-      const palletAssign=_llItemPallet[key]||1;
       const entries=Array.isArray(_llBoxData[key])?_llBoxData[key]:[_llBoxData[key]||{}];
-      entries.forEach(bd=>{
+      entries.forEach((bd,si)=>{
+        const rowPalKey=key+'/'+si;
+        const palletAssign=_llItemPallet[rowPalKey]!==undefined?_llItemPallet[rowPalKey]:(_llItemPallet[key]||1);
         const start=parseInt(bd&&bd.boxStart)||0;
         const end=bd&&bd.boxEnd?parseInt(bd.boxEnd)||start:start;
         const numBoxes=start&&end>=start?end-start+1:1;
