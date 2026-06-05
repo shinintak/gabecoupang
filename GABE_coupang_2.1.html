@@ -4590,160 +4590,122 @@ function downloadLoadingList(){
     const S_L={font:{name:'맑은 고딕',sz:10},alignment:{horizontal:'left',vertical:'center',wrapText:true},border:BD};
     const S_RB={font:{name:'맑은 고딕',sz:10,bold:true},alignment:{horizontal:'right',vertical:'center'},border:BD};
 
-    // 파렛트별로 시트 생성
-    const palNums=totalPallets>1?Array.from({length:totalPallets},(_,i)=>i+1):[1];
+    // ── 같은 센터 = 한 시트 / 팔렛 섹션을 세로로 적층 ──
+    const palNums=Array.from({length:totalPallets},(_,i)=>i+1);
+    const validPals=palNums.filter(p=>rowData.some(r=>r.pallet===p));
+    if(!validPals.length) return;
 
-    palNums.forEach(palNo=>{
-      // 이 파렛트에 해당하는 행만 필터
-      const palRows=totalPallets>1?rowData.filter(r=>r.pallet===palNo):rowData;
+    const ws={}, merges=[];
+    let R=0;
+    const rowH=[];
+    const THICK={style:'medium',color:{rgb:'000000'}};
+    const COL_MAX=9;
+
+    validPals.forEach((palNo,palIdx)=>{
+      const palRows=rowData.filter(r=>r.pallet===palNo);
       if(!palRows.length) return;
 
-      // boxStart별 그룹화 (A열·I열 병합용)
+      const sR=R;
+
       const groupMap=new Map();
-      palRows.forEach(item=>{
-        const k=item.boxStart;
-        if(!groupMap.has(k)) groupMap.set(k,[]);
-        groupMap.get(k).push(item);
-      });
+      palRows.forEach(item=>{const k=item.boxStart;if(!groupMap.has(k))groupMap.set(k,[]);groupMap.get(k).push(item);});
       const sortedKeys=[...groupMap.keys()].sort((a,b)=>{if(a===null&&b===null)return 0;if(a===null)return 1;if(b===null)return -1;return a-b;});
 
-      // 총 박스 수 (이 파렛트)
       const usedBoxes=new Set();
       palRows.forEach(r=>{if(!r.boxStart)return;const e=r.boxEnd||r.boxStart;for(let b=r.boxStart;b<=e;b++)usedBoxes.add(b);});
       const totalBoxes=usedBoxes.size;
 
-      const ws={};
-      const merges=[];
-      let R=0;
-
-      // ── 1행: 팔레트 적재 리스트 (A1:J1) ──
       ws[ec(R,0)]=cs('팔레트 적재 리스트',S_TITLE);
       for(let c=1;c<10;c++) ws[ec(R,c)]=cs('',S_TITLE);
       merges.push({s:{r:R,c:0},e:{r:R,c:9}});
-      R++;
+      rowH[R]={hpt:39}; R++;
 
-      // ── 2행: palNo - totalPallets (A~E) / 총 totalBoxes box (F~J) ──
-      ws[ec(R,0)]=cs(String(palNo),S_PAL);
+      // 2행: 전체팔렛수-이번팔렛번호 (예: 2-1, 2-2)
+      ws[ec(R,0)]=cs(String(totalPallets),S_PAL);
       ws[ec(R,1)]=cs('-',S_PAL);
-      ws[ec(R,2)]=cs(String(totalPallets),S_PAL);
-      ws[ec(R,3)]=cs('',S_EMPTY);
-      ws[ec(R,4)]=cs('',S_EMPTY);
+      ws[ec(R,2)]=cs(String(palNo),S_PAL);
+      ws[ec(R,3)]=cs('',S_EMPTY); ws[ec(R,4)]=cs('',S_EMPTY);
       ws[ec(R,5)]=cs('총',S_PAL);
       ws[ec(R,6)]=cn(totalBoxes,{font:{name:'맑은 고딕',sz:22,bold:true},alignment:{horizontal:'center',vertical:'center'}});
-      ws[ec(R,7)]=cs('box',S_PAL);
-      ws[ec(R,8)]=cs('',S_PAL);
-      ws[ec(R,9)]=cs('',S_PAL);
+      ws[ec(R,7)]=cs('box',S_PAL); ws[ec(R,8)]=cs('',S_PAL); ws[ec(R,9)]=cs('',S_PAL);
       merges.push({s:{r:R,c:7},e:{r:R,c:9}});
-      R++;
+      rowH[R]={hpt:35.25}; R++;
 
-      // ── 3행: ( {month}월 {day}일) (A,B,C) / empty (D,E) / {center}  센터 (F:J) ──
-      ws[ec(R,0)]=cs('(',S_DATE);
-      ws[ec(R,1)]=cs(`${month}월`,S_DATE);
-      ws[ec(R,2)]=cs(`${day}일)`,S_DATE);
-      ws[ec(R,3)]=cs('',S_EMPTY);
-      ws[ec(R,4)]=cs('',S_EMPTY);
+      ws[ec(R,0)]=cs('(',S_DATE); ws[ec(R,1)]=cs(`${month}월`,S_DATE); ws[ec(R,2)]=cs(`${day}일)`,S_DATE);
+      ws[ec(R,3)]=cs('',S_EMPTY); ws[ec(R,4)]=cs('',S_EMPTY);
       ws[ec(R,5)]=cs(`${center}  센터`,S_DATE_L);
       for(let c=6;c<10;c++) ws[ec(R,c)]=cs('',S_DATE_L);
       merges.push({s:{r:R,c:5},e:{r:R,c:9}});
-      R++;
+      rowH[R]={hpt:30.75}; R++;
 
-      // ── 4행: 업체명 (A:C) / 주식회사 가베 (D:J) ──
-      ws[ec(R,0)]=cs('업체명 :',S_LBL);
-      ws[ec(R,1)]=cs('',S_LBL); ws[ec(R,2)]=cs('',S_LBL);
+      ws[ec(R,0)]=cs('업체명 :',S_LBL); ws[ec(R,1)]=cs('',S_LBL); ws[ec(R,2)]=cs('',S_LBL);
       ws[ec(R,3)]=cs('(주)가베',S_VAL);
       for(let c=4;c<10;c++) ws[ec(R,c)]=cs('',S_VAL);
-      merges.push({s:{r:R,c:0},e:{r:R,c:2}});
-      merges.push({s:{r:R,c:3},e:{r:R,c:9}});
-      R++;
+      merges.push({s:{r:R,c:0},e:{r:R,c:2}}); merges.push({s:{r:R,c:3},e:{r:R,c:9}});
+      rowH[R]={hpt:34.5}; R++;
 
-      // ── 5행: 발주번호 (A:C) / PO번호들 (D:J) ──
-      ws[ec(R,0)]=cs('발주번호 :',S_LBL);
-      ws[ec(R,1)]=cs('',S_LBL); ws[ec(R,2)]=cs('',S_LBL);
+      ws[ec(R,0)]=cs('발주번호 :',S_LBL); ws[ec(R,1)]=cs('',S_LBL); ws[ec(R,2)]=cs('',S_LBL);
       ws[ec(R,3)]=cs([...allPOs].join('/'),S_VAL);
       for(let c=4;c<10;c++) ws[ec(R,c)]=cs('',S_VAL);
-      merges.push({s:{r:R,c:0},e:{r:R,c:2}});
-      merges.push({s:{r:R,c:3},e:{r:R,c:9}});
-      R++;
+      merges.push({s:{r:R,c:0},e:{r:R,c:2}}); merges.push({s:{r:R,c:3},e:{r:R,c:9}});
+      rowH[R]={hpt:24.75}; R++;
 
-      // ── 6행: 컬럼 헤더 ──
-      ws[ec(R,0)]=cs('NO',S_HDR);
-      ws[ec(R,1)]=cs('SKU No',S_HDR);
-      ws[ec(R,2)]=cs('SKU NAME',S_HDR);
+      ws[ec(R,0)]=cs('NO',S_HDR); ws[ec(R,1)]=cs('SKU No',S_HDR); ws[ec(R,2)]=cs('SKU NAME',S_HDR);
       for(let c=3;c<8;c++) ws[ec(R,c)]=cs('',S_HDR);
-      ws[ec(R,8)]=cs('BOX 수량',S_HDR);
-      ws[ec(R,9)]=cs('총수량',S_HDR);
+      ws[ec(R,8)]=cs('BOX 수량',S_HDR); ws[ec(R,9)]=cs('총수량',S_HDR);
       merges.push({s:{r:R,c:2},e:{r:R,c:7}});
-      R++;
+      rowH[R]={hpt:21.95}; R++;
 
-      // ── 데이터 행 (그룹별 A·I 병합) ──
       sortedKeys.forEach(boxKey=>{
         const groupItems=groupMap.get(boxKey);
         const first=groupItems[0];
         const boxLabel=boxKey===null?'':first.boxEnd?`${first.boxStart}~${first.boxEnd}`:String(first.boxStart);
         const groupStart=R;
-
         groupItems.forEach((item)=>{
-          ws[ec(R,0)]=cs('',S_C);
-          ws[ec(R,1)]=cs(item.skuId,S_C);
+          ws[ec(R,0)]=cs('',S_C); ws[ec(R,1)]=cs(item.skuId,S_C);
           ws[ec(R,2)]=cs(item.skuName,S_L);
           for(let c=3;c<8;c++) ws[ec(R,c)]=cs('',S_L);
           merges.push({s:{r:R,c:2},e:{r:R,c:7}});
-          ws[ec(R,8)]=cs('',S_C);
-          ws[ec(R,9)]=cn(item.total,S_RB);
-          R++;
+          ws[ec(R,8)]=cs('',S_C); ws[ec(R,9)]=cn(item.total,S_RB);
+          rowH[R]={hpt:15}; R++;
         });
-
         ws[ec(groupStart,0)]=cs(boxLabel,S_CB);
         ws[ec(groupStart,8)]=cn(first.numBoxes,S_C);
-
         if(groupItems.length>1){
           merges.push({s:{r:groupStart,c:0},e:{r:R-1,c:0}});
           merges.push({s:{r:groupStart,c:8},e:{r:R-1,c:8}});
         }
       });
 
-      // 1~5행 내부 테두리 완전 제거 후 외부 테두리(굵은선)만 적용
-      const THICK={style:'medium',color:{rgb:'000000'}};
-      const COL_MAX=9;
-      for(let r=0;r<R;r++){
+      const sEnd=R-1;
+      for(let r=sR;r<=sEnd;r++){
         for(let c=0;c<=COL_MAX;c++){
           const ref=ec(r,c);
           if(!ws[ref]) ws[ref]={v:'',t:'s',s:{}};
           if(!ws[ref].s) ws[ref].s={};
-          const onTop=r===0, onBot=r===R-1, onLeft=c===0, onRight=c===COL_MAX;
-          const needsChange=(r<5)||onTop||onBot||onLeft||onRight;
-          if(!needsChange) continue;
-          // 공유 스타일 객체 변형 방지 — 셀마다 독립 복사
+          const relRow=r-sR;
+          const onTop=r===sR,onBot=r===sEnd,onLeft=c===0,onRight=c===COL_MAX;
+          if(!(relRow<5||onTop||onBot||onLeft||onRight)) continue;
           ws[ref].s=Object.assign({},ws[ref].s);
-          if(r<5){
-            // 1~5행: 테두리 완전 초기화 (빈 객체 = 테두리 없음)
-            ws[ref].s.border={};
-          } else {
-            ws[ref].s.border=Object.assign({},ws[ref].s.border||{});
-          }
-          // 외부 가장자리에만 굵은 테두리
-          if(onTop)   ws[ref].s.border.top=THICK;
-          if(onBot)   ws[ref].s.border.bottom=THICK;
-          if(onLeft)  ws[ref].s.border.left=THICK;
+          if(relRow<5){ ws[ref].s.border={}; }
+          else { ws[ref].s.border=Object.assign({},ws[ref].s.border||{}); }
+          if(onTop)  ws[ref].s.border.top=THICK;
+          if(onBot)  ws[ref].s.border.bottom=THICK;
+          if(onLeft) ws[ref].s.border.left=THICK;
           if(onRight) ws[ref].s.border.right=THICK;
         }
       }
 
-      ws['!merges']=merges;
-      ws['!ref']=`A1:J${R}`;
-      ws['!cols']=[
-        {wch:8.86},{wch:13.86},{wch:16},{wch:5.86},{wch:13},
-        {wch:5.86},{wch:16.29},{wch:3.14},{wch:9.86},{wch:9.86}
-      ];
-      ws['!rows']=[
-        {hpt:39},{hpt:35.25},{hpt:30.75},{hpt:34.5},{hpt:24.75},{hpt:21.95}
-      ];
-      for(let i=6;i<R;i++) ws['!rows'].push({hpt:15});
-
-      const baseSheetName=center.replace(/[\/:*?[\]]/g,'');
-      const sheetName=totalPallets>1?`${baseSheetName}_P${palNo}`.substring(0,31):baseSheetName.substring(0,31);
-      S.utils.book_append_sheet(wb,ws,sheetName);
+      if(palIdx<validPals.length-1){ rowH[R]={hpt:10}; rowH[R+1]={hpt:10}; R+=2; }
     });
+
+    ws['!merges']=merges;
+    ws['!ref']=`A1:J${R}`;
+    ws['!cols']=[{wch:8.86},{wch:13.86},{wch:16},{wch:5.86},{wch:13},{wch:5.86},{wch:16.29},{wch:3.14},{wch:9.86},{wch:9.86}];
+    ws['!rows']=rowH;
+
+    const baseSheetName=center.replace(/[\/:*?[\]]/g,'');
+    S.utils.book_append_sheet(wb,ws,baseSheetName.substring(0,31));
   });
 
   if(!wb.SheetNames.length){ alert('출고 가능한 밀크런 항목이 없습니다.'); return; }
