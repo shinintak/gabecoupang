@@ -6320,7 +6320,11 @@ function _buildOrderListHTML(rec, onlyMissing=false){
     return (pda-qty)<=0?'short':'ok';
   };
 
+  // rowReasonSnapshot 우선 사용 (발주리스트 저장 시점의 분류 결과 — ERP 재확인 불필요)
+  const rowSnap=rec.rowReasonSnapshot||null;
   const _getReason=(idx,row)=>{
+    if(rowSnap&&rowSnap[idx]!==undefined) return rowSnap[idx];
+    // 구버전 세션 폴백: 저장된 ERP로 재계산
     if(mRMap[idx]!==undefined) return mRMap[idx];
     const id=normId(row[3]);
     if(discSet.has(id)) return '단종';
