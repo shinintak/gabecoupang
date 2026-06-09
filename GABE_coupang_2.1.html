@@ -1768,7 +1768,33 @@ async function clearUnreliableCancelData(){
 function loadAndSaveSession(dateKey, btn){
   if(!confirm(dateKey+' 데이터를 불러와서 납품데이터로 저장합니다.\n현재 작업 중인 내용은 유지됩니다.\n진행하시겠습니까?')) return;
   if(btn){btn.disabled=true;btn.textContent='저장중...';}
+  // 현재 ERP 데이터 보존 (로드 후 복원하여 최신 ERP 기준으로 재계산)
+  const curEprLoaded = Object.keys(eprQtyMap).length > 0;
+  const curEprQtyMap = curEprLoaded ? Object.assign({}, eprQtyMap) : null;
+  const curSkuErpMap = curEprLoaded ? Object.assign({}, skuErpMap) : null;
+  const curEprSpecSet = curEprLoaded ? new Set(eprSpecSet) : null;
+  const curSetComponentMap = curEprLoaded ? Object.assign({}, setComponentMap) : null;
+
   loadSession(dateKey);
+
+  // 현재 ERP가 로드돼 있으면 세션의 구 ERP를 덮어쓰고 최신 ERP로 재계산
+  if(curEprLoaded){
+    eprQtyMap = curEprQtyMap;
+    skuErpMap = curSkuErpMap;
+    eprSpecSet = curEprSpecSet;
+    setComponentMap = curSetComponentMap;
+    // skuIdSetComponents 재빌드 (최신 ERP 기준)
+    skuIdSetComponents={};
+    withNo.forEach(r=>{
+      const id=normId(r[3]); if(skuIdSetComponents[id]) return;
+      const spec=skuErpMap[id]||'';
+      if(spec&&setComponentMap[spec]){ skuIdSetComponents[id]=setComponentMap[spec]; return; }
+      if(spec){ const sc=extractSetCode(spec); if(sc){ for(const [k,v] of Object.entries(setComponentMap)){ if(extractSetCode(k)===sc){ skuIdSetComponents[id]=v; return; } } } }
+      if(setComponentMap[id]){ skuIdSetComponents[id]=setComponentMap[id]; return; }
+      const ic=extractSetCode(id); if(ic){ for(const [k,v] of Object.entries(setComponentMap)){ if(extractSetCode(k)===ic){ skuIdSetComponents[id]=v; return; } } }
+    });
+  }
+
   saveCurrentSession();
   if(btn){
     btn.textContent='✓ 저장됨';
@@ -1828,8 +1854,9 @@ async function rebuildAllCancelData(btn){
         return'short';
       }
       if(comps&&comps.length>0)return _chk(comps,tq)?'short':'ok';
-      if(!sp||!eprSpecArr.includes(sp))return'check';
-      return(eprMap[normId(sp)]||0)-tq<=0?'short':'ok';
+      const normSp=normId(sp);
+      if(!sp||!eprSpecArr.includes(normSp))return'check';
+      return(eprMap[normSp]||0)-tq<=0?'short':'ok';
     };
 
     // 발주번호별 출고금액 합산
