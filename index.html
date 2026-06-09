@@ -1767,64 +1767,51 @@ async function clearUnreliableCancelData(){
 // ── 납품저장: 발주 데이터만 복원 + 현재 ERP 유지 + cancelData 재계산 저장 ──
 // loadSession()을 호출하면 구 ERP로 덮어씌워지므로 발주 데이터만 직접 복원
 function loadAndSaveSession(dateKey, btn){
-  if(!confirm(dateKey+' 데이터를 불러와서 납품데이터로 저장합니다.\n현재 ERP 재고 기준으로 재계산됩니다.\n진행하시겠습니까?')) return;
+  if(!confirm(dateKey+' 발주리스트 저장 시점의 분류 결과를 납품데이터로 업데이트합니다.\n진행하시겠습니까?')) return;
   if(btn){btn.disabled=true;btn.textContent='저장중...';}
 
   const store=ssLoad();
   const rec=store[dateKey];
   if(!rec){ alert('저장 데이터를 찾을 수 없습니다.'); if(btn){btn.disabled=false;btn.textContent='납품저장';} return; }
 
-  // 현재 ERP 유지 여부 결정 (ERP가 로드돼 있으면 현재 ERP 우선)
-  const hasCurrentErp=Object.keys(eprQtyMap).length>0;
-
-  // 발주 데이터만 복원 (ERP 관련 전역변수는 건드리지 않음)
-  withNo          =rec.withNo||[];
-  processed       =withNo.map(r=>r.slice(1));
-  manualReasonMap =rec.manualReasonMap||{};
-  outAmtOverrides =rec.outAmtOverrides||{};
-  marginMap       =rec.marginMap||{};
-  discontinuedSet =new Set(rec.discontinuedSet||[]);
-  poDeliveryMap   =rec.poDeliveryMap||{};
-  if(!Object.keys(poDeliveryMap).length&&withNo.length){
-    withNo.forEach(r=>{const p=String(r[1]||'').trim();if(p&&!poDeliveryMap[p])poDeliveryMap[p]=dateKey;});
-  }
-  _loadedSessionDateKey=dateKey;
-
-  // ERP가 없을 때만 세션 ERP로 폴백
-  if(!hasCurrentErp){
-    skuErpMap      =rec.skuErpMap||{};
-    eprQtyMap      =rec.eprQtyMap||{};
-    eprSpecSet     =new Set(rec.eprSpecSet||[]);
-    setComponentMap=rec.setComponentMap||{};
-    barcodeAttachMap=rec.barcodeAttachMap||{};
-    skuBarcodeMap  =rec.skuBarcodeMap||{};
+  // rowReasonSnapshot이 없는 구버전 세션 안내
+  if(!rec.rowReasonSnapshot||!rec.withNo||!rec.withNo.length){
+    alert('이 세션은 구버전 형식입니다.\n발주리스트에서 해당 날짜를 불러온 후 [저장] 버튼을 눌러주세요.');
+    if(btn){btn.disabled=false;btn.textContent='납품저장';} return;
   }
 
-  // skuTotalQtyMap 재빌드
-  skuTotalQtyMap={};
-  withNo.forEach(r=>{const id=normId(r[3]);skuTotalQtyMap[id]=(skuTotalQtyMap[id]||0)+(parseFloat(String(r[8]||'').replace(/,/g,''))||0);});
+  // rowReasonSnapshot 기반으로 cancelData 재구성 (ERP 재확인 없음)
+  const _RN={'마진율 미달':'마진율미달','불량미납':'불량으로미납처리'};
+  const snap=rec.rowReasonSnapshot;
 
-  // skuIdSetComponents 재빌드 (현재 ERP 기준)
-  skuIdSetComponents={};
-  withNo.forEach(r=>{
-    const id=normId(r[3]); if(skuIdSetComponents[id]) return;
-    const spec=skuErpMap[id]||'';
-    if(spec&&setComponentMap[spec]){ skuIdSetComponents[id]=setComponentMap[spec]; return; }
-    if(spec){ const sc=extractSetCode(spec); if(sc){ for(const [k,v] of Object.entries(setComponentMap)){ if(extractSetCode(k)===sc){ skuIdSetComponents[id]=v; return; } } } }
-    if(setComponentMap[id]){ skuIdSetComponents[id]=setComponentMap[id]; return; }
-    const ic=extractSetCode(id); if(ic){ for(const [k,v] of Object.entries(setComponentMap)){ if(extractSetCode(k)===ic){ skuIdSetComponents[id]=v; return; } } }
+  const _poOut={};
+  rec.withNo.forEach((row,i)=>{
+    const ponum=String(row[1]||'').trim(); if(!ponum) return;
+    const rsn=snap[i]!==undefined?snap[i]:'';
+    const amt=parseFloat(String(row[10]||'').replace(/,/g,''))||0;
+    if(!_poOut[ponum]) _poOut[ponum]=0;
+    if(!rsn) _poOut[ponum]+=amt;
+  });
+  const _cancelPoSet=new Set(Object.entries(_poOut).filter(([,v])=>v===0).map(([k])=>k));
+
+  const _cancelMap={};
+  rec.withNo.forEach((row,i)=>{
+    const ponum=String(row[1]||'').trim();
+    if(!_cancelPoSet.has(ponum)) return;
+    const rsn=snap[i]!==undefined?snap[i]:'';
+    if(!rsn) return;
+    const rn=_RN[rsn]||rsn;
+    const qty=parseFloat(String(row[8]||'').replace(/,/g,''))||0;
+    const amt=parseFloat(String(row[10]||'').replace(/,/g,''))||0;
+    if(!_cancelMap[ponum]) _cancelMap[ponum]={ponum,center:String(row[6]||'').trim(),items:[]};
+    _cancelMap[ponum].items.push({name:String(row[4]||'').trim(),qty,amt,reason:rn,skuid:String(row[3]||'').trim()});
   });
 
-  // printSkuSet 재빌드
-  printSkuSet=new Set();
-  withNo.forEach(r=>{const id=normId(r[3]);const nc=extractSetCode(String(r[4]||''));if(PRINT_SPEC_CODES.has(nc)||PRINT_SPEC_CODES.has(extractSetCode(id))||(skuIdSetComponents[id]||[]).some(c=>PRINT_SPEC_CODES.has(extractSetCode(c))))printSkuSet.add(id);});
-
-  saveCurrentSession();
-  renderAnnualPanel(); // 납품데이터 화면 즉시 갱신
-  if(btn){
-    btn.textContent='✓ 저장됨';
-    setTimeout(()=>{btn.disabled=false;btn.textContent='납품저장';},2000);
-  }
+  rec.cancelData={orders:Object.values(_cancelMap),reliable:true};
+  store[dateKey]=rec;
+  if(!ssSave(store)){ if(btn){btn.disabled=false;btn.textContent='납품저장';} return; }
+  _sharedWrite('gabe_sessions_v1',store).then(()=>{ renderAnnualPanel(); });
+  if(btn){ btn.textContent='✓ 저장됨'; setTimeout(()=>{btn.disabled=false;btn.textContent='납품저장';},2000); }
 }
 
 // ── 발주취소 데이터 일괄 재계산 (cancelData 없는 과거 세션 전체 처리) ──
@@ -2044,12 +2031,15 @@ function saveCurrentSession(){
   let saveTOut=0, saveOrdQty=0, saveOutQty=0;
   const saveCats={재고부족:0,'마진율 미달':0,마케팅재고:0,단종:0,불량미납:0,발주취소:0,확인필요:0};
   const saveCatQtys={재고부족:0,'마진율 미달':0,마케팅재고:0,단종:0,불량미납:0,발주취소:0,확인필요:0};
+  // 각 행의 최종 사유를 스냅샷으로 캡처 (발주리스트 현재 화면 기준)
+  const rowReasonSnapshot={};
   withNo.forEach((r,i)=>{
     const sid=normId(r[3]),pct=getMarginPct(sid);
     const isGr=discontinuedSet.has(sid),isOr=pct!==null&&pct<17;
     const st=getStockStatus(sid);
     const sysR=isGr?'단종':isOr?'마진율 미달':printSkuSet.has(sid)?'':st==='short'?'재고부족':st==='check'?'확인필요':'';
     const rsn=manualReasonMap[i]!==undefined?manualReasonMap[i]:sysR;
+    rowReasonSnapshot[i]=rsn;
     const amt=parseFloat(String(r[10]||'').replace(/,/g,''))||0;
     const qty=parseFloat(String(r[8]||'').replace(/,/g,''))||0;
     saveOrdQty+=qty;
@@ -2058,21 +2048,22 @@ function saveCurrentSession(){
       if(saveCatQtys[rsn]!==undefined) saveCatQtys[rsn]+=qty;
     } else{ saveTOut+=amt; saveOutQty+=qty; }
   });
-  // ── 발주취소 발주서 사전 계산 (calcSummary 기준 = 엑셀 다운로드와 동일 로직) ──
-  // 출고매입가 합이 0인 발주번호만 추출, 저장 시점의 완전한 컨텍스트 사용
-  const _savePoRows=calcSummary().poRows;
-  const _savePoOut={};
-  _savePoRows.forEach(r=>{if(!_savePoOut[r.ponum])_savePoOut[r.ponum]=0;_savePoOut[r.ponum]+=r.out;});
-  const _cancelPoSet=new Set(Object.entries(_savePoOut).filter(([,v])=>v===0).map(([k])=>k));
+  // cancelData: rowReasonSnapshot 기반으로 계산 (ERP 재확인 없이 화면에 표시된 사유 그대로 사용)
   const _RN={'마진율 미달':'마진율미달','불량미납':'불량으로미납처리'};
+  const _savePoOut={};
+  withNo.forEach((row,i)=>{
+    const ponum=String(row[1]||'').trim(); if(!ponum) return;
+    const rsn=rowReasonSnapshot[i];
+    const amt=parseFloat(String(row[10]||'').replace(/,/g,''))||0;
+    if(!_savePoOut[ponum]) _savePoOut[ponum]=0;
+    if(!rsn) _savePoOut[ponum]+=amt;
+  });
+  const _cancelPoSet=new Set(Object.entries(_savePoOut).filter(([,v])=>v===0).map(([k])=>k));
   const _cancelMap={};
   withNo.forEach((row,i)=>{
     const ponum=String(row[1]||'').trim();
     if(!_cancelPoSet.has(ponum)) return;
-    const sid=normId(row[3]),pct=getMarginPct(sid);
-    const _st=getStockStatus(sid);
-    const sysR=discontinuedSet.has(sid)?'단종':(pct!==null&&pct<17)?'마진율 미달':printSkuSet.has(sid)?'':_st==='short'?'재고부족':_st==='check'?'확인필요':'';
-    const rsn=manualReasonMap[i]!==undefined?manualReasonMap[i]:sysR;
+    const rsn=rowReasonSnapshot[i]||'';
     if(!rsn) return;
     const rn=_RN[rsn]||rsn;
     const qty=parseFloat(String(row[8]||'').replace(/,/g,''))||0;
@@ -2080,7 +2071,7 @@ function saveCurrentSession(){
     if(!_cancelMap[ponum])_cancelMap[ponum]={ponum,center:String(row[6]||'').trim(),items:[]};
     _cancelMap[ponum].items.push({name:String(row[4]||'').trim(),qty,amt,reason:rn,skuid:String(row[3]||'').trim()});
   });
-  const cancelData={orders:Object.values(_cancelMap),reliable:true}; // 신뢰할 수 있는 저장임을 표시
+  const cancelData={orders:Object.values(_cancelMap),reliable:true};
 
   const store=ssLoad();
   store[dateKey]={
@@ -2094,6 +2085,7 @@ function saveCurrentSession(){
     cats: saveCats,
     catQtys: saveCatQtys,
     cancelData: cancelData,
+    rowReasonSnapshot: rowReasonSnapshot,
     withNo: withNo,
     manualReasonMap: manualReasonMap,
     outAmtOverrides: outAmtOverrides,
