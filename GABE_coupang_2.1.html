@@ -1764,20 +1764,47 @@ async function clearUnreliableCancelData(){
   }
 }
 
-// ── 납품저장: 세션 불러오기 + 최신 ERP 적용 + cancelData 포함 저장 (날짜별 버튼용) ──
-async function loadAndSaveSession(dateKey, btn){
-  if(!confirm(dateKey+' 데이터를 불러와서 납품데이터로 저장합니다.\n현재 작업 중인 내용은 유지됩니다.\n진행하시겠습니까?')) return;
+// ── 납품저장: 발주 데이터만 복원 + 현재 ERP 유지 + cancelData 재계산 저장 ──
+// loadSession()을 호출하면 구 ERP로 덮어씌워지므로 발주 데이터만 직접 복원
+function loadAndSaveSession(dateKey, btn){
+  if(!confirm(dateKey+' 데이터를 불러와서 납품데이터로 저장합니다.\n현재 ERP 재고 기준으로 재계산됩니다.\n진행하시겠습니까?')) return;
   if(btn){btn.disabled=true;btn.textContent='저장중...';}
 
-  loadSession(dateKey);
+  const store=ssLoad();
+  const rec=store[dateKey];
+  if(!rec){ alert('저장 데이터를 찾을 수 없습니다.'); if(btn){btn.disabled=false;btn.textContent='납품저장';} return; }
 
-  // 서버 최신 ERP 로드 → cancelData가 항상 최신 재고 기준으로 계산되도록
-  if(_serverConnected){
-    await _loadErpDataFromServer();
-  } else if(Object.keys(eprQtyMap).length===0){
-    // 서버 미연결 + ERP 없음 → 저장된 ERP 그대로 사용 (기존 동작)
+  // 현재 ERP 유지 여부 결정 (ERP가 로드돼 있으면 현재 ERP 우선)
+  const hasCurrentErp=Object.keys(eprQtyMap).length>0;
+
+  // 발주 데이터만 복원 (ERP 관련 전역변수는 건드리지 않음)
+  withNo          =rec.withNo||[];
+  processed       =withNo.map(r=>r.slice(1));
+  manualReasonMap =rec.manualReasonMap||{};
+  outAmtOverrides =rec.outAmtOverrides||{};
+  marginMap       =rec.marginMap||{};
+  discontinuedSet =new Set(rec.discontinuedSet||[]);
+  poDeliveryMap   =rec.poDeliveryMap||{};
+  if(!Object.keys(poDeliveryMap).length&&withNo.length){
+    withNo.forEach(r=>{const p=String(r[1]||'').trim();if(p&&!poDeliveryMap[p])poDeliveryMap[p]=dateKey;});
   }
-  // skuIdSetComponents 재빌드 (갱신된 ERP 기준)
+  _loadedSessionDateKey=dateKey;
+
+  // ERP가 없을 때만 세션 ERP로 폴백
+  if(!hasCurrentErp){
+    skuErpMap      =rec.skuErpMap||{};
+    eprQtyMap      =rec.eprQtyMap||{};
+    eprSpecSet     =new Set(rec.eprSpecSet||[]);
+    setComponentMap=rec.setComponentMap||{};
+    barcodeAttachMap=rec.barcodeAttachMap||{};
+    skuBarcodeMap  =rec.skuBarcodeMap||{};
+  }
+
+  // skuTotalQtyMap 재빌드
+  skuTotalQtyMap={};
+  withNo.forEach(r=>{const id=normId(r[3]);skuTotalQtyMap[id]=(skuTotalQtyMap[id]||0)+(parseFloat(String(r[8]||'').replace(/,/g,''))||0);});
+
+  // skuIdSetComponents 재빌드 (현재 ERP 기준)
   skuIdSetComponents={};
   withNo.forEach(r=>{
     const id=normId(r[3]); if(skuIdSetComponents[id]) return;
@@ -1787,6 +1814,10 @@ async function loadAndSaveSession(dateKey, btn){
     if(setComponentMap[id]){ skuIdSetComponents[id]=setComponentMap[id]; return; }
     const ic=extractSetCode(id); if(ic){ for(const [k,v] of Object.entries(setComponentMap)){ if(extractSetCode(k)===ic){ skuIdSetComponents[id]=v; return; } } }
   });
+
+  // printSkuSet 재빌드
+  printSkuSet=new Set();
+  withNo.forEach(r=>{const id=normId(r[3]);const nc=extractSetCode(String(r[4]||''));if(PRINT_SPEC_CODES.has(nc)||PRINT_SPEC_CODES.has(extractSetCode(id))||(skuIdSetComponents[id]||[]).some(c=>PRINT_SPEC_CODES.has(extractSetCode(c))))printSkuSet.add(id);});
 
   saveCurrentSession();
   renderAnnualPanel(); // 납품데이터 화면 즉시 갱신
