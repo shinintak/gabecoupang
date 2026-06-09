@@ -2823,8 +2823,9 @@ function getStockStatus(skuId){
 
   // 세트구성 매칭 건너뛰기 목록에 있으면 → EPR 직접 조회로 바로 이동
   if(SKIP_SET_MATCH_SKUS.has(id)){
-    if(!spec||!eprSpecSet.has(spec)) return 'check';
-    const pda=eprQtyMap[spec]||0;
+    const normSpec=normId(spec);
+    if(!spec||!eprSpecSet.has(normSpec)) return 'check';
+    const pda=eprQtyMap[normSpec]||0;
     return (pda-totalQty)<=0 ? 'short' : 'ok';
   }
 
@@ -2899,8 +2900,9 @@ function getStockStatus(skuId){
   }
 
   // 세트구성 없음 → EPR 직접 체크
-  if(!spec||!eprSpecSet.has(spec)) return 'check';
-  const pda=eprQtyMap[spec]||0;
+  const normSpec=normId(spec);
+  if(!spec||!eprSpecSet.has(normSpec)) return 'check';
+  const pda=eprQtyMap[normSpec]||0;
   return (pda-totalQty)<=0 ? 'short' : 'ok';
 }
 
@@ -5126,8 +5128,19 @@ async function syncOutgoingFromServer(silent=false){
 }
 async function saveMktToServer(){
   if(!canEdit('outgoing_mkt')){ alert('마케팅 저장 권한이 없습니다.'); return; }
-  const d = mktLoad();
-  await _sharedWrite(OUTGOING_MKT_KEY, d);
+  const local = mktLoad();
+  // 서버 데이터 먼저 읽어서 병합 → 다른 사용자 변경사항 보존
+  const server = (_serverConnected ? await _sharedRead(OUTGOING_MKT_KEY) : null) || {};
+  const merged = JSON.parse(JSON.stringify(server));
+  for(const date of Object.keys(local)){
+    if(!merged[date]) merged[date]={};
+    for(const skuId of Object.keys(local[date])){
+      if(!merged[date][skuId]) merged[date][skuId]={};
+      Object.assign(merged[date][skuId], local[date][skuId]);
+    }
+  }
+  try{ localStorage.setItem(OUTGOING_MKT_KEY, JSON.stringify(merged)); }catch(e){}
+  await _sharedWrite(OUTGOING_MKT_KEY, merged);
   const el=document.getElementById('outgoing-sync-msg');
   if(el){ el.textContent='✓ 마케팅 저장됨'; el.style.display='inline'; setTimeout(()=>{ el.style.display='none'; el.textContent='✓ 동기화됨'; },2000); }
 }
@@ -5182,8 +5195,7 @@ const OUTGOING_MKT_KEY = 'gabe_outgoing_mkt_v1';
 function mktLoad(){ try{ return JSON.parse(localStorage.getItem(OUTGOING_MKT_KEY)||'{}'); }catch(e){ return {}; } }
 function mktSave(d){
   try{ localStorage.setItem(OUTGOING_MKT_KEY,JSON.stringify(d)); }catch(e){}
-  // 서버에 즉시 반영 (다른 컴퓨터에서 📤 마케팅 저장 또는 🔄 동기화로 확인)
-  _sharedWrite(OUTGOING_MKT_KEY,d);
+  // 서버 즉시 저장 제거 → 📤 마케팅 저장 버튼으로 병합 저장 (다중 사용자 덮어쓰기 방지)
 }
 
 function showMktEdit(event, date, skuId, field, currentVal) {
