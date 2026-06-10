@@ -5627,6 +5627,21 @@ function renderMktNegoTable(){
   }).join('');
 }
 
+function _mktNegoSyncForm(){
+  const tbody = document.getElementById('mkt-nego-tbody');
+  if(!tbody) return;
+  const rows = mktNegoLoad();
+  let changed = false;
+  [...tbody.querySelectorAll('tr[data-idx]')].forEach(tr => {
+    const i = parseInt(tr.dataset.idx);
+    if(!rows[i]) return;
+    tr.querySelectorAll('input[data-field]').forEach(inp => {
+      if(rows[i][inp.dataset.field] !== inp.value){ rows[i][inp.dataset.field] = inp.value; changed = true; }
+    });
+  });
+  if(changed) try{ localStorage.setItem(MKT_NEGO_KEY, JSON.stringify(rows)); }catch(e){}
+}
+
 function _mktNegoOrderQty(skuId, date){
   if(!skuId || !date) return 0;
   const id = normId(skuId);
@@ -5689,6 +5704,7 @@ function openMktDateDrop(event, idx){
 }
 
 function mktNegoSelectDate(idx, date){
+  _mktNegoSyncForm();
   const rows = mktNegoLoad();
   if(!rows[idx]) return;
   rows[idx].outgoingDate = date;
@@ -5704,6 +5720,7 @@ function mktNegoFieldChange(idx, inp){
 }
 
 function mktNegoSkuIdChange(idx, inp){
+  _mktNegoSyncForm();
   const rows = mktNegoLoad();
   if(!rows[idx]) return;
   rows[idx].skuId = inp.value.trim();
@@ -5730,6 +5747,7 @@ function mktNegoQtyInput(idx, inp){
 }
 
 function mktNegoShipDate(idx, date){
+  _mktNegoSyncForm();
   const rows = mktNegoLoad();
   if(!rows[idx]) return;
   const r = rows[idx];
@@ -5751,6 +5769,7 @@ function mktNegoShipDate(idx, date){
 }
 
 function addMktNegoRow(){
+  _mktNegoSyncForm();
   const rows = mktNegoLoad();
   rows.push({ startDate:'', endDate:'', skuId:'', skuName:'', mkt1:'', mkt2:'', period:'재입고까지', outgoingDate:'', shippedDates:{} });
   mktNegoSave(rows);
@@ -5761,6 +5780,7 @@ function addMktNegoRow(){
 
 function deleteMktNegoRow(idx){
   if(!confirm('이 행을 삭제하시겠습니까?')) return;
+  _mktNegoSyncForm();
   const rows = mktNegoLoad();
   rows.splice(idx, 1);
   mktNegoSave(rows);
