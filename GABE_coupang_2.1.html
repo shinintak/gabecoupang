@@ -955,6 +955,7 @@ async function _saveErpDataToServer() {
   const snapshot = {
     eprQtyMap:         Object.assign({}, eprQtyMap),
     skuErpMap:         Object.assign({}, skuErpMap),
+    skuNameMap:        Object.assign({}, skuNameMap),
     skuIdSetComponents:Object.assign({}, skuIdSetComponents),
     setComponentMap:   Object.assign({}, setComponentMap),
     savedAt:           new Date().toISOString()
@@ -969,6 +970,7 @@ async function _loadErpDataFromServer() {
   // 전역 맵에 병합 (기존 데이터 유지하면서 서버 데이터 덮어쓰기)
   Object.assign(eprQtyMap,          data.eprQtyMap          || {});
   Object.assign(skuErpMap,          data.skuErpMap          || {});
+  Object.assign(skuNameMap,         data.skuNameMap         || {});
   Object.assign(skuIdSetComponents, data.skuIdSetComponents || {});
   Object.assign(setComponentMap,    data.setComponentMap    || {});
   return true;
@@ -1447,6 +1449,7 @@ let undoInProgress=false;
 const UNDO_LIMIT=50;
 let marginMap={};    // SKU ID(문자열) → 마진율(소수)
 let skuErpMap={};    // SKU ID(문자열) → SPEC
+let skuNameMap={};   // SKU ID(문자열) → 쿠팡 상품명 (2.SKU ID D열)
 let eprQtyMap={};    // SPEC(문자열) → PDA수량 합산 (EPR 재고)
 let eprNameMap={};   // 품명(B열) → PDA수량 (한글명 세트구성 폴백용)
 let eprSpecSet=new Set(); // EPR에 등록된 SPEC 집합
@@ -1487,7 +1490,7 @@ document.getElementById('fi-margin').addEventListener('change', e=>{
 
 function parseAllInOne(buf, file){
   // 새 파일 로드 전 전체 상태 초기화
-  marginMap={}; skuErpMap={}; eprQtyMap={}; eprNameMap={}; eprSpecSet=new Set();
+  marginMap={}; skuErpMap={}; skuNameMap={}; eprQtyMap={}; eprNameMap={}; eprSpecSet=new Set();
   discontinuedSet=new Set(); skuTotalQtyMap={}; setComponentMap={}; skuIdSetComponents={};
   milkRunCenterSet=new Set(); autoMilkRunCenterSet=new Set(); milkRunCenterOverrides={}; poDeliveryMap={}; manualReasonMap={}; colFilters={};
   outAmtOverrides={}; sortStack=[]; undoStack=[]; printSkuSet=new Set();
@@ -1528,10 +1531,11 @@ function parseAllInOne(buf, file){
     for(let R=1;R<=rng.e.r;R++){
       const cA=ws[XLSX.utils.encode_cell({r:R,c:0})]; // A열 = SKU ID
       const cC=ws[XLSX.utils.encode_cell({r:R,c:2})]; // C열 = SPEC
-      if(!cA||!cC) continue;
-      const id=normId(cA.v);
-      const spec=String(cC.v||'').trim();
-      if(id&&spec) skuErpMap[id]=spec;
+      const cD=ws[XLSX.utils.encode_cell({r:R,c:3})]; // D열 = 쿠팡 상품명
+      if(!cA) continue;
+      const id=normId(cA.v); if(!id) continue;
+      if(cC){ const spec=String(cC.v||'').trim(); if(spec) skuErpMap[id]=spec; }
+      if(cD && cD.v){ const nm=String(cD.v).trim(); if(nm) skuNameMap[id]=nm; }
     }
   }
 
@@ -2847,7 +2851,7 @@ function reloadLastFile(){
 
 function clearAll(){
   if(!confirm('초기화할까요?')) return;
-  marginMap={}; skuErpMap={}; eprQtyMap={}; eprNameMap={}; eprSpecSet=new Set(); discontinuedSet=new Set(); skuTotalQtyMap={}; setComponentMap={}; skuIdSetComponents={}; milkRunCenterSet=new Set(); autoMilkRunCenterSet=new Set(); milkRunCenterOverrides={}; poDeliveryMap={}; manualReasonMap={}; barcodeSheetRaw={}; skuBarcodeMap={}; barcodeAttachMap={}; colFilters={};
+  marginMap={}; skuErpMap={}; skuNameMap={}; eprQtyMap={}; eprNameMap={}; eprSpecSet=new Set(); discontinuedSet=new Set(); skuTotalQtyMap={}; setComponentMap={}; skuIdSetComponents={}; milkRunCenterSet=new Set(); autoMilkRunCenterSet=new Set(); milkRunCenterOverrides={}; poDeliveryMap={}; manualReasonMap={}; barcodeSheetRaw={}; skuBarcodeMap={}; barcodeAttachMap={}; colFilters={};
   processed=[]; withNo=[];
   document.getElementById('margin-saved-bar').style.display='none';
   document.getElementById('file-ok').style.display='none';
@@ -5567,6 +5571,7 @@ function _mktNegoErpQty(skuId){
 function _mktNegoSkuName(skuId){
   if(!skuId) return '';
   const id = normId(skuId);
+  if(skuNameMap[id]) return skuNameMap[id];
   if(window.withNo && withNo.length){
     const row = withNo.find(r => normId(r[3]) === id);
     if(row && row[4]) return String(row[4]);
@@ -5610,15 +5615,17 @@ function renderMktNegoTable(){
       <td style="padding:5px 7px;border:1px solid #E0E5FF;"><input data-field="startDate" type="text" value="${String(r.startDate||'').replace(/"/g,'&quot;')}" onchange="mktNegoFieldChange(${i},this)" placeholder="YY.MM.DD" style="width:80px;padding:4px 6px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;outline:none;"></td>
       <td style="padding:5px 7px;border:1px solid #E0E5FF;"><input data-field="endDate" type="text" value="${String(r.endDate||'').replace(/"/g,'&quot;')}" onchange="mktNegoFieldChange(${i},this)" placeholder="YY.MM.DD" style="width:80px;padding:4px 6px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;outline:none;"></td>
       <td style="padding:5px 7px;border:1px solid #E0E5FF;"><input data-field="skuId" type="text" value="${String(r.skuId||'').replace(/"/g,'&quot;')}" onchange="mktNegoSkuIdChange(${i},this)" placeholder="SKU ID" style="width:90px;padding:4px 6px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;outline:none;"></td>
-      <td style="padding:5px 7px;border:1px solid #E0E5FF;min-width:200px;"><input data-field="skuName" type="text" value="${String(r.skuName||'').replace(/"/g,'&quot;')}" onchange="mktNegoFieldChange(${i},this)" placeholder="상품명" style="width:100%;box-sizing:border-box;padding:4px 6px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;outline:none;"></td>
+      <td style="padding:5px 7px;border:1px solid #E0E5FF;min-width:260px;"><input data-field="skuName" type="text" value="${String(r.skuName||'').replace(/"/g,'&quot;')}" onchange="mktNegoFieldChange(${i},this)" placeholder="상품명" style="width:100%;box-sizing:border-box;padding:4px 6px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;outline:none;"></td>
       <td style="padding:5px 7px;border:1px solid #E0E5FF;text-align:center;"><input data-field="mkt1" type="number" value="${r.mkt1||''}" min="0" oninput="mktNegoQtyInput(${i},this)" style="width:70px;padding:4px 6px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;outline:none;text-align:right;"></td>
       <td style="padding:5px 7px;border:1px solid #E0E5FF;text-align:center;"><input data-field="mkt2" type="number" value="${r.mkt2||''}" min="0" oninput="mktNegoQtyInput(${i},this)" style="width:70px;padding:4px 6px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;outline:none;text-align:right;"></td>
       <td style="padding:5px 7px;border:1px solid #E0E5FF;"><input data-field="period" type="text" value="${String(r.period||'').replace(/"/g,'&quot;')}" onchange="mktNegoFieldChange(${i},this)" placeholder="재입고까지" style="width:90px;padding:4px 6px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;outline:none;"></td>
-      <td style="padding:5px 7px;border:1px solid #E0E5FF;min-width:130px;">
-        <button onclick="openMktDateDrop(event,${i})" style="width:100%;text-align:left;padding:4px 8px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;background:#fff;cursor:pointer;margin-bottom:3px;display:flex;justify-content:space-between;align-items:center;box-sizing:border-box;">
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${selLabel}</span><span style="flex-shrink:0;margin-left:4px;color:${isSelShipped?'#2E7D32':'#888'};">${isSelShipped?'✓':'▼'}</span>
-        </button>
-        <div class="mkt-order-qty-cell" style="text-align:right;font-weight:700;color:${oqColor};">${oqText}</div>
+      <td style="padding:5px 7px;border:1px solid #E0E5FF;min-width:150px;">
+        <div style="display:flex;align-items:center;gap:5px;">
+          <span class="mkt-order-qty-cell" style="flex-shrink:0;font-weight:700;color:${oqColor};min-width:28px;text-align:right;">${oqText}</span>
+          <button onclick="openMktDateDrop(event,${i})" style="flex:1;text-align:left;padding:4px 8px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;background:#fff;cursor:pointer;display:flex;justify-content:space-between;align-items:center;box-sizing:border-box;min-width:0;">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${selLabel}</span><span style="flex-shrink:0;margin-left:4px;color:${isSelShipped?'#2E7D32':'#888'};">${isSelShipped?'✓':'▼'}</span>
+          </button>
+        </div>
       </td>
       <td style="padding:5px 7px;border:1px solid #E0E5FF;text-align:right;font-weight:600;color:#1B2559;">${erpQty!==null?erpQty.toLocaleString('ko-KR'):'<span style="color:#aaa">-</span>'}</td>
       <td class="mkt-avail-cell" style="padding:5px 7px;border:1px solid #E0E5FF;text-align:right;font-weight:700;color:${ac};">${avail!==null?avail.toLocaleString('ko-KR'):'<span style="color:#aaa">-</span>'}</td>
