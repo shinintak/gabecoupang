@@ -2527,7 +2527,7 @@ function renderAnnualPanel(){
     {key:'gmv',      label:'매출액(GMV)', color:'#C62828', fmt:'amt', hdr:'#1565C0', cellBg:'#FFFDE7'},
     {key:'rate',     label:'납품비율',    color:'#C62828', fmt:'pct', hdr:'#BF360C', cellBg:'#FFFDE7'},
     {key:'delivery', label:'택배비',      color:'#111',    fmt:'amt', hdr:'#4A148C'},
-    {key:'milkrun',  label:'밀크런',      color:'#111',    fmt:'amt', hdr:'#4A148C'},
+    {key:'milkrun',  label:'밀크런(VAT포함)', color:'#111',    fmt:'amt', hdr:'#4A148C'},
   ];
 
   // 합계 행 계산
@@ -6663,7 +6663,7 @@ function _renderMonthPopupContent(year, monthLabel){
         <th style="${thS}color:#ffcdd2;"></th>
         <th style="${thS}color:#ffcdd2;"></th>
         <th style="${thS}">택배</th>
-        <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;">밀크런</th>
+        <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;">밀크런(VAT포함)</th>
       </tr>
     </thead><tbody>`;
 
