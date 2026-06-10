@@ -330,6 +330,7 @@ body{padding:0!important;overflow:hidden;}
             <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:center;">마케팅1팀<br><span style="font-weight:400;font-size:10px;">(일반,쿠팡)</span></th>
             <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:center;">마케팅2팀<br><span style="font-weight:400;font-size:10px;">(공구)</span></th>
             <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:center;">재고협의기간</th>
+            <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:right;">발주수량<br><span style="font-weight:400;font-size:10px;">(날짜선택)</span></th>
             <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:right;">ERP수량</th>
             <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:right;">쿠팡사용<br>가능수량</th>
             <th style="padding:8px 10px;border:1px solid #E0E5FF;width:36px;"></th>
@@ -5591,15 +5592,20 @@ function renderMktNegoTable(){
   const rows = mktNegoLoad();
   const tbody = document.getElementById('mkt-nego-tbody');
   if(!rows.length){
-    tbody.innerHTML='<tr><td colspan="10" style="text-align:center;color:#A0AEC0;padding:32px;font-size:13px;">등록된 제품이 없습니다. [+ 행 추가] 버튼으로 추가하세요.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="11" style="text-align:center;color:#A0AEC0;padding:32px;font-size:13px;">등록된 제품이 없습니다. [+ 행 추가] 버튼으로 추가하세요.</td></tr>';
     return;
   }
+  const outDates = Object.keys(outgoingLoad()).sort();
   tbody.innerHTML = rows.map((r,i) => {
     const erpQty = _mktNegoErpQty(r.skuId);
-    const m1 = parseInt(r.mkt1) || 0;
     const m2 = parseInt(r.mkt2) || 0;
-    const avail = erpQty !== null ? erpQty - m1 - m2 : null;
+    const avail = erpQty !== null ? erpQty - m2 : null;
     const ac = avail===null?'#aaa':avail<0?'#e74c3c':avail===0?'#e67e22':'#059669';
+    const orderQty = _mktNegoOrderQty(r.skuId, r.outgoingDate);
+    const oqText = r.outgoingDate ? (orderQty > 0 ? orderQty.toLocaleString('ko-KR') : '0') : '-';
+    const oqColor = orderQty > 0 ? '#1B2559' : '#aaa';
+    const isSelShipped = !!(r.outgoingDate && r.shippedDates && r.shippedDates[r.outgoingDate]!==undefined);
+    const selLabel = r.outgoingDate ? (()=>{ const [,mo,dd]=r.outgoingDate.split('-'); return `${parseInt(mo)}월 ${parseInt(dd)}일`; })() : '날짜 선택';
     return `<tr data-idx="${i}" style="border-bottom:1px solid #E0E5FF;">
       <td style="padding:5px 7px;border:1px solid #E0E5FF;"><input data-field="startDate" type="text" value="${String(r.startDate||'').replace(/"/g,'&quot;')}" onchange="mktNegoFieldChange(${i},this)" placeholder="YY.MM.DD" style="width:80px;padding:4px 6px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;outline:none;"></td>
       <td style="padding:5px 7px;border:1px solid #E0E5FF;"><input data-field="endDate" type="text" value="${String(r.endDate||'').replace(/"/g,'&quot;')}" onchange="mktNegoFieldChange(${i},this)" placeholder="YY.MM.DD" style="width:80px;padding:4px 6px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;outline:none;"></td>
@@ -5608,11 +5614,86 @@ function renderMktNegoTable(){
       <td style="padding:5px 7px;border:1px solid #E0E5FF;text-align:center;"><input data-field="mkt1" type="number" value="${r.mkt1||''}" min="0" oninput="mktNegoQtyInput(${i},this)" style="width:70px;padding:4px 6px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;outline:none;text-align:right;"></td>
       <td style="padding:5px 7px;border:1px solid #E0E5FF;text-align:center;"><input data-field="mkt2" type="number" value="${r.mkt2||''}" min="0" oninput="mktNegoQtyInput(${i},this)" style="width:70px;padding:4px 6px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;outline:none;text-align:right;"></td>
       <td style="padding:5px 7px;border:1px solid #E0E5FF;"><input data-field="period" type="text" value="${String(r.period||'').replace(/"/g,'&quot;')}" onchange="mktNegoFieldChange(${i},this)" placeholder="재입고까지" style="width:90px;padding:4px 6px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;outline:none;"></td>
+      <td style="padding:5px 7px;border:1px solid #E0E5FF;min-width:130px;">
+        <button onclick="openMktDateDrop(event,${i})" style="width:100%;text-align:left;padding:4px 8px;font-size:11px;border:1px solid #E0E5FF;border-radius:4px;background:#fff;cursor:pointer;margin-bottom:3px;display:flex;justify-content:space-between;align-items:center;box-sizing:border-box;">
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${selLabel}</span><span style="flex-shrink:0;margin-left:4px;color:${isSelShipped?'#2E7D32':'#888'};">${isSelShipped?'✓':'▼'}</span>
+        </button>
+        <div class="mkt-order-qty-cell" style="text-align:right;font-weight:700;color:${oqColor};">${oqText}</div>
+      </td>
       <td style="padding:5px 7px;border:1px solid #E0E5FF;text-align:right;font-weight:600;color:#1B2559;">${erpQty!==null?erpQty.toLocaleString('ko-KR'):'<span style="color:#aaa">-</span>'}</td>
       <td class="mkt-avail-cell" style="padding:5px 7px;border:1px solid #E0E5FF;text-align:right;font-weight:700;color:${ac};">${avail!==null?avail.toLocaleString('ko-KR'):'<span style="color:#aaa">-</span>'}</td>
       <td style="padding:5px 7px;border:1px solid #E0E5FF;text-align:center;"><button onclick="deleteMktNegoRow(${i})" style="font-size:11px;padding:2px 8px;border:1px solid #e74c3c;border-radius:4px;background:#fff;color:#e74c3c;cursor:pointer;">✕</button></td>
     </tr>`;
   }).join('');
+}
+
+function _mktNegoOrderQty(skuId, date){
+  if(!skuId || !date) return 0;
+  const id = normId(skuId);
+  return (outgoingLoad()[date]||[]).filter(r => normId(r.skuId)===id).reduce((s,r) => s+(r.qty||0), 0);
+}
+
+function openMktDateDrop(event, idx){
+  event.stopPropagation();
+  const existing = document.getElementById('_mkt-date-drop_');
+  if(existing){ existing.remove(); return; }
+  const rows = mktNegoLoad();
+  const r = rows[idx]; if(!r) return;
+  const outDates = Object.keys(outgoingLoad()).sort();
+  const pop = document.createElement('div');
+  pop.id = '_mkt-date-drop_';
+  pop.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #E0E5FF;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);min-width:210px;padding:4px 0;max-height:280px;overflow-y:auto;';
+  const clearRow = document.createElement('div');
+  clearRow.style.cssText = 'padding:7px 12px;font-size:12px;color:#A0AEC0;cursor:pointer;border-bottom:1px solid #F0F0F0;';
+  clearRow.textContent = '날짜 선택';
+  clearRow.onmouseenter = ()=>clearRow.style.background='#F7F9FF';
+  clearRow.onmouseleave = ()=>clearRow.style.background='';
+  clearRow.onclick = ()=>{ mktNegoSelectDate(idx,''); pop.remove(); };
+  pop.appendChild(clearRow);
+  if(!outDates.length){
+    const em = document.createElement('div');
+    em.style.cssText = 'padding:10px 12px;font-size:12px;color:#A0AEC0;';
+    em.textContent = '저장된 출고 날짜가 없습니다.';
+    pop.appendChild(em);
+  }
+  outDates.forEach(d=>{
+    const [,mo,dd] = d.split('-');
+    const oq = _mktNegoOrderQty(r.skuId, d);
+    const isShipped = !!(r.shippedDates && r.shippedDates[d]!==undefined);
+    const isSelected = d === r.outgoingDate;
+    const row = document.createElement('div');
+    row.style.cssText = `display:flex;align-items:center;padding:5px 10px;gap:6px;${isSelected?'background:#F0F4FF;':''}`;
+    row.onmouseenter = ()=>{ if(!isSelected) row.style.background='#F7F9FF'; };
+    row.onmouseleave = ()=>{ row.style.background = isSelected?'#F0F4FF':''; };
+    const lbl = document.createElement('span');
+    lbl.style.cssText = `flex:1;font-size:12px;cursor:pointer;color:${isSelected?'#1B2559':'#4A5568'};font-weight:${isSelected?'700':'400'};`;
+    lbl.textContent = `${parseInt(mo)}월 ${parseInt(dd)}일`;
+    lbl.onclick = ()=>{ mktNegoSelectDate(idx,d); pop.remove(); };
+    const qtyEl = document.createElement('span');
+    qtyEl.style.cssText = 'font-size:11px;color:#A0AEC0;min-width:22px;text-align:right;';
+    qtyEl.textContent = oq > 0 ? oq : '';
+    const btn = document.createElement('button');
+    btn.style.cssText = `font-size:11px;padding:2px 9px;border-radius:5px;border:none;font-weight:700;cursor:pointer;white-space:nowrap;background:${isShipped?'#2E7D32':'#1565C0'};color:#fff;`;
+    btn.textContent = isShipped ? '✓ 완료' : '출고';
+    btn.onclick = e=>{ e.stopPropagation(); mktNegoShipDate(idx,d); pop.remove(); };
+    row.appendChild(lbl); row.appendChild(qtyEl); row.appendChild(btn);
+    pop.appendChild(row);
+  });
+  const rect = event.currentTarget.getBoundingClientRect();
+  pop.style.top = (rect.bottom+4)+'px';
+  pop.style.left = rect.left+'px';
+  document.body.appendChild(pop);
+  setTimeout(()=> document.addEventListener('click', function h(e){
+    if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('click',h); }
+  }), 0);
+}
+
+function mktNegoSelectDate(idx, date){
+  const rows = mktNegoLoad();
+  if(!rows[idx]) return;
+  rows[idx].outgoingDate = date;
+  mktNegoSave(rows);
+  renderMktNegoTable();
 }
 
 function mktNegoFieldChange(idx, inp){
@@ -5648,9 +5729,30 @@ function mktNegoQtyInput(idx, inp){
   if(cell){ cell.style.color=ac; cell.textContent=avail!==null?avail.toLocaleString('ko-KR'):'-'; }
 }
 
+function mktNegoShipDate(idx, date){
+  const rows = mktNegoLoad();
+  if(!rows[idx]) return;
+  const r = rows[idx];
+  const isShipped = !!(r.shippedDates && r.shippedDates[date]!==undefined);
+  if(isShipped){
+    const shippedQty = r.shippedDates[date];
+    if(!confirm(`출고 취소하시겠습니까?\n마케팅1팀 수량이 ${parseInt(r.mkt1)||0} → ${(parseInt(r.mkt1)||0)+shippedQty} 로 복원됩니다.`)) return;
+    rows[idx].mkt1 = String((parseInt(r.mkt1)||0) + shippedQty);
+    delete rows[idx].shippedDates[date];
+  } else {
+    const orderQty = _mktNegoOrderQty(r.skuId, date);
+    if(orderQty <= 0){ alert('선택한 날짜의 발주수량이 없습니다.'); return; }
+    if(!rows[idx].shippedDates) rows[idx].shippedDates = {};
+    rows[idx].mkt1 = String((parseInt(r.mkt1)||0) - orderQty);
+    rows[idx].shippedDates[date] = orderQty;
+  }
+  mktNegoSave(rows);
+  renderMktNegoTable();
+}
+
 function addMktNegoRow(){
   const rows = mktNegoLoad();
-  rows.push({ startDate:'', endDate:'', skuId:'', skuName:'', mkt1:'', mkt2:'', period:'재입고까지' });
+  rows.push({ startDate:'', endDate:'', skuId:'', skuName:'', mkt1:'', mkt2:'', period:'재입고까지', outgoingDate:'', shippedDates:{} });
   mktNegoSave(rows);
   renderMktNegoTable();
   const tbody = document.getElementById('mkt-nego-tbody');
@@ -5672,7 +5774,7 @@ function saveMktNego(){
   trs.forEach(tr => {
     const i = parseInt(tr.dataset.idx);
     if(!rows[i]) return;
-    tr.querySelectorAll('input[data-field]').forEach(inp => {
+    tr.querySelectorAll('input[data-field], select[data-field]').forEach(inp => {
       rows[i][inp.dataset.field] = inp.value.trim();
     });
   });
