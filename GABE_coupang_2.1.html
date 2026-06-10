@@ -330,7 +330,7 @@ body{padding:0!important;overflow:hidden;}
             <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:center;">마케팅1팀<br><span style="font-weight:400;font-size:10px;">(일반,쿠팡)</span></th>
             <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:center;">마케팅2팀<br><span style="font-weight:400;font-size:10px;">(공구)</span></th>
             <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:center;">재고협의기간</th>
-            <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:right;">발주수량<br><span style="font-weight:400;font-size:10px;">(날짜선택)</span></th>
+            <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:center;">발주수량<br><button onclick="openMktHeaderDateDrop(event)" style="margin-top:4px;font-size:10px;padding:2px 8px;border:1px solid #1B2559;border-radius:4px;background:#fff;color:#1B2559;cursor:pointer;font-weight:600;">전체날짜 ▼</button></th>
             <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:right;">ERP수량</th>
             <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:right;">쿠팡사용<br>가능수량</th>
             <th style="padding:8px 10px;border:1px solid #E0E5FF;width:36px;"></th>
@@ -5708,6 +5708,53 @@ function openMktDateDrop(event, idx){
   setTimeout(()=> document.addEventListener('click', function h(e){
     if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('click',h); }
   }), 0);
+}
+
+function openMktHeaderDateDrop(event){
+  event.stopPropagation();
+  const existing = document.getElementById('_mkt-hdr-date-drop_');
+  if(existing){ existing.remove(); return; }
+  const outDates = Object.keys(outgoingLoad()).sort();
+  const pop = document.createElement('div');
+  pop.id = '_mkt-hdr-date-drop_';
+  pop.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #C3CEFF;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.18);min-width:170px;padding:4px 0;';
+  if(!outDates.length){
+    const em = document.createElement('div');
+    em.style.cssText = 'padding:10px 14px;font-size:12px;color:#A0AEC0;';
+    em.textContent = '저장된 출고 날짜가 없습니다.';
+    pop.appendChild(em);
+  }
+  outDates.forEach(d=>{
+    const [,mo,dd] = d.split('-');
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:7px 14px;font-size:12px;cursor:pointer;color:#1B2559;white-space:nowrap;gap:10px;';
+    row.onmouseenter = ()=>row.style.background='#F0F4FF';
+    row.onmouseleave = ()=>row.style.background='';
+    const lbl = document.createElement('span');
+    lbl.style.fontWeight = '600';
+    lbl.textContent = `${parseInt(mo)}월 ${parseInt(dd)}일`;
+    const tag = document.createElement('span');
+    tag.style.cssText = 'font-size:10px;color:#888;';
+    tag.textContent = '전체 적용';
+    row.appendChild(lbl); row.appendChild(tag);
+    row.onclick = ()=>{ mktNegoSetAllDates(d); pop.remove(); };
+    pop.appendChild(row);
+  });
+  const rect = event.currentTarget.getBoundingClientRect();
+  pop.style.top = (rect.bottom+4)+'px';
+  pop.style.left = rect.left+'px';
+  document.body.appendChild(pop);
+  setTimeout(()=> document.addEventListener('click', function h(e){
+    if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('click',h); }
+  }), 0);
+}
+
+function mktNegoSetAllDates(date){
+  _mktNegoSyncForm();
+  const rows = mktNegoLoad();
+  rows.forEach(r => { r.outgoingDate = date; });
+  mktNegoSave(rows);
+  renderMktNegoTable();
 }
 
 function mktNegoSelectDate(idx, date){
