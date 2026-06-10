@@ -5747,7 +5747,7 @@ function mktNegoQtyInput(idx, inp){
   const rows = mktNegoLoad();
   const skuId = rows[idx] ? rows[idx].skuId : '';
   const erpQty = _mktNegoErpQty(skuId);
-  const avail = erpQty !== null ? erpQty - m1 - m2 : null;
+  const avail = erpQty !== null ? erpQty - m2 : null;
   const ac = avail===null?'#aaa':avail<0?'#e74c3c':avail===0?'#e67e22':'#059669';
   const cell = tr.querySelector('.mkt-avail-cell');
   if(cell){ cell.style.color=ac; cell.textContent=avail!==null?avail.toLocaleString('ko-KR'):'-'; }
