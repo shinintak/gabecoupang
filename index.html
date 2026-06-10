@@ -299,7 +299,10 @@ body{padding:0!important;overflow:hidden;}
   <div style="position:absolute;top:18px;left:50%;transform:translateX(-50%);width:96vw;max-width:1500px;max-height:calc(100vh - 36px);background:#fff;border-radius:14px;box-shadow:0 12px 48px rgba(0,0,0,.35);display:flex;flex-direction:column;overflow:hidden;">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 18px;background:#1B2559;border-radius:14px 14px 0 0;flex-shrink:0;">
       <span id="order-list-popup-title" style="font-size:14px;font-weight:700;color:#fff;"></span>
-      <button onclick="closeOrderListPopup()" style="background:rgba(255,255,255,0.15);border:none;border-radius:6px;padding:5px 14px;color:#fff;cursor:pointer;font-size:12px;font-weight:700;">✕ 닫기</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button id="order-list-popup-dl-btn" onclick="downloadOrderListPopupXLSX()" style="display:none;background:#2E7D32;border:none;border-radius:6px;padding:5px 14px;color:#fff;cursor:pointer;font-size:12px;font-weight:700;">📥 엑셀 다운로드</button>
+        <button onclick="closeOrderListPopup()" style="background:rgba(255,255,255,0.15);border:none;border-radius:6px;padding:5px 14px;color:#fff;cursor:pointer;font-size:12px;font-weight:700;">✕ 닫기</button>
+      </div>
     </div>
     <div id="order-list-popup-content" style="overflow:auto;flex:1;padding:16px;background:#F4F6F9;"></div>
   </div>
@@ -6258,7 +6261,9 @@ function closeMonthPopup(){
 }
 
 // ── 납품일 클릭 → 발주리스트 팝업 ──
+let _popupDk=null, _popupOnlyMissing=false;
 function openOrderListPopup(dk, onlyMissing=false){
+  _popupDk=dk; _popupOnlyMissing=onlyMissing;
   const store=ssLoad();
   const rec=store[dk];
   const [y,m,d]=dk.split('-');
@@ -6271,10 +6276,133 @@ function openOrderListPopup(dk, onlyMissing=false){
   } else {
     el.innerHTML=_buildOrderListHTML(rec, onlyMissing);
   }
+  const dlBtn=document.getElementById('order-list-popup-dl-btn');
+  if(dlBtn) dlBtn.style.display=onlyMissing?'':'none';
   document.getElementById('order-list-popup').style.display='block';
 }
 function closeOrderListPopup(){
   document.getElementById('order-list-popup').style.display='none';
+}
+
+function downloadOrderListPopupXLSX(){
+  if(!_popupDk) return;
+  const store=ssLoad();
+  const rec=store[_popupDk];
+  if(!rec||!rec.withNo||!rec.withNo.length){ alert('다운로드할 데이터가 없습니다.'); return; }
+  const S=typeof XLSXStyle!=='undefined'?XLSXStyle:XLSX;
+  const rows=rec.withNo||[];
+  const mRMap=rec.manualReasonMap||{};
+  const outOvr=rec.outAmtOverrides||{};
+  const mMap=rec.marginMap||{};
+  const discSet=new Set((rec.discontinuedSet||[]).map(v=>normId(v)));
+  const eprMap=rec.eprQtyMap||{};
+  const eprSpecSet=new Set(rec.eprSpecSet||[]);
+  const skuErpM=rec.skuErpMap||{};
+  const setCompMap=rec.setComponentMap||{};
+  const rowSnap=rec.rowReasonSnapshot||null;
+  const _isExempt=c=>c==='KS0005'||c.includes('캔디통')||c.includes('캔디동')||
+    c==='108301'||c.includes('쌓기나무 미니북')||c==='108306'||c==='116905'||
+    c==='116066'||c==='KS3220-1'||c==='KS3220-2'||
+    c==='108305'||c.includes('종이케이스')||c.includes('소마케이스')||c.includes('쌓기케이스')||
+    c==='108365';
+  const _getEpr=s=>{ const v=eprMap[normId(s)]??eprMap[s]; return (v===undefined||v===null)?null:v; };
+  const _getStatus=(id,qty)=>{
+    const nid=normId(id);
+    const spec=skuErpM[nid]||'';
+    if(_isExempt(spec)||_isExempt(nid)) return 'ok';
+    const comps=setCompMap[spec]||setCompMap[nid]||[];
+    if(comps.length>0){
+      const hasEx=comps.some(_isExempt);
+      const hasShort=comps.some(cs=>{ if(_isExempt(cs)) return false; const p=_getEpr(cs); if(p===null) return !hasEx; return p<=0||p<qty; });
+      return hasShort?'short':'ok';
+    }
+    if(!spec||!eprSpecSet.has(spec)) return 'check';
+    return (_getEpr(spec)??0)-qty<=0?'short':'ok';
+  };
+  const _getReason=(idx,row)=>{
+    if(rowSnap&&rowSnap[idx]!==undefined) return rowSnap[idx];
+    if(mRMap[idx]!==undefined) return mRMap[idx];
+    const id=normId(row[3]);
+    if(discSet.has(id)) return '단종';
+    const pctRaw=mMap[id];
+    if(pctRaw!==undefined&&Math.round(pctRaw*100)<17) return '마진율 미달';
+    const qty=parseFloat(String(row[8]||'').replace(/,/g,''))||0;
+    const st=_getStatus(id,qty);
+    if(st==='short') return '재고부족';
+    if(st==='check') return '확인필요';
+    return '';
+  };
+  const targetRows=_popupOnlyMissing
+    ? rows.map((row,i)=>({row,i})).filter(({row,i})=>_getReason(i,row)!=='')
+    : rows.map((row,i)=>({row,i}));
+  const COLS=['미출고사유','no','발주번호','발주유형','SKU ID','SKU 이름','SKU Barcode','물류센터','발주일','발주수량','매입가','총발주 매입금','출고매입가','마진율'];
+  const cl=i=>i<26?String.fromCharCode(65+i):'A'+String.fromCharCode(65+i-26);
+  const mc=(v,s)=>({v:v??'',t:typeof v==='number'?'n':'s',s:s||{}});
+  const THIN={style:'thin',color:{rgb:'CCCCCC'}};
+  const THICK={style:'medium',color:{rgb:'2C3E50'}};
+  const NCOLS=14;
+  const mkBd=(isFirst,isLast,isFC,isLC)=>({top:isFirst?THICK:THIN,bottom:isLast?THICK:THIN,left:isFC?THICK:THIN,right:isLC?THICK:THIN});
+  const mkS=(fill,bold,white,isNum,isFirst,isLast,ci,ctr)=>({
+    fill:fill?{patternType:'solid',fgColor:{rgb:fill}}:{patternType:'none'},
+    font:{name:'맑은 고딕',sz:11,bold:!!bold,color:{rgb:white?'FFFFFF':'000000'}},
+    alignment:ctr?{horizontal:'center'}:isNum?{horizontal:'right'}:{},
+    numFmt:isNum?'#,##0':'',
+    border:mkBd(isFirst,isLast,ci===0,ci===NCOLS-1)
+  });
+  const S_HDR={fill:{patternType:'solid',fgColor:{rgb:'2C3E50'}},font:{name:'맑은 고딕',sz:11,bold:true,color:{rgb:'FFFFFF'}},alignment:{horizontal:'center',vertical:'center'}};
+  const S_SUM={fill:{patternType:'solid',fgColor:{rgb:'D6E4F0'}},font:{name:'맑은 고딕',sz:11,bold:true},numFmt:'#,##0',alignment:{horizontal:'center'}};
+  const firstRows=new Set(),lastRows=new Set(); let lastPO='';
+  targetRows.forEach(({row},j)=>{ const p=String(row[1]||'').trim(); if(p!==lastPO){firstRows.add(j);if(j>0)lastRows.add(j-1);lastPO=p;} });
+  if(targetRows.length>0) lastRows.add(targetRows.length-1);
+  const ws={}; let R=0;
+  COLS.forEach((n,c)=>{ws[cl(c)+(R+1)]=mc(n,S_HDR);}); R++;
+  let tQty=0,tAmt=0,tOut=0;
+  targetRows.forEach(({row,i},j)=>{
+    const reason=_getReason(i,row);
+    const RC=REASON_COLORS[reason]||null;
+    const isFirst=firstRows.has(j),isLast=lastRows.has(j);
+    const id=normId(row[3]);
+    const isGray=discSet.has(id);
+    const pctRaw=mMap[id];
+    const pct=pctRaw!==undefined?Math.round(pctRaw*100):null;
+    const isOrange=pct!==null&&pct<17;
+    const qty=parseFloat(String(row[8]||'').replace(/,/g,''))||0;
+    const price=parseFloat(String(row[9]||'').replace(/,/g,''))||0;
+    const amt=parseFloat(String(row[10]||'').replace(/,/g,''))||0;
+    const out=outOvr[i]!==undefined?outOvr[i]:(reason?0:amt);
+    tQty+=qty; tAmt+=amt; tOut+=out;
+    const nameFill=RC?RC.bg.replace('#',''):null;
+    const whiteText=RC&&RC.fg==='#fff';
+    const defs=[
+      [reason,null,false,false,false,false],
+      [row[0],null,false,false,false,true],
+      [row[1],null,false,false,false,true],
+      [row[2],null,false,false,false,true],
+      [id,null,false,false,false,false],
+      [row[4],nameFill,false,whiteText,false,false],
+      [row[5],null,false,false,false,true],
+      [row[6],null,false,false,false,false],
+      [formatDate(row[7]),null,false,false,false,true],
+      [qty,null,false,false,true,false],
+      [price,null,false,false,true,false],
+      [amt,null,false,false,true,false],
+      [out,null,false,false,true,false],
+      [isGray?'단종':pct!==null?pct+'%':'',isOrange?'FFB300':null,isOrange,false,false,false],
+    ];
+    defs.forEach(([v,fill,bold,white,isNum,ctr],c)=>{ws[cl(c)+(R+1)]=mc(v,mkS(fill,bold,white,isNum,isFirst,isLast,c,ctr));});
+    R++;
+  });
+  R++;
+  const poCnt=new Set(targetRows.map(({row})=>String(row[1]||'').trim()).filter(v=>v)).size;
+  [['합계'],[''],['발주번호 '+poCnt+'건'],[''],[''],[''],[''],[''],[''],
+   [tQty,true],[''],[tAmt,true],[tOut,true],['']
+  ].forEach(([v,isN],c)=>{ws[cl(c)+(R+1)]=mc(v??'',{...S_SUM,numFmt:isN?'#,##0':''});});
+  R++;
+  ws['!ref']=`A1:${cl(NCOLS-1)}${R}`;
+  ws['!cols']=[{wch:14},{wch:5},{wch:13},{wch:8},{wch:10},{wch:35},{wch:14},{wch:10},{wch:11},{wch:8},{wch:10},{wch:13},{wch:13},{wch:7}];
+  const wb=S.utils.book_new();
+  S.utils.book_append_sheet(wb,ws,_popupOnlyMissing?'미납품 발주리스트':'발주리스트');
+  S.writeFile(wb,`미납품_발주리스트_${_popupDk.replace(/-/g,'')}.xlsx`);
 }
 
 function _buildOrderListHTML(rec, onlyMissing=false){
