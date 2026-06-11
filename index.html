@@ -573,7 +573,8 @@ body{padding:0!important;overflow:hidden;}
 
   <!-- GABE-BOT -->
   <div class="sb-divider" style="margin:8px 0 4px;"></div>
-  <div onclick="openGabeBotHelp()" title="GABE-BOT 도움말" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0 8px;cursor:pointer;opacity:0.75;transition:opacity .2s;" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.75'">
+  <div onclick="openGabeBotHelp()" title="GABE-BOT 도움말" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0 8px;cursor:pointer;opacity:0.75;transition:opacity .2s;position:relative;" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.75'">
+    <span id="gabebot-badge" style="display:none;position:absolute;top:2px;right:18px;min-width:16px;height:16px;background:#e53e3e;color:#fff;font-size:9px;font-weight:700;border-radius:8px;text-align:center;line-height:16px;padding:0 3px;box-shadow:0 1px 4px rgba(0,0,0,0.3);z-index:10;"></span>
     <svg width="38" height="38" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
       <line x1="13" y1="9" x2="10" y2="3" stroke="#9B7FE8" stroke-width="2" stroke-linecap="round"/>
       <circle cx="10" cy="2.5" r="2" fill="#B39DDB"/>
@@ -605,7 +606,7 @@ body{padding:0!important;overflow:hidden;}
 
 <!-- ── GABE-BOT 팝업 ── -->
 <div id="gabebot-overlay" onclick="closeGabeBotHelp()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:9998;"></div>
-<div id="gabebot-popup" style="display:none;position:fixed;bottom:80px;left:180px;width:370px;height:540px;min-width:300px;min-height:400px;background:#fff;border-radius:18px;box-shadow:0 8px 40px rgba(45,22,96,0.28);z-index:9999;flex-direction:column;overflow:hidden;">
+<div id="gabebot-popup" style="display:none;position:fixed;width:740px;height:560px;min-width:400px;min-height:400px;background:#fff;border-radius:18px;box-shadow:0 8px 40px rgba(45,22,96,0.28);z-index:9999;flex-direction:column;overflow:hidden;">
   <!-- 헤더 (드래그 핸들) -->
   <div id="gabebot-drag-handle" style="background:#2D1660;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;cursor:move;">
     <svg width="28" height="28" viewBox="0 0 38 38" fill="none">
@@ -627,9 +628,9 @@ body{padding:0!important;overflow:hidden;}
       <div style="color:#C5B5F5;font-size:10px;">도움말 · 건의함</div>
     </div>
     <!-- 탭 버튼 -->
-    <div style="display:flex;gap:4px;">
-      <button id="gabebot-tab-help" onclick="gabeBotTab('help')" style="font-size:10px;padding:4px 10px;border-radius:10px;border:none;background:rgba(255,255,255,0.9);color:#4F2FA8;font-weight:700;cursor:pointer;">🤖 도움말</button>
-      <button id="gabebot-tab-req" onclick="gabeBotTab('req')" style="font-size:10px;padding:4px 10px;border-radius:10px;border:none;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);font-weight:600;cursor:pointer;">📝 건의함</button>
+    <div style="display:flex;gap:6px;">
+      <button id="gabebot-tab-req" onclick="gabeBotTab('req')" style="font-size:11px;padding:5px 13px;border-radius:10px;border:none;background:rgba(255,255,255,0.18);color:#fff;font-weight:700;cursor:pointer;">📝 건의함</button>
+      <button id="gabebot-tab-help" onclick="gabeBotTab('help')" style="font-size:11px;padding:5px 13px;border-radius:10px;border:none;background:rgba(255,255,255,0.9);color:#4F2FA8;font-weight:700;cursor:pointer;">🤖 도움말</button>
     </div>
     <button onclick="closeGabeBotHelp()" style="background:rgba(255,255,255,0.12);border:none;border-radius:50%;width:24px;height:24px;color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
   </div>
@@ -657,8 +658,11 @@ body{padding:0!important;overflow:hidden;}
     <!-- 건의 입력 -->
     <div style="padding:10px 12px;border-top:1px solid #e8e0ff;background:#fff;flex-shrink:0;">
       <div style="font-size:11px;font-weight:700;color:#4F2FA8;margin-bottom:6px;">📝 새 건의 / 수정 요청</div>
-      <input id="req-title" type="text" placeholder="제목 (예: 발주리스트 - 필터 기능 추가)" style="width:100%;border:1px solid #c8b8f0;border-radius:8px;padding:6px 10px;font-size:11px;outline:none;color:#333;box-sizing:border-box;margin-bottom:6px;">
-      <textarea id="req-body" rows="3" placeholder="내용을 자세히 적어주세요..." style="width:100%;border:1px solid #c8b8f0;border-radius:8px;padding:6px 10px;font-size:11px;outline:none;color:#333;resize:none;box-sizing:border-box;margin-bottom:6px;"></textarea>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <input id="req-author" type="text" placeholder="작성자 (필수)" style="flex:1;border:1px solid #c8b8f0;border-radius:8px;padding:6px 10px;font-size:11px;outline:none;color:#333;box-sizing:border-box;">
+        <input id="req-title" type="text" placeholder="제목 (예: 발주리스트 - 필터 기능 추가)" style="flex:3;border:1px solid #c8b8f0;border-radius:8px;padding:6px 10px;font-size:11px;outline:none;color:#333;box-sizing:border-box;">
+      </div>
+      <textarea id="req-body" rows="6" placeholder="내용을 자세히 적어주세요..." style="width:100%;border:1px solid #c8b8f0;border-radius:8px;padding:6px 10px;font-size:11px;outline:none;color:#333;resize:none;box-sizing:border-box;margin-bottom:6px;"></textarea>
       <button onclick="gabeBotSubmitReq()" style="width:100%;height:30px;background:#4F2FA8;border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;">전송하기 ➤</button>
     </div>
   </div>
@@ -1226,6 +1230,7 @@ function _applyPermissionsUI() {
   // 관리자 메뉴
   const adminMenu = document.getElementById('sb-admin-menu');
   if (adminMenu) adminMenu.style.display = _isAdmin ? 'block' : 'none';
+  if (_isAdmin) _gabeBotStartRealtime();
 
   // 각 요소 ID → 권한 키 매핑
   const idPermMap = {
@@ -2974,6 +2979,65 @@ function _fillRateTable(mn){
 }
 
 // ── GABE-BOT ──────────────────────────────────────────
+// ── GABE-BOT 알림 ───────────────────────────────────────
+let _gabeBotUnread=0, _gabeBotChannel=null;
+
+function _gabeBotStartRealtime(){
+  if(_gabeBotChannel) return; // 중복 구독 방지
+  const sb=_getSupabase();
+  if(!sb) return;
+  _gabeBotChannel=sb.channel('gabe_suggestions_notify')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'gabe_suggestions'},
+      (payload)=>{
+        _gabeBotUnread++;
+        _gabeBotUpdateBadge();
+        _gabeBotToast(payload.new);
+      })
+    .subscribe();
+}
+
+function _gabeBotUpdateBadge(){
+  const badge=document.getElementById('gabebot-badge');
+  if(!badge) return;
+  if(_gabeBotUnread>0){
+    badge.textContent=_gabeBotUnread>99?'99+':String(_gabeBotUnread);
+    badge.style.display='block';
+  } else {
+    badge.style.display='none';
+  }
+}
+
+function _gabeBotClearBadge(){
+  _gabeBotUnread=0;
+  _gabeBotUpdateBadge();
+}
+
+function _gabeBotToast(item){
+  const toast=document.createElement('div');
+  toast.style.cssText='position:fixed;bottom:24px;right:24px;background:#2D1660;color:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 4px 20px rgba(45,22,96,0.4);z-index:99999;display:flex;flex-direction:column;gap:4px;max-width:280px;animation:gabeBotFadeIn .3s ease;';
+  toast.innerHTML=`
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:16px;">🤖</span>
+      <span style="font-size:12px;font-weight:700;">새 건의가 도착했어요!</span>
+      <button onclick="this.parentElement.parentElement.remove()" style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,0.6);font-size:14px;cursor:pointer;padding:0;">✕</button>
+    </div>
+    <div style="font-size:11px;color:#D4BCFF;padding-left:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.title||'(제목없음)'}</div>
+    <div style="font-size:10px;color:rgba(255,255,255,0.5);padding-left:24px;">${item.author||'익명'}</div>
+    <button onclick="openGabeBotHelp();gabeBotTab('req');this.closest('div[style]').remove();" style="margin-top:4px;background:rgba(255,255,255,0.15);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:600;padding:5px;cursor:pointer;">건의함 열기 →</button>`;
+  document.body.appendChild(toast);
+  // 7초 후 자동 사라짐
+  setTimeout(()=>{ toast.style.opacity='0'; toast.style.transition='opacity .4s'; setTimeout(()=>toast.remove(),400); }, 7000);
+}
+
+// 토스트 애니메이션 CSS
+if(!document.getElementById('gabebot-toast-style')){
+  const s=document.createElement('style');
+  s.id='gabebot-toast-style';
+  s.textContent='@keyframes gabeBotFadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}';
+  document.head.appendChild(s);
+}
+// ────────────────────────────────────────────────────────
+
 const GABEBOT_KB = {
   '발주리스트': `<b>☰ 발주 리스트</b><br><br>
 📂 <b>파일 업로드</b><br>
@@ -3046,11 +3110,12 @@ let _gabeBotInteractionReady=false;
 function openGabeBotHelp(){
   const pop=document.getElementById('gabebot-popup');
   const ov=document.getElementById('gabebot-overlay');
-  // bottom→top 변환 (최초 1회)
-  if(pop.style.bottom){
-    const vh=window.innerHeight;
-    const h=parseInt(pop.style.height)||540;
-    pop.style.top=(vh-h-80)+'px';
+  // 매번 중앙 배치 (크기 조절 후에도 처음 열릴 때는 중앙)
+  if(!pop._userMoved){
+    const w=parseInt(pop.style.width)||740;
+    const h=parseInt(pop.style.height)||560;
+    pop.style.left=Math.max(0,(window.innerWidth-w)/2)+'px';
+    pop.style.top=Math.max(0,(window.innerHeight-h)/2)+'px';
     pop.style.bottom='';
   }
   pop.style.display='flex';
@@ -3084,6 +3149,7 @@ function _gabeBotSetupInteractions(){
     if(!state) return;
     const dx=e.clientX-state.startX, dy=e.clientY-state.startY;
     if(state.type==='drag'){
+      pop._userMoved=true;
       pop.style.left=Math.max(0,Math.min(window.innerWidth-100,state.startL+dx))+'px';
       pop.style.top=Math.max(0,Math.min(window.innerHeight-60,state.startT+dy))+'px';
     } else {
@@ -3097,19 +3163,19 @@ function gabeBotTab(tab){
   const isHelp=tab==='help';
   document.getElementById('gabebot-panel-help').style.display=isHelp?'flex':'none';
   document.getElementById('gabebot-panel-req').style.display=isHelp?'none':'flex';
-  document.getElementById('gabebot-tab-help').style.cssText=isHelp
-    ?'font-size:10px;padding:4px 10px;border-radius:10px;border:none;background:rgba(255,255,255,0.9);color:#4F2FA8;font-weight:700;cursor:pointer;'
-    :'font-size:10px;padding:4px 10px;border-radius:10px;border:none;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);font-weight:600;cursor:pointer;';
-  document.getElementById('gabebot-tab-req').style.cssText=isHelp
-    ?'font-size:10px;padding:4px 10px;border-radius:10px;border:none;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);font-weight:600;cursor:pointer;'
-    :'font-size:10px;padding:4px 10px;border-radius:10px;border:none;background:rgba(255,255,255,0.9);color:#4F2FA8;font-weight:700;cursor:pointer;';
-  if(!isHelp) _gabeBotLoadReqs();
+  const activeStyle='font-size:11px;padding:5px 13px;border-radius:10px;border:none;background:rgba(255,255,255,0.9);color:#4F2FA8;font-weight:700;cursor:pointer;';
+  const inactiveStyle='font-size:11px;padding:5px 13px;border-radius:10px;border:none;background:rgba(255,255,255,0.18);color:#fff;font-weight:700;cursor:pointer;';
+  document.getElementById('gabebot-tab-help').style.cssText=isHelp?activeStyle:inactiveStyle;
+  document.getElementById('gabebot-tab-req').style.cssText=isHelp?inactiveStyle:activeStyle;
+  if(!isHelp){ _gabeBotClearBadge(); _gabeBotLoadReqs(); }
 }
 async function gabeBotSubmitReq(){
+  const author=document.getElementById('req-author').value.trim();
   const title=document.getElementById('req-title').value.trim();
   const body=document.getElementById('req-body').value.trim();
+  if(!author){alert('이름을 입력해주세요.');document.getElementById('req-author').focus();return;}
   if(!title&&!body){alert('제목 또는 내용을 입력해주세요.');return;}
-  const userName=document.getElementById('sb-user-name')?.textContent||'익명';
+  const userName=author;
   const entry={title:title||'(제목없음)',body,author:userName,created_at:new Date().toISOString(),status:'대기중'};
   // Supabase 저장 시도
   try{
@@ -3125,6 +3191,7 @@ async function gabeBotSubmitReq(){
     list.unshift(entry);
     localStorage.setItem('gabe_suggestions',JSON.stringify(list));
   }
+  document.getElementById('req-author').value='';
   document.getElementById('req-title').value='';
   document.getElementById('req-body').value='';
   alert('건의가 전달됐습니다! 감사해요 😊');
