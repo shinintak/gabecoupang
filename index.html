@@ -4336,10 +4336,10 @@ function getMilkRunSKUs(center){
     const qty=parseFloat(String(row[8]||'').replace(/,/g,''))||0;
     const ponum=String(row[1]||'').trim();
     const skuName=String(row[4]||'');
-    if(!map.has(skuId)) map.set(skuId,{skuId:row[3],skuName,qty:0,pos:[]});
-    const entry=map.get(skuId);
+    const mapKey=ponum+'_'+skuId;
+    if(!map.has(mapKey)) map.set(mapKey,{skuId:row[3],skuName,qty:0,pos:[ponum]});
+    const entry=map.get(mapKey);
     entry.qty+=qty;
-    if(!entry.pos.includes(ponum)) entry.pos.push(ponum);
   });
   return [...map.values()];
 }
