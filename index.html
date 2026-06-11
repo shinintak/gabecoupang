@@ -571,6 +571,28 @@ body{padding:0!important;overflow:hidden;}
     </div>
   </div>
 
+  <!-- GABE-BOT -->
+  <div class="sb-divider" style="margin:8px 0 4px;"></div>
+  <div onclick="openGabeBotHelp()" title="GABE-BOT 도움말" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0 8px;cursor:pointer;opacity:0.75;transition:opacity .2s;" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.75'">
+    <svg width="38" height="38" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="13" y1="9" x2="10" y2="3" stroke="#9B7FE8" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="10" cy="2.5" r="2" fill="#B39DDB"/>
+      <line x1="25" y1="9" x2="28" y2="3" stroke="#9B7FE8" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="28" cy="2.5" r="2" fill="#B39DDB"/>
+      <rect x="6" y="9" width="26" height="17" rx="6" fill="#7B5FC0"/>
+      <rect x="9" y="12" width="20" height="11" rx="3.5" fill="#EDE7FF" opacity="0.95"/>
+      <circle cx="14.5" cy="17.5" r="3" fill="#6B4FBB"/>
+      <circle cx="23.5" cy="17.5" r="3" fill="#6B4FBB"/>
+      <circle cx="14.5" cy="17.5" r="1.2" fill="#fff"/>
+      <circle cx="23.5" cy="17.5" r="1.2" fill="#fff"/>
+      <path d="M14 22 Q19 25.5 24 22" stroke="#6B4FBB" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+      <rect x="9" y="26" width="20" height="10" rx="4" fill="#5A40C0"/>
+      <rect x="12" y="28.5" width="14" height="5" rx="2" fill="#3D2A9A"/>
+      <text x="19" y="32.5" font-size="4" fill="#C5B5F5" text-anchor="middle" font-family="맑은 고딕,sans-serif" font-weight="700">Gabe Bot</text>
+    </svg>
+    <span style="font-size:8px;letter-spacing:1.5px;color:rgba(255,255,255,0.45);font-weight:700;">GABE-BOT</span>
+  </div>
+
   <div class="sb-bottom">
     <div class="sb-shared-row">
       <span id="shared-status" class="sb-status-txt">⏳ 확인 중...</span>
@@ -580,6 +602,69 @@ body{padding:0!important;overflow:hidden;}
     <button onclick="doLogout()" style="width:100%;height:28px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:600;cursor:pointer;">로그아웃</button>
   </div>
 </aside>
+
+<!-- ── GABE-BOT 팝업 ── -->
+<div id="gabebot-overlay" onclick="closeGabeBotHelp()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:9998;"></div>
+<div id="gabebot-popup" style="display:none;position:fixed;bottom:80px;left:180px;width:370px;height:540px;min-width:300px;min-height:400px;background:#fff;border-radius:18px;box-shadow:0 8px 40px rgba(45,22,96,0.28);z-index:9999;flex-direction:column;overflow:hidden;">
+  <!-- 헤더 (드래그 핸들) -->
+  <div id="gabebot-drag-handle" style="background:#2D1660;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;cursor:move;">
+    <svg width="28" height="28" viewBox="0 0 38 38" fill="none">
+      <line x1="13" y1="9" x2="10" y2="3" stroke="#9B7FE8" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="10" cy="2.5" r="2" fill="#B39DDB"/>
+      <line x1="25" y1="9" x2="28" y2="3" stroke="#9B7FE8" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="28" cy="2.5" r="2" fill="#B39DDB"/>
+      <rect x="6" y="9" width="26" height="17" rx="6" fill="#7B5FC0"/>
+      <rect x="9" y="12" width="20" height="11" rx="3.5" fill="#EDE7FF" opacity="0.95"/>
+      <circle cx="14.5" cy="17.5" r="3" fill="#6B4FBB"/>
+      <circle cx="23.5" cy="17.5" r="3" fill="#6B4FBB"/>
+      <circle cx="14.5" cy="17.5" r="1.2" fill="#fff"/>
+      <circle cx="23.5" cy="17.5" r="1.2" fill="#fff"/>
+      <path d="M14 22 Q19 25.5 24 22" stroke="#6B4FBB" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+      <rect x="9" y="26" width="20" height="10" rx="4" fill="#5A40C0"/>
+    </svg>
+    <div style="flex:1;">
+      <div style="color:#fff;font-size:13px;font-weight:700;">GABE-BOT</div>
+      <div style="color:#C5B5F5;font-size:10px;">도움말 · 건의함</div>
+    </div>
+    <!-- 탭 버튼 -->
+    <div style="display:flex;gap:4px;">
+      <button id="gabebot-tab-help" onclick="gabeBotTab('help')" style="font-size:10px;padding:4px 10px;border-radius:10px;border:none;background:rgba(255,255,255,0.9);color:#4F2FA8;font-weight:700;cursor:pointer;">🤖 도움말</button>
+      <button id="gabebot-tab-req" onclick="gabeBotTab('req')" style="font-size:10px;padding:4px 10px;border-radius:10px;border:none;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);font-weight:600;cursor:pointer;">📝 건의함</button>
+    </div>
+    <button onclick="closeGabeBotHelp()" style="background:rgba(255,255,255,0.12);border:none;border-radius:50%;width:24px;height:24px;color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
+  </div>
+
+  <!-- ── 도움말 탭 ── -->
+  <div id="gabebot-panel-help" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px 6px;background:#f5f3ff;flex-shrink:0;border-bottom:1px solid #e8e0ff;">
+      <button onclick="gabeBotQuick('발주리스트')" style="font-size:10px;padding:3px 8px;border-radius:12px;border:1px solid #7B5FC0;background:#fff;color:#7B5FC0;cursor:pointer;font-weight:600;">☰ 발주리스트</button>
+      <button onclick="gabeBotQuick('출고리스트')" style="font-size:10px;padding:3px 8px;border-radius:12px;border:1px solid #7B5FC0;background:#fff;color:#7B5FC0;cursor:pointer;font-weight:600;">⬆ 출고리스트</button>
+      <button onclick="gabeBotQuick('납품데이터')" style="font-size:10px;padding:3px 8px;border-radius:12px;border:1px solid #7B5FC0;background:#fff;color:#7B5FC0;cursor:pointer;font-weight:600;">▤ 납품데이터</button>
+      <button onclick="gabeBotQuick('정산데이터')" style="font-size:10px;padding:3px 8px;border-radius:12px;border:1px solid #7B5FC0;background:#fff;color:#7B5FC0;cursor:pointer;font-weight:600;">₩ 정산데이터</button>
+      <button onclick="gabeBotQuick('데이터관리')" style="font-size:10px;padding:3px 8px;border-radius:12px;border:1px solid #7B5FC0;background:#fff;color:#7B5FC0;cursor:pointer;font-weight:600;">⬇ 데이터관리</button>
+    </div>
+    <div id="gabebot-chat" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;background:#faf9ff;"></div>
+    <div style="padding:9px 12px;border-top:1px solid #e8e0ff;display:flex;gap:8px;flex-shrink:0;background:#fff;">
+      <input id="gabebot-input" type="text" placeholder="궁금한 기능을 입력하세요..." onkeydown="if(event.key==='Enter')gabeBotSend()" style="flex:1;border:1px solid #c8b8f0;border-radius:20px;padding:7px 13px;font-size:11px;outline:none;color:#333;">
+      <button onclick="gabeBotSend()" style="background:#4F2FA8;border:none;border-radius:50%;width:32px;height:32px;color:#fff;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">➤</button>
+    </div>
+  </div>
+
+  <!-- ── 건의함 탭 ── -->
+  <div id="gabebot-panel-req" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+    <!-- 건의 목록 -->
+    <div id="gabebot-req-list" style="flex:1;overflow-y:auto;padding:10px 12px;background:#faf9ff;display:flex;flex-direction:column;gap:8px;"></div>
+    <!-- 건의 입력 -->
+    <div style="padding:10px 12px;border-top:1px solid #e8e0ff;background:#fff;flex-shrink:0;">
+      <div style="font-size:11px;font-weight:700;color:#4F2FA8;margin-bottom:6px;">📝 새 건의 / 수정 요청</div>
+      <input id="req-title" type="text" placeholder="제목 (예: 발주리스트 - 필터 기능 추가)" style="width:100%;border:1px solid #c8b8f0;border-radius:8px;padding:6px 10px;font-size:11px;outline:none;color:#333;box-sizing:border-box;margin-bottom:6px;">
+      <textarea id="req-body" rows="3" placeholder="내용을 자세히 적어주세요..." style="width:100%;border:1px solid #c8b8f0;border-radius:8px;padding:6px 10px;font-size:11px;outline:none;color:#333;resize:none;box-sizing:border-box;margin-bottom:6px;"></textarea>
+      <button onclick="gabeBotSubmitReq()" style="width:100%;height:30px;background:#4F2FA8;border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;">전송하기 ➤</button>
+    </div>
+  </div>
+  <!-- 리사이즈 핸들 -->
+  <div id="gabebot-resize-handle" style="position:absolute;bottom:0;right:0;width:18px;height:18px;cursor:nwse-resize;z-index:10;border-radius:0 0 18px 0;background:linear-gradient(135deg,transparent 40%,rgba(79,47,168,0.3) 40%);"></div>
+</div>
 
 <!-- ── 메인 콘텐츠 ── -->
 <div class="main-content">
@@ -2887,6 +2972,273 @@ function _fillRateTable(mn){
   tHtml+=`</tbody></table>`;
   rateTbl.innerHTML=tHtml;
 }
+
+// ── GABE-BOT ──────────────────────────────────────────
+const GABEBOT_KB = {
+  '발주리스트': `<b>☰ 발주 리스트</b><br><br>
+📂 <b>파일 업로드</b><br>
+쿠팡 발주 엑셀 파일을 드래그하거나 클릭해서 업로드하면 자동으로 처리돼요.<br><br>
+🏷️ <b>상태 자동 분류</b><br>
+• <span style="color:#c0392b">재고부족</span> — ERP 재고가 발주수량 미만<br>
+• <span style="color:#e67e22">마진율미달</span> — 마진율 17% 미만<br>
+• <span style="color:#888">단종</span> — 단종 처리된 SKU<br>
+• <span style="color:#059669">확인필요</span> — 스펙 미등록 상품<br>
+• <span style="color:#8e44ad">마케팅재고</span> — 출력 전용 상품<br><br>
+🚚 <b>밀크런 적재리스트</b><br>
+발주서별로 팝업을 열어 적재 가능 여부와 수량을 확인할 수 있어요.<br><br>
+💾 <b>데이터 저장</b><br>
+상단 [데이터 저장] 버튼으로 현재 발주 상태를 저장해요. 나중에 납품데이터에서 불러올 수 있어요.<br><br>
+📥 <b>다운로드</b><br>
+발주서·바코드 엑셀 파일로 다운로드 가능해요.`,
+
+  '출고리스트': `<b>⬆ 출고리스트</b><br><br>
+📋 <b>출고 현황 조회</b><br>
+저장된 발주데이터 기반으로 월별 출고 내역을 한눈에 확인할 수 있어요.<br><br>
+🔍 <b>필터 / 정렬</b><br>
+헤더의 ▼ 버튼으로 센터·상태별 필터를 적용하고, 컬럼 클릭으로 정렬해요.<br><br>
+🚛 <b>밀크런 현황</b><br>
+밀크런 여부(M/R 컬럼)와 센터를 기준으로 출고 상태를 구분해 볼 수 있어요.<br><br>
+📊 <b>합계 확인</b><br>
+상단 요약바에서 발주금액·최종금액·항목별 제외 금액을 즉시 확인해요.`,
+
+  '납품데이터': `<b>▤ 납품데이터</b><br><br>
+📅 <b>세션 불러오기</b><br>
+저장된 발주 세션을 날짜별로 불러와 납품 실적으로 기록할 수 있어요.<br><br>
+📈 <b>연간 납품현황</b><br>
+연도·월별로 발주금액, 납품금액, 납품비율을 표와 그래프로 확인해요.<br><br>
+📉 <b>월별 변화율</b><br>
+상승률(▲ 빨강) / 하락률(▼ 파랑) 을 구분해서 월간 추이를 분석해요.<br><br>
+② <b>납품비율 차트</b><br>
+납품금액 ÷ 발주금액 비율을 꺾은선으로 시각화해요.<br><br>
+✏️ <b>직접 입력</b><br>
+원가·밀크런 비용은 표의 입력칸에 직접 입력할 수 있어요.`,
+
+  '정산데이터': `<b>₩ 정산데이터</b><br><br>
+🗓️ <b>월별 정산 조회</b><br>
+연도/월 버튼을 클릭해 해당 월의 정산 내역을 확인해요.<br><br>
+📊 <b>정산 현황 요약</b><br>
+발주건수, 정산금액, 발주취소 건수를 상단 요약바에서 바로 확인해요.<br><br>
+❌ <b>발주취소 내역</b><br>
+발주취소된 항목별로 사유와 금액을 상세히 조회할 수 있어요.<br><br>
+📥 <b>데이터 연동</b><br>
+납품데이터에서 저장한 세션이 자동으로 정산 기준 데이터로 연동돼요.`,
+
+  '데이터관리': `<b>⬇ 데이터 관리</b><br><br>
+⬇ <b>데이터 불러오기</b><br>
+저장된 납품 세션을 월/날짜별로 조회하고 불러올 수 있어요.<br><br>
+⬆ <b>전체 내보내기</b><br>
+현재 저장된 모든 데이터를 JSON 파일로 내보내요. 백업용으로 사용하세요.<br><br>
+⊕ <b>가져오기</b><br>
+내보낸 JSON 파일을 다시 불러와 데이터를 복원해요.<br><br>
+⚙️ <b>권한관리</b> (관리자 전용)<br>
+사용자별 접근 권한을 설정하고 관리해요.`,
+};
+
+const GABEBOT_FALLBACK = [
+  ['발주','발주리스트'],['출고','출고리스트'],['납품','납품데이터'],
+  ['정산','정산데이터'],['데이터','데이터관리'],['저장','발주리스트'],
+  ['밀크런','발주리스트'],['재고','발주리스트'],['마진','발주리스트'],
+  ['그래프','납품데이터'],['차트','납품데이터'],['변화율','납품데이터'],
+  ['불러오기','데이터관리'],['내보내기','데이터관리'],['권한','데이터관리'],
+];
+
+let _gabeBotInteractionReady=false;
+function openGabeBotHelp(){
+  const pop=document.getElementById('gabebot-popup');
+  const ov=document.getElementById('gabebot-overlay');
+  // bottom→top 변환 (최초 1회)
+  if(pop.style.bottom){
+    const vh=window.innerHeight;
+    const h=parseInt(pop.style.height)||540;
+    pop.style.top=(vh-h-80)+'px';
+    pop.style.bottom='';
+  }
+  pop.style.display='flex';
+  ov.style.display='block';
+  const chat=document.getElementById('gabebot-chat');
+  if(!chat.children.length){
+    _gabeBotAppend('bot','안녕하세요! 저는 <b>GABE-BOT</b>이에요 🤖<br>궁금한 기능을 위의 버튼에서 선택하거나 직접 입력해 주세요!');
+  }
+  if(!_gabeBotInteractionReady){ _gabeBotSetupInteractions(); _gabeBotInteractionReady=true; }
+  setTimeout(()=>document.getElementById('gabebot-input').focus(),100);
+}
+function closeGabeBotHelp(){
+  document.getElementById('gabebot-popup').style.display='none';
+  document.getElementById('gabebot-overlay').style.display='none';
+}
+function _gabeBotSetupInteractions(){
+  const pop=document.getElementById('gabebot-popup');
+  const dragHandle=document.getElementById('gabebot-drag-handle');
+  const resizeHandle=document.getElementById('gabebot-resize-handle');
+  let state=null;
+  const onDown=(type,e)=>{
+    const rect=pop.getBoundingClientRect();
+    state={type,startX:e.clientX,startY:e.clientY,
+      startL:rect.left,startT:rect.top,startW:rect.width,startH:rect.height};
+    document.body.style.userSelect='none';
+    e.preventDefault();
+  };
+  dragHandle.addEventListener('mousedown',e=>{ if(e.target.tagName!=='BUTTON') onDown('drag',e); });
+  resizeHandle.addEventListener('mousedown',e=>onDown('resize',e));
+  document.addEventListener('mousemove',e=>{
+    if(!state) return;
+    const dx=e.clientX-state.startX, dy=e.clientY-state.startY;
+    if(state.type==='drag'){
+      pop.style.left=Math.max(0,Math.min(window.innerWidth-100,state.startL+dx))+'px';
+      pop.style.top=Math.max(0,Math.min(window.innerHeight-60,state.startT+dy))+'px';
+    } else {
+      pop.style.width=Math.max(300,state.startW+dx)+'px';
+      pop.style.height=Math.max(400,state.startH+dy)+'px';
+    }
+  });
+  document.addEventListener('mouseup',()=>{ state=null; document.body.style.userSelect=''; });
+}
+function gabeBotTab(tab){
+  const isHelp=tab==='help';
+  document.getElementById('gabebot-panel-help').style.display=isHelp?'flex':'none';
+  document.getElementById('gabebot-panel-req').style.display=isHelp?'none':'flex';
+  document.getElementById('gabebot-tab-help').style.cssText=isHelp
+    ?'font-size:10px;padding:4px 10px;border-radius:10px;border:none;background:rgba(255,255,255,0.9);color:#4F2FA8;font-weight:700;cursor:pointer;'
+    :'font-size:10px;padding:4px 10px;border-radius:10px;border:none;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);font-weight:600;cursor:pointer;';
+  document.getElementById('gabebot-tab-req').style.cssText=isHelp
+    ?'font-size:10px;padding:4px 10px;border-radius:10px;border:none;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);font-weight:600;cursor:pointer;'
+    :'font-size:10px;padding:4px 10px;border-radius:10px;border:none;background:rgba(255,255,255,0.9);color:#4F2FA8;font-weight:700;cursor:pointer;';
+  if(!isHelp) _gabeBotLoadReqs();
+}
+async function gabeBotSubmitReq(){
+  const title=document.getElementById('req-title').value.trim();
+  const body=document.getElementById('req-body').value.trim();
+  if(!title&&!body){alert('제목 또는 내용을 입력해주세요.');return;}
+  const userName=document.getElementById('sb-user-name')?.textContent||'익명';
+  const entry={title:title||'(제목없음)',body,author:userName,created_at:new Date().toISOString(),status:'대기중'};
+  // Supabase 저장 시도
+  try{
+    const sb=_getSupabase();
+    if(sb){
+      const {error}=await sb.from('gabe_suggestions').insert([entry]);
+      if(error) throw error;
+    } else throw new Error('no sb');
+  } catch(e){
+    // Supabase 실패 시 localStorage 저장
+    const list=JSON.parse(localStorage.getItem('gabe_suggestions')||'[]');
+    entry.id=Date.now();
+    list.unshift(entry);
+    localStorage.setItem('gabe_suggestions',JSON.stringify(list));
+  }
+  document.getElementById('req-title').value='';
+  document.getElementById('req-body').value='';
+  alert('건의가 전달됐습니다! 감사해요 😊');
+  _gabeBotLoadReqs();
+}
+async function _gabeBotLoadReqs(){
+  const el=document.getElementById('gabebot-req-list');
+  el.innerHTML='<div style="font-size:11px;color:#aaa;text-align:center;padding:20px;">불러오는 중...</div>';
+  let items=[], useSupabase=false;
+  try{
+    const sb=_getSupabase();
+    if(sb){
+      const {data,error}=await sb.from('gabe_suggestions').select('*').order('created_at',{ascending:false}).limit(50);
+      if(!error&&data){items=data;useSupabase=true;}
+      else throw new Error();
+    } else throw new Error();
+  } catch(e){
+    items=JSON.parse(localStorage.getItem('gabe_suggestions')||'[]');
+  }
+  if(!items.length){el.innerHTML='<div style="font-size:11px;color:#aaa;text-align:center;padding:30px;">아직 건의사항이 없어요</div>';return;}
+  const SC={대기중:'#e67e22',검토중:'#4318FF',완료:'#059669',보류:'#888'};
+  el.innerHTML='';
+  items.forEach(it=>{
+    const isDone=(it.status||'대기중')==='완료';
+    const id=it.id;
+    const card=document.createElement('div');
+    card.style.cssText=`background:#fff;border:1px solid ${isDone?'#bbf7d0':'#e8e0ff'};border-radius:10px;padding:10px 12px;opacity:${isDone?'0.75':'1'};`;
+    card.innerHTML=`
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;flex:1;min-width:0;">
+          <input type="checkbox" ${isDone?'checked':''} onchange="gabeBotToggleComplete('${id}',this.checked)"
+            style="width:14px;height:14px;accent-color:#059669;cursor:pointer;flex-shrink:0;">
+          <span style="font-size:11px;font-weight:700;color:${isDone?'#888':'#2D1660'};text-decoration:${isDone?'line-through':'none'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${it.title||'(제목없음)'}</span>
+        </label>
+        <span style="font-size:9px;padding:2px 7px;border-radius:8px;background:${(SC[it.status]||'#888')}20;color:${SC[it.status]||'#888'};font-weight:700;flex-shrink:0;">${it.status||'대기중'}</span>
+        <button onclick="gabeBotDeleteReq('${id}')" title="삭제"
+          style="background:none;border:none;color:#ccc;font-size:13px;cursor:pointer;padding:0 2px;flex-shrink:0;line-height:1;" onmouseenter="this.style.color='#e53e3e'" onmouseleave="this.style.color='#ccc'">✕</button>
+      </div>
+      ${it.body?`<div style="font-size:10px;color:#555;line-height:1.5;margin-bottom:4px;padding-left:19px;">${it.body}</div>`:''}
+      <div style="font-size:9px;color:#aaa;padding-left:19px;">${it.author||'익명'} · ${new Date(it.created_at).toLocaleDateString('ko-KR')}</div>`;
+    el.appendChild(card);
+  });
+}
+async function gabeBotToggleComplete(id, checked){
+  const newStatus=checked?'완료':'대기중';
+  let sbOk=false;
+  try{
+    const sb=_getSupabase();
+    if(sb){
+      const {error}=await sb.from('gabe_suggestions').update({status:newStatus}).eq('id',String(id));
+      if(error) console.error('Supabase toggle error:',error);
+      else sbOk=true;
+    }
+  } catch(e){ console.error(e); }
+  // localStorage 항상 업데이트 (Supabase 실패 대비 + 오프라인)
+  const list=JSON.parse(localStorage.getItem('gabe_suggestions')||'[]');
+  const idx=list.findIndex(x=>String(x.id)===String(id));
+  if(idx>=0){list[idx].status=newStatus;localStorage.setItem('gabe_suggestions',JSON.stringify(list));}
+  await _gabeBotLoadReqs();
+}
+async function gabeBotDeleteReq(id){
+  if(!confirm('이 건의를 삭제할까요?')) return;
+  let sbOk=false;
+  try{
+    const sb=_getSupabase();
+    if(sb){
+      const {error}=await sb.from('gabe_suggestions').delete().eq('id',String(id));
+      if(error) console.error('Supabase delete error:',error);
+      else sbOk=true;
+    }
+  } catch(e){ console.error(e); }
+  // localStorage도 항상 정리
+  let list=JSON.parse(localStorage.getItem('gabe_suggestions')||'[]');
+  list=list.filter(x=>String(x.id)!==String(id));
+  localStorage.setItem('gabe_suggestions',JSON.stringify(list));
+  await _gabeBotLoadReqs();
+}
+function _gabeBotAppend(who, html){
+  const chat=document.getElementById('gabebot-chat');
+  const div=document.createElement('div');
+  div.style.cssText=who==='bot'
+    ?'align-self:flex-start;max-width:92%;background:#f0eaff;border-radius:4px 14px 14px 14px;padding:11px 14px;font-size:12px;font-weight:500;color:#1a1236;line-height:1.8;box-shadow:0 1px 4px rgba(79,47,168,.1);-webkit-font-smoothing:antialiased;'
+    :'align-self:flex-end;max-width:82%;background:#4F2FA8;border-radius:14px 4px 14px 14px;padding:9px 14px;font-size:12px;font-weight:500;color:#fff;line-height:1.6;-webkit-font-smoothing:antialiased;';
+  div.innerHTML=html;
+  chat.appendChild(div);
+  chat.scrollTop=chat.scrollHeight;
+}
+function gabeBotQuick(topic){
+  _gabeBotAppend('user', topic+' 알려줘');
+  setTimeout(()=>{
+    const ans=GABEBOT_KB[topic]||'해당 주제에 대한 정보가 없어요.';
+    _gabeBotAppend('bot', ans);
+  },300);
+}
+function gabeBotSend(){
+  const inp=document.getElementById('gabebot-input');
+  const q=inp.value.trim(); if(!q) return;
+  _gabeBotAppend('user', q);
+  inp.value='';
+  setTimeout(()=>{
+    const kw=q.replace(/\s/g,'');
+    let found=null;
+    for(const [k,v] of Object.entries(GABEBOT_KB)){
+      if(kw.includes(k)||k.includes(kw)){found=v;break;}
+    }
+    if(!found){
+      for(const [w,t] of GABEBOT_FALLBACK){
+        if(kw.includes(w)){found=GABEBOT_KB[t];break;}
+      }
+    }
+    _gabeBotAppend('bot', found||'죄송해요, 잘 모르겠어요 😅<br>위의 버튼에서 페이지를 선택하거나 다시 입력해 주세요!');
+  },350);
+}
+// ──────────────────────────────────────────────────────
 
 function reloadLastFile(){
   if(!lastFileBuf||!lastFileObj){ alert('로드된 파일이 없습니다.'); return; }
