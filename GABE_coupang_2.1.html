@@ -2407,7 +2407,7 @@ function renderSessionList(){
       CAT_LABELS.forEach(c=>{
         const v=r.cats?.[c]||0;
         const q=rCatQtys[c]||0;
-        if(v>0) catTags+=`<span style="font-size:11px;color:${CAT_COLORS[c]};white-space:nowrap;">${c} ${fmtAQ(v,q)}</span>`;
+        if(v>0) catTags+=`<span style="font-size:11px;color:#333;white-space:nowrap;">${c} ${fmtAQ(v,q)}</span>`;
       });
 
       html+=`<div style="background:#fff;border:1px solid #e0e0e0;border-radius:4px;padding:3px 6px;">
