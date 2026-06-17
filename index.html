@@ -4951,6 +4951,19 @@ function renderLoadingListTable(){
   const INP_R='width:64px;font-size:13px;text-align:right;border:1px solid #C0C8FF;border-radius:6px;padding:5px 6px;outline:none;';
   const INP_P='width:40px;font-size:13px;text-align:center;border:1.5px solid #C0C8FF;border-radius:6px;padding:4px 3px;outline:none;background:#fff;';
 
+  const totalOrderQty=items.reduce((s,item)=>s+(item.qty||0),0);
+  let totalLoadedQty=0;
+  items.forEach((item,idx)=>{
+    const key=c+'/'+idx;
+    (_llBoxData[key]||[]).forEach(bd=>{
+      if(!bd||!bd.qtyPerBox||!bd.boxStart) return;
+      const start=parseInt(bd.boxStart)||0;
+      const end=bd.boxEnd?parseInt(bd.boxEnd)||start:start;
+      const n=end>=start?end-start+1:1;
+      totalLoadedQty+=n*bd.qtyPerBox;
+    });
+  });
+
   let html='';
   items.forEach((item,idx)=>{
     const key=c+'/'+idx;
@@ -5017,6 +5030,12 @@ function renderLoadingListTable(){
       <th style="padding:8px 10px;text-align:right;white-space:nowrap;color:#E74C3C;">합계</th>
     </tr></thead>
     <tbody>${html}</tbody>
+    <tfoot><tr style="background:#EDE9FF;border-top:2px solid #7B2FBE;">
+      <td colspan="2" style="padding:8px 10px;text-align:right;font-weight:700;color:#1B2559;font-size:13px;">합계</td>
+      <td style="padding:8px 10px;text-align:center;font-weight:700;color:#4318FF;font-size:13px;">${totalOrderQty.toLocaleString('ko-KR')}</td>
+      <td colspan="3"></td>
+      <td style="padding:8px 10px;text-align:right;font-weight:700;color:#E74C3C;font-size:13px;">${totalLoadedQty>0?totalLoadedQty.toLocaleString('ko-KR'):'-'}</td>
+    </tr></tfoot>
   </table>`;
 }
 
