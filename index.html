@@ -364,7 +364,7 @@ body{padding:0!important;overflow:hidden;}
       <p class="sec-label">출고리스트</p>
       <p class="sec-title" style="margin-bottom:.5rem;">발주 기본 정보</p>
       <div id="outgoing-erp-status" style="font-size:11px;color:#A0AEC0;margin-bottom:6px;">📊 ERP 데이터 확인 중...</div>
-      <div id="outgoing-month-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
+      <div id="outgoing-month-tabs" style="margin-bottom:8px;position:relative;z-index:100;"></div>
       <div id="outgoing-stats" style="display:flex;gap:12px;margin-bottom:8px;flex-wrap:wrap;"></div>
       <input id="outgoing-search" oninput="renderOutgoingTable()" placeholder="발주번호 · SKU ID · SKU 이름 · 날짜 검색..."
         style="width:100%;box-sizing:border-box;padding:6px 10px;font-size:12px;border:1px solid #E0E5FF;border-radius:6px;margin-bottom:8px;outline:none;">
@@ -800,7 +800,7 @@ const MANUAL_REASONS=['재고부족','마진율 미달','마케팅재고','단�
 const LS_KEY         = 'coupang_unified_v1';
 const OUTGOING_LS_KEY = 'gabe_outgoing_v1';
 let outgoingSelMonth = '';
-let outgoingSelMonthGroup = '';
+let outgoingSelMonthGroup = null;
 
 // ── 고정 세트구성 스펙 (SKU 코드 → EPR 직접 조회 구성품 SPEC 배열) ──
 const FIXED_SET_SPECS = {
@@ -5907,7 +5907,7 @@ function renderOutgoingTable(){
   const mgMap={};
   months.forEach(m=>{ const mg=m.slice(0,7); if(!mgMap[mg]) mgMap[mg]=[]; mgMap[mg].push(m); });
   const mgKeys=Object.keys(mgMap).sort();
-  if(!outgoingSelMonthGroup||!mgMap[outgoingSelMonthGroup]) outgoingSelMonthGroup=outgoingSelMonth.slice(0,7);
+  if(outgoingSelMonthGroup===null||(outgoingSelMonthGroup!==''&&!mgMap[outgoingSelMonthGroup])) outgoingSelMonthGroup=outgoingSelMonth.slice(0,7);
   // 월 버튼 (사각형)
   const mgBtns=mgKeys.map(mg=>{
     const mo=parseInt(mg.split('-')[1]);
@@ -5923,8 +5923,8 @@ function renderOutgoingTable(){
     const borderB=i<datesInGroup.length-1?'border-bottom:1px solid #E0E5FF;':'';
     return `<button onclick="outgoingSelMonth='${m}';renderOutgoingTable();" style="display:block;width:100%;text-align:left;font-size:11px;padding:4px 10px;border:none;${borderB}background:${active?'#4F2FA8':'#fff'};color:${active?'#fff':'#444'};cursor:pointer;font-weight:${active?'700':'400'};">${label}</button>`;
   }).join('');
-  const dateList=datesInGroup.length?`<div style="display:inline-flex;flex-direction:column;border:1px solid #C0C8FF;border-radius:4px;overflow:hidden;min-width:90px;">${dateCells}</div>`:'';
-  tabsEl.innerHTML=`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start;margin-bottom:8px;">${mgBtns}</div><div style="margin-bottom:4px;">${dateList}</div>`;
+  const dateDropdown=datesInGroup.length?`<div style="position:absolute;top:calc(100% + 4px);left:0;z-index:300;background:#fff;border:1px solid #C0C8FF;border-radius:4px;overflow:hidden;min-width:100px;box-shadow:0 6px 18px rgba(0,0,0,.15);">${dateCells}</div>`:'';
+  tabsEl.innerHTML=`<div style="position:relative;display:inline-block;">${mgBtns}${dateDropdown}</div>`;
   const rows=[...(db[outgoingSelMonth]||[])].sort((a,b)=>String(a.skuName).localeCompare(String(b.skuName),'ko'));
   // SKU별 합계 집계 (발주번호 목록 포함)
   const skuMap={};
