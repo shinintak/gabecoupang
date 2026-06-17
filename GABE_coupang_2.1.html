@@ -5908,23 +5908,41 @@ function renderOutgoingTable(){
   months.forEach(m=>{ const mg=m.slice(0,7); if(!mgMap[mg]) mgMap[mg]=[]; mgMap[mg].push(m); });
   const mgKeys=Object.keys(mgMap).sort();
   if(outgoingSelMonthGroup===null||(outgoingSelMonthGroup!==''&&!mgMap[outgoingSelMonthGroup])) outgoingSelMonthGroup=outgoingSelMonth.slice(0,7);
-  // 월 버튼 (사각형)
-  const mgBtns=mgKeys.map(mg=>{
-    const mo=parseInt(mg.split('-')[1]);
-    const active=mg===outgoingSelMonthGroup;
-    return `<button onclick="outgoingSelectMonthGroup('${mg}')" style="font-size:12px;padding:5px 20px;border-radius:4px;border:2px solid ${active?'#4F2FA8':'#ddd'};background:${active?'#4F2FA8':'#fff'};color:${active?'#fff':'#555'};cursor:pointer;font-weight:${active?'700':'400'};">${mo}월 ${active?'▾':'▸'}</button>`;
-  }).join('');
-  // 선택된 월의 날짜 목록 (세로 나열, 엑셀 셀 스타일)
+  // 선택된 월의 날짜 셀 미리 계산
   const datesInGroup=mgMap[outgoingSelMonthGroup]||[];
   const dateCells=datesInGroup.map((m,i)=>{
     const [,mo,dd]=m.split('-');
     const label=parseInt(mo)+'월 '+parseInt(dd)+'일';
     const active=m===outgoingSelMonth;
-    const borderB=i<datesInGroup.length-1?'border-bottom:1px solid #E0E5FF;':'';
-    return `<button onclick="outgoingSelMonth='${m}';renderOutgoingTable();" style="display:block;width:100%;text-align:left;font-size:11px;padding:4px 10px;border:none;${borderB}background:${active?'#4F2FA8':'#fff'};color:${active?'#fff':'#444'};cursor:pointer;font-weight:${active?'700':'400'};">${label}</button>`;
+    const borderB=i<datesInGroup.length-1?'border-bottom:1px solid #EDE9FF;':'';
+    return `<button onclick="outgoingSelMonth='${m}';renderOutgoingTable();"
+      style="display:block;width:100%;text-align:left;font-size:12px;padding:7px 14px;border:none;${borderB}
+      background:${active?'#4F2FA8':'#fff'};color:${active?'#fff':'#333'};cursor:pointer;font-weight:${active?'700':'400'};
+      white-space:nowrap;">${label}</button>`;
   }).join('');
-  const dateDropdown=datesInGroup.length?`<div style="position:absolute;top:calc(100% + 4px);left:0;z-index:300;background:#fff;border:1px solid #C0C8FF;border-radius:4px;overflow:hidden;min-width:100px;box-shadow:0 6px 18px rgba(0,0,0,.15);">${dateCells}</div>`:'';
-  tabsEl.innerHTML=`<div style="position:relative;display:inline-block;">${mgBtns}${dateDropdown}</div>`;
+  // 월 버튼 — 각 버튼 아래에 드롭다운 부착
+  const mgBtns=mgKeys.map(mg=>{
+    const mo=parseInt(mg.split('-')[1]);
+    const active=mg===outgoingSelMonthGroup;
+    const dropdown=active&&datesInGroup.length?
+      `<div style="position:absolute;top:calc(100% + 6px);left:0;z-index:300;
+        background:#fff;border:1.5px solid #4F2FA8;border-radius:6px;overflow:hidden;
+        box-shadow:0 8px 24px rgba(79,47,168,.25);">
+        <div style="background:#4F2FA8;padding:5px 14px;font-size:11px;font-weight:700;color:#fff;letter-spacing:.5px;">${mo}월</div>
+        ${dateCells}
+      </div>`:'' ;
+    return `<div style="position:relative;display:inline-block;">
+      <button onclick="outgoingSelectMonthGroup('${mg}')"
+        style="font-size:12px;padding:5px 20px;border-radius:4px;
+        border:2px solid ${active?'#4F2FA8':'#ddd'};
+        background:${active?'#4F2FA8':'#fff'};
+        color:${active?'#fff':'#555'};cursor:pointer;font-weight:${active?'700':'400'};">
+        ${mo}월 ${active?'▾':'▸'}
+      </button>
+      ${dropdown}
+    </div>`;
+  }).join('');
+  tabsEl.innerHTML=`<div style="display:flex;gap:6px;flex-wrap:wrap;">${mgBtns}</div>`;
   const rows=[...(db[outgoingSelMonth]||[])].sort((a,b)=>String(a.skuName).localeCompare(String(b.skuName),'ko'));
   // SKU별 합계 집계 (발주번호 목록 포함)
   const skuMap={};
