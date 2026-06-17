@@ -5868,6 +5868,7 @@ async function saveOutgoingData(){
 }
 
 function outgoingSelectMonthGroup(mg){
+  if(outgoingSelMonthGroup===mg){ outgoingSelMonthGroup=''; renderOutgoingTable(); return; }
   outgoingSelMonthGroup=mg;
   const db=outgoingLoad();
   const datesInGroup=Object.keys(db).filter(d=>d.startsWith(mg)).sort();
@@ -5950,7 +5951,10 @@ function renderOutgoingTable(){
   if(qName) merged=merged.filter(r=>r.skuName.toLowerCase().includes(qName));
   const totalQty=merged.reduce((s,r)=>s+r.qty,0);
   const totalAmt=merged.reduce((s,r)=>s+(r.amt||0),0);
+  const [sy,smo,sdd]=outgoingSelMonth.split('-');
+  const selDateLabel=outgoingSelMonth?`${parseInt(smo)}월 ${parseInt(sdd)}일`:'';
   statsEl.innerHTML=
+    (selDateLabel?`<div class="stat" style="background:#4F2FA8;border-color:#4F2FA8;"><div class="sl" style="color:rgba(255,255,255,.7);">선택 날짜</div><div class="sv" style="color:#fff;">${selDateLabel}</div></div>`:'')+
     `<div class="stat"><div class="sl">총 SKU 수</div><div class="sv">${merged.length.toLocaleString('ko-KR')}</div></div>`+
     `<div class="stat"><div class="sl">총 발주수량</div><div class="sv">${totalQty.toLocaleString('ko-KR')}</div></div>`+
     (totalAmt>0?`<div class="stat"><div class="sl">총 금액</div><div class="sv" style="color:#c0392b;">₩${totalAmt.toLocaleString('ko-KR')}</div></div>`:'');
