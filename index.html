@@ -539,7 +539,7 @@ body{padding:0!important;overflow:hidden;}
 
   <div class="sb-section">MAIN</div>
   <div class="sb-item active" data-page="main" onclick="closeAllSubPages()">
-    <span class="sb-item-icon">☰</span>발주 리스트
+    <span class="sb-item-icon">☰</span>발주리스트
   </div>
   <div class="sb-item" data-page="outgoing" onclick="openOutgoingPage()">
     <span class="sb-item-icon">⬆</span>출고리스트
@@ -676,7 +676,7 @@ body{padding:0!important;overflow:hidden;}
   <!-- 상단 헤더 -->
   <div class="main-hdr">
     <div class="main-hdr-left">
-      <div class="main-hdr-title">발주 리스트</div>
+      <div class="main-hdr-title">발주리스트</div>
       <div class="main-hdr-sub">파일 1개 업로드 · 자동 추출 · 마진율 · 재고 매칭</div>
     </div>
     <div class="main-hdr-btns">
@@ -829,6 +829,9 @@ const EPR_FIRST_SPECS = new Set([
   'KS4253',    // 세트구성 매칭 오판정 방지 — EPR 직접재고 있을 때 ok 처리
   'KS4254',    // 세트구성 매칭 오판정 방지 — EPR 직접재고 있을 때 ok 처리
   'KS4252',    // 세트구성 매칭 오판정 방지 — EPR 직접재고 있을 때 ok 처리
+  'KS4231',    // EPR재고 내품(KS4231-a, KS4231-b) 등록으로 인한 재고부족 오판정 방지
+  'KS4221',    // EPR재고 내품(KS4221-a, KS4221-b) 등록으로 인한 재고부족 오판정 방지
+  'KS7142',    // EPR재고 내품(KS7142-00) 등록으로 인한 재고부족 오판정 방지
 ]);
 
 // ── EPR 재고 공유 별칭 맵: spec → 실제 EPR 조회 spec ──
@@ -1272,7 +1275,7 @@ function closePermPanel() {
 }
 
 const _PERM_GROUPS = [
-  { label:'📋 발주 리스트', perms:[
+  { label:'📋 발주리스트', perms:[
     { key:'main_upload',  label:'파일 등록',  type:'사용/미사용' },
     { key:'main_extract', label:'파일 추출',  type:'사용/미사용' },
   ]},
@@ -3040,7 +3043,7 @@ if(!document.getElementById('gabebot-toast-style')){
 // ────────────────────────────────────────────────────────
 
 const GABEBOT_KB = {
-  '발주리스트': `<b>☰ 발주 리스트</b><br><br>
+  '발주리스트': `<b>☰ 발주리스트</b><br><br>
 📂 <b>파일 업로드</b><br>
 쿠팡 발주 엑셀 파일을 드래그하거나 클릭해서 업로드하면 자동으로 처리돼요.<br><br>
 🏷️ <b>상태 자동 분류</b><br>
@@ -3499,7 +3502,7 @@ function formatDate(v){
 
 function showReasonMenu(event, globalIdx){
   event.stopPropagation();
-  if(!canEdit('main_upload')){ alert('발주 리스트 수정 권한이 없습니다.'); return; }
+  if(!canEdit('main_upload')){ alert('발주리스트 수정 권한이 없습니다.'); return; }
   const existing=document.getElementById('_reason_menu_');
   if(existing) existing.remove();
 
