@@ -3360,16 +3360,18 @@ function closeReturnErrMonthPopup(){
   renderReturnErrPanel();
 }
 
-// 4번째 값 = 최소 글자수(size 속성 하한). 실제 너비는 각 행의 값 길이에 맞춰 자동으로 늘어남
+// 4번째 값 = 최소 글자수(size 속성 하한, bool/ox/calc 타입은 미사용). 실제 너비는 각 행의 값 길이에 맞춰 자동으로 늘어남
+// outAmt(출고금액)는 type:'calc' — 매입가×수량으로 자동 계산되는 읽기전용 값
+// returned(회송여부)는 type:'bool' — 회송 도착하면 체크하는 체크박스
 const RETURN_ERR_FIELDS=[
   ['date','발생일','text',10],['eta','입고예정일','text',10],['center','물류센터','text',6],['po','발주번호','text',9],
-  ['skuId','SKU ID','text',8],['skuName','상품명','text',16],['errType','오류유형','text',7],
-  ['cost','매입가','num',6],['outAmt','출고금액','num',7],['qty','수량','num',4],
+  ['skuId','SKU ID','text',8],['skuName','상품명','text',16],['returnName','회송 제품명','text',16],['errType','오류유형','text',7],
+  ['cost','매입가','num',6],['outAmt','출고금액','calc',7],['qty','수량','num',4],
   ['deliveryFee','택배비','num',6],['location','반품위치','text',6],
-  ['returned','회송여부','text',5],['returnDate','회송일자','text',10],
+  ['returned','회송여부','bool',5],['returnDate','회송일자','text',10],
   ['erpRestored','ERP복구','ox',5],
 ];
-const RETURN_ERR_NUM_FIELDS=new Set(['cost','outAmt','qty','deliveryFee']);
+const RETURN_ERR_NUM_FIELDS=new Set(['cost','qty','deliveryFee']);
 
 function _returnErrMonthIds(year,monthLabel){
   const store=returnErrLoad();
@@ -3391,9 +3393,10 @@ function _renderReturnErrPopupContent(year,monthLabel){
   const colSizes={};
   RETURN_ERR_FIELDS.forEach(([k,,type,minCh])=>{
     let maxLen=minCh;
+    const isNumLike=type==='num'||type==='calc';
     ids.forEach(id=>{
-      const v=store[id][k]??'';
-      const disp=(type==='num'&&v!=='')?Number(v).toLocaleString('ko-KR'):String(v);
+      const v=(k==='outAmt')?(store[id].cost||0)*(store[id].qty||0):(store[id][k]??'');
+      const disp=(isNumLike&&v!=='')?Number(v).toLocaleString('ko-KR'):String(v);
       if(disp.length+1>maxLen) maxLen=disp.length+1;
     });
     colSizes[k]=Math.min(maxLen,70);
@@ -3425,11 +3428,23 @@ function _renderReturnErrPopupContent(year,monthLabel){
           </select></td>`;
           return;
         }
+        // 회송여부 — 도착하면 체크하는 체크박스
+        if(type==='bool'){
+          const isDone=_returnErrIsDone(rec[k]);
+          html+=`<td style="padding:3px 4px;border:1px solid #eef1f7;text-align:center;"><input type="checkbox" data-field="${k}" ${isDone?'checked':''} ${editable?'':'disabled'} title="회송 도착하면 체크"></td>`;
+          return;
+        }
         // 박스 묶음으로 통합된 택배비 — 금액을 가진 행이 아니면 입력칸 대신 안내 표시
         if(k==='deliveryFee'&&grouped&&!(parseFloat(rec.deliveryFee)>0)){
           html+=`<td style="padding:3px 4px;border:1px solid #eef1f7;text-align:center;">
             <span title="같은 박스로 묶여 택배비가 다른 행에 통합되었습니다" onclick="ungroupReturnErrRow('${id}')" style="cursor:pointer;font-size:10px;color:#7B5FC0;font-weight:700;white-space:nowrap;">↳ 통합됨${editable?' ✕':''}</span>
           </td>`;
+          return;
+        }
+        // 출고금액 = 매입가×수량 자동 계산 (읽기전용, cost/qty 수정 시 즉시 갱신)
+        if(k==='outAmt'){
+          const calcAmt=(parseFloat(rec.cost)||0)*(parseFloat(rec.qty)||0);
+          html+=`<td style="padding:3px 4px;border:1px solid #eef1f7;text-align:right;white-space:nowrap;"><span class="return-err-oa-disp" title="매입가×수량으로 자동 계산됩니다" style="display:inline-block;min-width:${colSizes[k]}ch;color:#4A5568;">${calcAmt.toLocaleString('ko-KR')}</span></td>`;
           return;
         }
         const val=rec[k]??'';
@@ -3438,7 +3453,8 @@ function _renderReturnErrPopupContent(year,monthLabel){
         const ta=isNum?'text-align:right;':'text-align:left;';
         const sz=colSizes[k];
         const boxMark=(k==='deliveryFee'&&grouped)?'<span title="박스 묶음 통합 금액" style="font-size:10px;margin-right:2px;">📦</span>':'';
-        html+=`<td style="padding:3px 4px;border:1px solid #eef1f7;white-space:nowrap;">${boxMark}<input data-field="${k}" value="${dispVal.replace(/"/g,'&quot;')}" size="${sz}" ${editable?'':'disabled'} style="border:1px solid #d8dee8;border-radius:3px;padding:3px 5px;font-size:11px;${ta}background:${editable?'#fff':'#f4f4f4'};"></td>`;
+        const recalcAttr=(k==='cost'||k==='qty')?' oninput="_returnErrRecalcOutAmt(this)"':'';
+        html+=`<td style="padding:3px 4px;border:1px solid #eef1f7;white-space:nowrap;">${boxMark}<input data-field="${k}" value="${dispVal.replace(/"/g,'&quot;')}" size="${sz}"${recalcAttr} ${editable?'':'disabled'} style="border:1px solid #d8dee8;border-radius:3px;padding:3px 5px;font-size:11px;${ta}background:${editable?'#fff':'#f4f4f4'};"></td>`;
       });
       html+=`<td style="padding:3px 4px;border:1px solid #eef1f7;text-align:center;">${editable?`<button onclick="deleteReturnErrRow('${id}')" style="border:none;background:none;color:#C62828;cursor:pointer;font-size:13px;">✕</button>`:''}</td></tr>`;
     });
@@ -3501,10 +3517,24 @@ function _returnErrCollectForm(){
     if(!store[id]) return;
     tr.querySelectorAll('input[data-field], select[data-field]').forEach(inp=>{
       const f=inp.dataset.field;
+      if(inp.type==='checkbox'){ store[id][f]=inp.checked?'O':'X'; return; }
       store[id][f]=RETURN_ERR_NUM_FIELDS.has(f)?(parseFloat(inp.value.replace(/,/g,''))||0):inp.value.trim();
     });
+    // 출고금액은 항상 매입가×수량으로 재계산 (직접 입력칸 없음)
+    store[id].outAmt=(store[id].cost||0)*(store[id].qty||0);
   });
   returnErrSave(store);
+}
+
+// 매입가/수량 입력 중 출고금액 표시를 즉시 갱신 (저장 전 미리보기)
+function _returnErrRecalcOutAmt(inputEl){
+  const tr=inputEl.closest('tr'); if(!tr) return;
+  const costInp=tr.querySelector('input[data-field="cost"]');
+  const qtyInp=tr.querySelector('input[data-field="qty"]');
+  const cost=parseFloat(((costInp&&costInp.value)||'').replace(/,/g,''))||0;
+  const qty=parseFloat(((qtyInp&&qtyInp.value)||'').replace(/,/g,''))||0;
+  const el=tr.querySelector('.return-err-oa-disp');
+  if(el) el.textContent=(cost*qty).toLocaleString('ko-KR');
 }
 
 function addReturnErrRow(){
@@ -3517,7 +3547,7 @@ function addReturnErrRow(){
   store[id]={
     date:'',
     center:'',po:'',skuId:'',skuName:'',returnName:'',cost:0,outAmt:0,qty:0,eta,
-    errType:'',returned:'',returnDate:'',deliveryFee:0,location:'',erpRestored:'X',
+    errType:'',returned:'X',returnDate:'',deliveryFee:0,location:'',erpRestored:'X',
   };
   returnErrSave(store);
   _renderReturnErrPopupContent(_returnErrPopupYear,_returnErrPopupMonth);
@@ -3591,16 +3621,17 @@ function handleReturnErrUpload(file){
           skuName:String(row[col.skuName]||'').trim(),
           returnName:String(row[col.returnName]||'').trim(),
           cost:parseFloat(String(row[col.cost]||'').replace(/,/g,''))||0,
-          outAmt:parseFloat(String(row[col.outAmt]||'').replace(/,/g,''))||0,
+          outAmt:0, // 매입가×수량으로 아래에서 재계산
           qty,
           eta:smtNormalizeDate(String(row[col.eta]||'').trim()),
           errType,
-          returned:String(row[col.returned]||'').trim(),
+          returned:_returnErrIsDone(row[col.returned])?'O':'X',
           returnDate:smtNormalizeDate(String(row[col.returnDate]||'').trim()),
           deliveryFee:parseFloat(String(row[col.deliveryFee]||'').replace(/,/g,''))||0,
           location:String(row[col.location]||'').trim(),
           erpRestored:_returnErrIsDone(row[col.erpRestored])?'O':'X',
         };
+        rec.outAmt=rec.cost*rec.qty;
         const id=[date,po,skuId,errType,qty].join('_');
         if(store[id]) updated++; else added++;
         store[id]=rec;
