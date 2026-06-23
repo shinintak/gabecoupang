@@ -522,21 +522,19 @@ body{padding:0!important;overflow:hidden;}
         <div id="sales-table-wrap" style="overflow-x:auto;max-height:400px;overflow-y:auto;"></div>
         <div id="sales-chart-wrap" style="display:none;margin-top:14px;background:#f8f9fb;border:1px solid #dde3ee;border-radius:8px;padding:12px;"></div>
       </div>
-    </div>
-  </div>
-  <!-- 회송·오류 현황 카드 -->
-  <div style="padding:0 24px 20px;">
-    <div style="background:#fff;border-radius:12px;padding:16px;border:1px solid #E0E5FF;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-        <span style="font-size:13px;font-weight:700;color:#1B2559;">🚚 회송·오류 현황 <span style="font-size:11px;font-weight:600;color:#A0AEC0;">(입고예정일 기준)</span></span>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <button id="return-err-upload-btn" onclick="document.getElementById('return-err-file-input').click()" style="font-size:11px;padding:5px 14px;border-radius:4px;border:none;background:#4F2FA8;color:#fff;cursor:pointer;font-weight:700;">엑셀 업로드</button>
+      <!-- 회송·오류 현황 카드 (판매데이터 정리 표 바로 아래, 같은 열 너비) -->
+      <div style="background:#fff;border-radius:12px;padding:16px;border:1px solid #E0E5FF;margin-top:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <span style="font-size:13px;font-weight:700;color:#1B2559;">🚚 회송·오류 현황 <span style="font-size:11px;font-weight:600;color:#A0AEC0;">(입고예정일 기준)</span></span>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button id="return-err-upload-btn" onclick="document.getElementById('return-err-file-input').click()" style="font-size:11px;padding:5px 14px;border-radius:4px;border:none;background:#4F2FA8;color:#fff;cursor:pointer;font-weight:700;">엑셀 업로드</button>
+          </div>
         </div>
+        <input type="file" id="return-err-file-input" accept=".xls,.xlsx" style="display:none" onchange="handleReturnErrUpload(this.files[0]);this.value=''">
+        <div id="return-err-upload-status" style="display:none;font-size:11px;color:#065F46;background:#F0FFF4;border-radius:6px;padding:5px 10px;margin-bottom:8px;"></div>
+        <div id="return-err-year-nav" style="margin-bottom:8px;"></div>
+        <div id="return-err-body"></div>
       </div>
-      <input type="file" id="return-err-file-input" accept=".xls,.xlsx" style="display:none" onchange="handleReturnErrUpload(this.files[0]);this.value=''">
-      <div id="return-err-upload-status" style="display:none;font-size:11px;color:#065F46;background:#F0FFF4;border-radius:6px;padding:5px 10px;margin-bottom:8px;"></div>
-      <div id="return-err-year-nav" style="margin-bottom:8px;"></div>
-      <div id="return-err-body"></div>
     </div>
   </div>
 </div>
