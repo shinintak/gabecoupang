@@ -2496,6 +2496,7 @@ function saveCurrentSession(){
     specBoxQtyMap: specBoxQtyMap,
     poDeliveryMap: poDeliveryMap,
     setComponentMap: setComponentMap,
+    milkRunCenterOverrides: milkRunCenterOverrides,
     // 제외(로딩 시 재빌드): eprNameMap, skuTotalQtyMap, skuIdSetComponents, milkRunCenterSet
   };
   if(!ssSave(store)) return;
@@ -2570,6 +2571,7 @@ function loadSession(dateKey){
     withNo.forEach(r=>{ const p=String(r[1]||'').trim(); if(p&&!poDeliveryMap[p]) poDeliveryMap[p]=dateKey; });
   }
   setComponentMap  = rec.setComponentMap||{};
+  milkRunCenterOverrides = rec.milkRunCenterOverrides||{};
   // 재빌드: skuTotalQtyMap (withNo 기반)
   skuTotalQtyMap={};
   withNo.forEach(r=>{ const id=normId(r[3]); skuTotalQtyMap[id]=(skuTotalQtyMap[id]||0)+(parseFloat(String(r[8]||'').replace(/,/g,''))||0); });
