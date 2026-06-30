@@ -5519,6 +5519,7 @@ let _llBoxData={};
 let _llPalletNo={};
 let _llPalletCount={};  // safeKey → 센터별 총 파렛트 수량
 let _llItemPallet={};   // 'center/idx/si' → BOX 행별 팔렛 번호 (이전 'center/idx' 키도 폴백으로 지원)
+let _llPalletRanges={}; // safeKey → [{pallet:1,boxStart:1,boxEnd:15},{pallet:2,...}]
 
 function getMilkRunSKUs(center){
   const map=new Map(); // Map 사용 → withNo 정렬 순서(발주번호→SKU ID) 유지
@@ -5557,7 +5558,7 @@ async function llSaveData(){
   try{
     // localStorage 백업 — 세션 날짜별 키로 저장
     const sk=_llSessionKey();
-    const local={boxData:_llBoxData,palletCount:_llPalletCount,itemPallet:_llItemPallet};
+    const local={boxData:_llBoxData,palletCount:_llPalletCount,itemPallet:_llItemPallet,palletRanges:_llPalletRanges};
     localStorage.setItem(LL_SAVE_KEY+'_'+sk,JSON.stringify(local));
 
     // Supabase 저장
@@ -5568,6 +5569,7 @@ async function llSaveData(){
       box_data:_llBoxData,
       pallet_count:_llPalletCount,
       item_pallet:_llItemPallet,
+      pallet_ranges:_llPalletRanges,
       updated_at:new Date().toISOString(),
       updated_by:_currentUser?.email||'unknown'
     });
@@ -5582,16 +5584,17 @@ async function llSaveData(){
 
 async function llLoadData(){
   // 세션 전환 시 항상 초기화 — 이전 세션 데이터가 남아있지 않도록
-  _llBoxData={}; _llPalletCount={}; _llItemPallet={};
+  _llBoxData={}; _llPalletCount={}; _llItemPallet={}; _llPalletRanges={};
   const sk=_llSessionKey();
   try{
     const sb=_getSupabase();
     if(sb){
       const {data,error}=await sb.from('ll_data').select('*').eq('session_key',sk).maybeSingle();
       if(!error&&data){
-        if(data.box_data)     _llBoxData=data.box_data;
-        if(data.pallet_count) _llPalletCount=data.pallet_count;
-        if(data.item_pallet)  _llItemPallet=data.item_pallet;
+        if(data.box_data)      _llBoxData=data.box_data;
+        if(data.pallet_count)  _llPalletCount=data.pallet_count;
+        if(data.item_pallet)   _llItemPallet=data.item_pallet;
+        if(data.pallet_ranges) _llPalletRanges=data.pallet_ranges;
         return;
       }
     }
@@ -5601,9 +5604,10 @@ async function llLoadData(){
     const raw=localStorage.getItem(LL_SAVE_KEY+'_'+sk);
     if(!raw) return;
     const d=JSON.parse(raw);
-    if(d.boxData)     _llBoxData=d.boxData;
-    if(d.palletCount) _llPalletCount=d.palletCount;
-    if(d.itemPallet)  _llItemPallet=d.itemPallet;
+    if(d.boxData)       _llBoxData=d.boxData;
+    if(d.palletCount)   _llPalletCount=d.palletCount;
+    if(d.itemPallet)    _llItemPallet=d.itemPallet;
+    if(d.palletRanges)  _llPalletRanges=d.palletRanges;
   }catch(e){}
 }
 
@@ -5752,11 +5756,46 @@ function renderLoadingListTable(){
     });
   });
 
-  const palBadge=`<div style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;padding:6px 14px;background:#EDE9FF;border-radius:20px;border:1px solid #C4B5FD;">
-    <span style="font-size:12px;color:#7B2FBE;font-weight:700;">총 ${palCount} Pallet</span>
-    <span style="font-size:11px;color:#A0AEC0;">BOX 행마다 Pallet 번호를 자유롭게 지정하세요</span>
-  </div>`;
-  area.innerHTML=palBadge+`
+  const cEscLL=c.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  let palSection='';
+  if(palCount>1){
+    const ranges=_llPalletRanges[safeC]||[];
+    let rangeInputs='';
+    const INP_PR='width:48px;font-size:12px;text-align:center;border:1px solid #C0C8FF;border-radius:5px;padding:3px 4px;outline:none;';
+    const INP_NM='width:100px;font-size:12px;border:1px solid #C0C8FF;border-radius:5px;padding:3px 5px;outline:none;';
+    for(let p=1;p<=palCount;p++){
+      const r=ranges.find(x=>x.pallet===p)||{};
+      rangeInputs+=`<div style="display:inline-flex;align-items:center;gap:3px;background:#F3EEFF;border:1px solid #C4B5FD;border-radius:8px;padding:5px 8px;flex-shrink:0;">
+        <span style="font-size:12px;font-weight:700;color:#7B2FBE;min-width:20px;">P${p}</span>
+        <span style="font-size:11px;color:#666;margin:0 2px;">연속</span>
+        <input type="number" min="1" value="${r.boxStart||''}" placeholder="시작"
+          oninput="llSetPalletRange('${safeC}',${p},'boxStart',this.value)"
+          style="${INP_PR}">
+        <span style="font-size:11px;color:#bbb;">~</span>
+        <input type="number" min="1" value="${r.boxEnd||''}" placeholder="끝"
+          oninput="llSetPalletRange('${safeC}',${p},'boxEnd',this.value)"
+          style="${INP_PR}">
+        <span style="font-size:11px;color:#aaa;margin:0 3px;">|</span>
+        <span style="font-size:11px;color:#666;">개별</span>
+        <input type="text" value="${(r.boxNums||'').replace(/"/g,'&quot;')}" placeholder="1,4,6 또는 1~3,7"
+          oninput="llSetPalletRange('${safeC}',${p},'boxNums',this.value)"
+          style="${INP_NM}">
+      </div>`;
+    }
+    palSection=`<div style="margin-bottom:10px;padding:8px 12px;background:#F8F5FF;border:1px solid #D4C5FF;border-radius:10px;">
+      <div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:12px;font-weight:700;color:#7B2FBE;white-space:nowrap;padding-top:3px;">📦 파렛트별 BOX 설정</span>
+        <div style="display:flex;flex-direction:column;gap:4px;">${rangeInputs}</div>
+        <button onclick="llAutoAssignPallets('${cEscLL}')" style="background:#7B2FBE;border:none;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;align-self:flex-end;">자동 배정</button>
+      </div>
+      <div style="margin-top:5px;font-size:11px;color:#A0AEC0;">연속: 시작~끝 범위 입력 / 개별: 박스번호를 쉼표로 구분 (예: 1,4,6 또는 1~3,7,10~12) · 둘 다 입력 가능</div>
+    </div>`;
+  } else {
+    palSection=`<div style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;padding:6px 14px;background:#EDE9FF;border-radius:20px;border:1px solid #C4B5FD;">
+      <span style="font-size:12px;color:#7B2FBE;font-weight:700;">총 ${palCount} Pallet</span>
+    </div>`;
+  }
+  area.innerHTML=palSection+`
   <table style="font-size:13px;width:100%;border-collapse:collapse;min-width:600px;">
     <thead><tr style="background:#F4F7FE;border-bottom:2px solid #7B2FBE;">
       <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#1B2559;">SKU No</th>
@@ -5829,6 +5868,62 @@ function llSetPalletCount(safeC,val){
 
 function llSetItemPallet(key,val){
   _llItemPallet[key]=parseInt(val)||1;
+}
+
+function llSetPalletRange(safeC,palNo,field,val){
+  if(!_llPalletRanges[safeC]) _llPalletRanges[safeC]=[];
+  let r=_llPalletRanges[safeC].find(x=>x.pallet===palNo);
+  if(!r){ r={pallet:palNo}; _llPalletRanges[safeC].push(r); }
+  if(field==='boxNums') r[field]=val||'';
+  else r[field]=val?parseInt(val):null;
+}
+
+function _parsePalletBoxText(text){
+  const nums=new Set();
+  if(!text) return nums;
+  String(text).split(',').forEach(part=>{
+    const p=part.trim();
+    const m=p.match(/^(\d+)\s*[~\-]\s*(\d+)$/);
+    if(m){ const s=parseInt(m[1]),e=parseInt(m[2]); for(let i=s;i<=e;i++) nums.add(i); }
+    else{ const n=parseInt(p); if(!isNaN(n)&&n>0) nums.add(n); }
+  });
+  return nums;
+}
+
+function llAutoAssignPallets(center){
+  const safeC=center.replace(/[^a-z0-9]/gi,'_');
+  const allRanges=_llPalletRanges[safeC]||[];
+
+  // 파렛트별 박스번호 Set 구성 (연속범위 + 개별번호 합산)
+  const palletBoxMap=new Map();
+  allRanges.forEach(r=>{
+    if(!palletBoxMap.has(r.pallet)) palletBoxMap.set(r.pallet,new Set());
+    const s=parseInt(r.boxStart)||0, e=parseInt(r.boxEnd)||s;
+    if(s) for(let b=s;b<=e;b++) palletBoxMap.get(r.pallet).add(b);
+    _parsePalletBoxText(r.boxNums).forEach(n=>palletBoxMap.get(r.pallet).add(n));
+  });
+
+  const hasAny=[...palletBoxMap.values()].some(s=>s.size>0);
+  if(!hasAny){ alert('파렛트별 BOX 번호(연속 또는 개별)를 먼저 입력하세요.'); return; }
+
+  const items=_llItems[center]||[];
+  let assigned=0;
+  items.forEach((item,idx)=>{
+    const key=center+'/'+idx;
+    const entries=_llBoxData[key]||[{}];
+    entries.forEach((bd,si)=>{
+      const boxNum=parseInt(bd&&bd.boxStart)||0;
+      if(!boxNum) return;
+      for(const [palNo,boxSet] of palletBoxMap){
+        if(boxSet.has(boxNum)){
+          _llItemPallet[key+'/'+si]=palNo;
+          assigned++;
+          break;
+        }
+      }
+    });
+  });
+  renderLoadingListTable();
 }
 
 function llAddBoxRow(key){
