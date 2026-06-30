@@ -761,9 +761,12 @@ body{padding:0!important;overflow:hidden;}
         <p class="sec-label">추출</p>
         <p class="sec-title">파일 추출</p>
         <p style="font-size:14px;color:#A0AEC0;margin-bottom:.75rem;">정상 출고 가능 항목만 추출 · 재고부족·마진율미달·단종·확인필요 제외</p>
-        <button class="run-btn" onclick="downloadPickingList()" style="width:100%;">피킹리스트 다운로드 (.xlsx)</button>
-        <button class="run-btn" onclick="downloadOrderSheet()" style="width:100%;margin-top:.5rem;">발주서 다운로드 (.xlsx)</button>
-        <button class="run-btn" onclick="downloadBarcodeXLSX()" style="width:100%;margin-top:.5rem;">바코드 다운로드 (.xlsx)</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">
+          <button class="run-btn" onclick="downloadPickingList()">피킹리스트 다운로드 (.xlsx)</button>
+          <button class="run-btn" onclick="downloadPickingImageFromFile()">픽킹위치정보 이미지 다운로드 (.pdf)</button>
+          <button class="run-btn" onclick="downloadOrderSheet()">발주서 다운로드 (.xlsx)</button>
+          <button class="run-btn" onclick="downloadBarcodeXLSX()">바코드 다운로드 (.xlsx)</button>
+        </div>
         <!-- 밀크런 적재리스트 버튼 -->
         <div id="loading-list-section" style="display:none;margin-top:1rem;border-top:1px solid #E0E5FF;padding-top:1rem;">
           <button class="run-btn" onclick="openLoadingListModal()" style="width:100%;color:#4318FF;">밀크런 적재리스트 생성</button>
@@ -802,6 +805,8 @@ body{padding:0!important;overflow:hidden;}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script>
 /*
   통합 파일 시트 구조:
@@ -1601,10 +1606,12 @@ let discontinuedSet=new Set(); // 단종 SKU ID 집합
 let skuTotalQtyMap={}; // SKU ID → 전체 발주수량 합산
 let printSkuSet=new Set(); // 출력상품 SKU ID 집합
 let setComponentMap={}; // 세트 SPEC(모) → [구성품 SPEC, ...]
+let setComponentQtyMap={}; // 세트 SPEC(모) → [{spec, qty}, ...] (픽킹용, 수량 포함)
 let skuIdSetComponents={}; // SKU ID → 세트구성품 (사전 계산)
 let barcodeSheetRaw=[]; // 5.바코드 확인 시트 원본 데이터 (발주서 복사용)
 let skuBarcodeMap={};   // SKU ID → 바코드 (바코드 확인 시트 A→C 매핑)
 let barcodeAttachMap={}; // SKU ID → 'O'|'X' (바코드 확인 시트 A→D 매핑)
+let specBoxQtyMap={};   // SPEC → Box 내 총수량 (바코드 확인 시트 J열)
 let page=0; const PAGE_SIZE=50;
 let milkRunCenterSet=new Set();
 let autoMilkRunCenterSet=new Set(); // 300만원 이상 자동 감지
@@ -1800,7 +1807,7 @@ function addExtraPurchaseOrder(buf, file){
 function parseAllInOne(buf, file){
   // 새 파일 로드 전 전체 상태 초기화
   marginMap={}; skuErpMap={}; skuNameMap={}; eprQtyMap={}; eprNameMap={}; eprSpecSet=new Set();
-  discontinuedSet=new Set(); skuTotalQtyMap={}; setComponentMap={}; skuIdSetComponents={};
+  discontinuedSet=new Set(); skuTotalQtyMap={}; setComponentMap={}; setComponentQtyMap={}; skuIdSetComponents={};
   milkRunCenterSet=new Set(); autoMilkRunCenterSet=new Set(); milkRunCenterOverrides={}; poDeliveryMap={}; manualReasonMap={}; colFilters={};
   outAmtOverrides={}; sortStack=[]; undoStack=[]; printSkuSet=new Set();
   processed=[]; withNo=[]; extraPoRowKeys=new Set();
@@ -1875,40 +1882,59 @@ function parseAllInOne(buf, file){
 
   // ── 4. 세트구성 시트: SPEC(모) → 구성품 SPEC 매핑 ──
   setComponentMap={};
+  setComponentQtyMap={};
   console.log('[전체 시트명]', wb.SheetNames);
   const setn=wb.SheetNames.find(n=>n.includes('세트구성')||n.includes('세트 구성')||n.includes('구성품')||n.includes('구성'))||'';
   if(setn){
     const ws4=wb.Sheets[setn];
     const rng4=XLSX.utils.decode_range(ws4['!ref']||'A1');
-    // 헤더행에서 SPEC(모) 열 탐색: 'SPEC'+'모' 우선 → '모' 단독 → 기본 B열(1)
-    let specMoCol=-1;
+    // 헤더 탐색: SPEC(모) 열, 수량 열
+    let specMoCol=-1, qtyCol=-1;
     for(let c=0;c<=rng4.e.c;c++){
       const cell=ws4[XLSX.utils.encode_cell({r:0,c})];
       const h=cell?String(cell.v||'').trim():'';
-      if(h.includes('SPEC')&&h.includes('모')){ specMoCol=c; break; }
-      if(specMoCol<0&&h.includes('모')) specMoCol=c;
+      if(h.includes('SPEC')&&h.includes('모')){ specMoCol=c; }
+      else if(specMoCol<0&&h.includes('모')) specMoCol=c;
+      if(qtyCol<0&&(h.includes('수량')||h.toLowerCase().includes('qty'))) qtyCol=c;
     }
     if(specMoCol<0) specMoCol=1;
-    for(let R=1;R<=rng4.e.r;R++){
-      const cA0=ws4[XLSX.utils.encode_cell({r:R,c:0})]; // A열: 부모 SPEC/KS코드
-      const cMo=ws4[XLSX.utils.encode_cell({r:R,c:specMoCol})];
-      const cD =ws4[XLSX.utils.encode_cell({r:R,c:3})]; // D열: 자식 SPEC코드
-      const cE =ws4[XLSX.utils.encode_cell({r:R,c:4})]; // E열: 자식 전체명(폴백)
-      if(!cMo||(!cD&&!cE)) continue;
-      const parentSpec=String(cMo.v||'').trim();
-      const parentCode=cA0&&cA0.v ? normId(String(cA0.v).trim()) : '';
-      // D열 SPEC코드 우선, 없으면 E열 전체 상품명 사용
-      const rawChild=cD&&cD.v ? String(cD.v).trim() : (cE&&cE.v ? String(cE.v).trim() : '');
-      const childSpec=normId(rawChild);
-      if(!parentSpec||!childSpec) continue;
-      // B열 전체명 키 등록 (기존)
+    if(qtyCol<0) qtyCol=7; // 기본값: H열(index 7) — 세트구성 시트 수량
+    // 헬퍼: 키 양쪽 등록 (parentSpec + parentCode)
+    const _addComp=(parentSpec, parentCode, childSpec, qty)=>{
+      const entry={spec:childSpec, qty};
       if(!setComponentMap[parentSpec]) setComponentMap[parentSpec]=[];
       setComponentMap[parentSpec].push(childSpec);
-      // A열 KS코드 키 추가 등록 → SPEC/SKU ID 직접 매칭용
+      if(!setComponentQtyMap[parentSpec]) setComponentQtyMap[parentSpec]=[];
+      setComponentQtyMap[parentSpec].push(entry);
       if(parentCode && parentCode!==parentSpec){
         if(!setComponentMap[parentCode]) setComponentMap[parentCode]=[];
         setComponentMap[parentCode].push(childSpec);
+        if(!setComponentQtyMap[parentCode]) setComponentQtyMap[parentCode]=[];
+        setComponentQtyMap[parentCode].push(entry);
       }
+      // extractSetCode 단축키도 등록
+      const sc=extractSetCode(parentSpec);
+      if(sc && sc!==parentSpec && sc!==parentCode){
+        if(!setComponentMap[sc]) setComponentMap[sc]=[];
+        setComponentMap[sc].push(childSpec);
+        if(!setComponentQtyMap[sc]) setComponentQtyMap[sc]=[];
+        setComponentQtyMap[sc].push(entry);
+      }
+    };
+    for(let R=1;R<=rng4.e.r;R++){
+      const cA0=ws4[XLSX.utils.encode_cell({r:R,c:0})];
+      const cMo=ws4[XLSX.utils.encode_cell({r:R,c:specMoCol})];
+      const cD =ws4[XLSX.utils.encode_cell({r:R,c:3})];
+      const cE =ws4[XLSX.utils.encode_cell({r:R,c:4})];
+      const cQty=qtyCol>=0?ws4[XLSX.utils.encode_cell({r:R,c:qtyCol})]:null;
+      if(!cMo||(!cD&&!cE)) continue;
+      const parentSpec=String(cMo.v||'').trim();
+      const parentCode=cA0&&cA0.v ? normId(String(cA0.v).trim()) : '';
+      const rawChild=cD&&cD.v ? String(cD.v).trim() : (cE&&cE.v ? String(cE.v).trim() : '');
+      const childSpec=normId(rawChild);
+      const childQty=cQty&&cQty.v ? (parseInt(cQty.v)||1) : 1;
+      if(!parentSpec||!childSpec) continue;
+      _addComp(parentSpec, parentCode, childSpec, childQty);
     }
   }
 
@@ -1927,17 +1953,29 @@ function parseAllInOne(buf, file){
       barcodeSheetRaw.push(row);
     }
   }
-  // 바코드 확인 시트: A열(SKU ID) 기준으로 C열(바코드)·D열(부착여부) 맵 구축
+  // 바코드 확인 시트: A열(SKU ID) 기준으로 C열(바코드)·D열(부착여부)·J열(Box내총수량) 맵 구축
   skuBarcodeMap={};
   barcodeAttachMap={};
+  specBoxQtyMap={};
   barcodeSheetRaw.forEach((row,i)=>{
     if(i===0) return; // 헤더 스킵
     const sid=normId(row[0]);
     const bc=String(row[2]||'').trim();
     const flag=String(row[3]||'').trim().toUpperCase();
+    const boxQty=parseFloat(row[9])||0; // J열(index 9) = Box 내 총수량
     if(sid){
       if(bc) skuBarcodeMap[sid]=bc;
       if(flag) barcodeAttachMap[sid]=flag;
+      if(boxQty){
+        specBoxQtyMap[sid]=boxQty;
+        const spec=skuErpMap[sid]||'';
+        if(spec){
+          specBoxQtyMap[spec]=boxQty;
+          // extractSetCode 단축코드도 키로 등록 (예: "(가베가족)IN95357 ..." → "IN95357")
+          const code=extractSetCode(spec);
+          if(code && !specBoxQtyMap[code]) specBoxQtyMap[code]=boxQty;
+        }
+      }
     }
   });
 
@@ -2455,6 +2493,7 @@ function saveCurrentSession(){
     eprSpecSet: [...eprSpecSet],
     barcodeAttachMap: barcodeAttachMap,
     skuBarcodeMap: skuBarcodeMap,
+    specBoxQtyMap: specBoxQtyMap,
     poDeliveryMap: poDeliveryMap,
     setComponentMap: setComponentMap,
     // 제외(로딩 시 재빌드): eprNameMap, skuTotalQtyMap, skuIdSetComponents, milkRunCenterSet
@@ -2524,6 +2563,7 @@ function loadSession(dateKey){
   eprSpecSet       = new Set(rec.eprSpecSet||[]);
   barcodeAttachMap = rec.barcodeAttachMap||{};
   skuBarcodeMap    = rec.skuBarcodeMap||{};
+  specBoxQtyMap    = rec.specBoxQtyMap||{};
   poDeliveryMap    = rec.poDeliveryMap||{};
   // 구버전 세션: poDeliveryMap 없을 때 dateKey에서 날짜 복원
   if(!Object.keys(poDeliveryMap).length && withNo.length){
@@ -4000,7 +4040,7 @@ function reloadLastFile(){
 
 function clearAll(){
   if(!confirm('초기화할까요?')) return;
-  marginMap={}; skuErpMap={}; skuNameMap={}; eprQtyMap={}; eprNameMap={}; eprSpecSet=new Set(); discontinuedSet=new Set(); skuTotalQtyMap={}; setComponentMap={}; skuIdSetComponents={}; milkRunCenterSet=new Set(); autoMilkRunCenterSet=new Set(); milkRunCenterOverrides={}; poDeliveryMap={}; manualReasonMap={}; barcodeSheetRaw={}; skuBarcodeMap={}; barcodeAttachMap={}; colFilters={};
+  marginMap={}; skuErpMap={}; skuNameMap={}; eprQtyMap={}; eprNameMap={}; eprSpecSet=new Set(); discontinuedSet=new Set(); skuTotalQtyMap={}; setComponentMap={}; setComponentQtyMap={}; skuIdSetComponents={}; milkRunCenterSet=new Set(); autoMilkRunCenterSet=new Set(); milkRunCenterOverrides={}; poDeliveryMap={}; manualReasonMap={}; barcodeSheetRaw={}; skuBarcodeMap={}; barcodeAttachMap={}; specBoxQtyMap={}; colFilters={};
   processed=[]; withNo=[]; extraPoRowKeys=new Set();
   document.getElementById('margin-saved-bar').style.display='none';
   document.getElementById('file-ok').style.display='none';
@@ -5979,6 +6019,456 @@ function downloadLoadingList(){
   const _dk=getSessionDateKey();
   const _ds=_dk?_dk.replace(/-/g,''):(()=>{const n=new Date();return n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');})();
   S.writeFile(wb,'적재리스트_'+_ds+'.xlsx');
+}
+
+// ── 픽킹위치정보 이미지 다운로드 ──
+function downloadPickingImageFromFile(){
+  const inp=document.createElement('input');
+  inp.type='file'; inp.accept='.xlsx,.xls';
+  inp.onchange=async(e)=>{
+    const file=e.target.files[0]; if(!file) return;
+    try{
+      const buf=await file.arrayBuffer();
+      const wb=XLSX.read(buf,{type:'array',raw:true});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rawRows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+      const items=rawRows.slice(1).map(r=>({
+        warehouse:String(r[0]||'').trim(),
+        warehouseName:String(r[1]||'').trim(),
+        rack:String(r[2]||'').trim(),
+        col:String(r[3]||'').trim(),
+        dan:String(r[4]||'').trim(),
+        spec:String(r[5]||'').trim(),
+        name:String(r[6]||'').trim(),
+        unit:String(r[8]||'').trim()||'EA',
+        qty:parseFloat(r[9])||0,
+        lastDate:r[10],
+        lastQty:parseFloat(r[11])||0,
+        barcode:String(r[12]||r[5]||'').trim(),
+        otherLoc:String(r[15]||'').trim(),
+      })).filter(r=>r.spec);
+      await _renderPickingImages(items, file.name);
+    }catch(err){ alert('파일 처리 오류: '+err.message); }
+  };
+  document.body.appendChild(inp); inp.click(); document.body.removeChild(inp);
+}
+
+function _pickFormatDate(v){
+  if(v===undefined||v===null||v==='') return '';
+  const n=parseFloat(v);
+  if(!isNaN(n)&&n>10000){
+    const d=new Date(Math.round((n-25569)*86400*1000));
+    return d.getUTCFullYear()+'.'+String(d.getUTCMonth()+1).padStart(2,'0')+'.'+String(d.getUTCDate()).padStart(2,'0');
+  }
+  return String(v).trim();
+}
+
+function _pickTruncate(ctx,text,maxW){
+  if(!text) return '';
+  if(ctx.measureText(text).width<=maxW) return text;
+  let t=text;
+  while(t.length>0&&ctx.measureText(t+'…').width>maxW) t=t.slice(0,-1);
+  return t+'…';
+}
+
+// P열 기타위치 파싱: "[3층-A1-1-1]2026.01.12(57), ..." → 배열
+function _parseLocations(locStr){
+  if(!locStr) return [];
+  return locStr.split(',').map(s=>s.trim()).filter(s=>s);
+}
+
+// "[창고명-랙-열-단]날짜(수량)" → {warehouseName, rack, col, dan, date, qty}
+function _parseLocDetail(s){
+  const m=s.match(/^\[([^\]]+)\]([\d.]+)?\(?(\d+)?\)?/);
+  if(!m) return {full:s,warehouseName:'',rack:'',col:'',dan:'',date:'',qty:0};
+  const parts=m[1].split('-');
+  return {
+    full:s,
+    warehouseName:parts[0]||'',
+    rack:parts[1]||'',
+    col:parts[2]||'',
+    dan:parts[3]||'',
+    date:m[2]||'',
+    qty:parseInt(m[3])||0
+  };
+}
+
+// 숫자 천단위 콤마
+function _fmtN(n){ return Number(n).toLocaleString('ko-KR'); }
+
+// 위치 유형 분류
+// excluded   : 4층-EMT, 4층-IQ (픽킹 제외 구역)
+// coupang_cp : 4층-CP (쿠팡 전용, 4층 색상 사용)
+// coupang_a3 : B동1층-A3 (쿠팡 전용)
+// floor5     : 5층
+// floor4     : 4층(CP·EMT·IQ 제외)
+// bdong      : B동(A3 제외)
+// floor3     : 3층
+// floor1     : 1층 / 1층바닥 (동일 구역)
+function _locType(ld){
+  const wh=String(ld.warehouseName||'');
+  const rk=String(ld.rack||'').toUpperCase();
+  // 제외 구역
+  if(wh.includes('4층')&&(rk.startsWith('EMT')||rk.startsWith('IQ'))) return 'excluded';
+  // 쿠팡 CP (4층 내)
+  if(wh.includes('4층')&&rk.startsWith('CP')) return 'coupang_cp';
+  // 쿠팡 B동A3
+  if(wh.includes('B동1층')&&ld.rack&&String(ld.rack).startsWith('A3')) return 'coupang_a3';
+  // 5층
+  if(wh.includes('5층')) return 'floor5';
+  // 4층 (CP·EMT·IQ 제외)
+  if(wh.includes('4층')) return 'floor4';
+  // B동 (A3 제외)
+  if(wh.includes('B동')) return 'bdong';
+  // 3층
+  if(wh.includes('3층')) return 'floor3';
+  // 1층 / 1층바닥 (같은 구역)
+  if(wh.includes('1층')) return 'floor1';
+  return 'other';
+}
+
+// 픽킹 대상 위치 인덱스 Set 반환
+// 우선순위: 쿠팡(CP/B동A3) → 5층 → 4층 → B동 → 3층
+// 충족되면 하위 순위 추가 표기 안 함
+function _pickHighlightSet(locDetails, qty, boxQty){
+  if(!locDetails.length) return new Set();
+  const types=locDetails.map(_locType);
+  const sumIdx=arr=>arr.reduce((s,i)=>s+(locDetails[i]?locDetails[i].qty||0:0),0);
+  const byType=t=>types.map((v,i)=>v===t?i:-1).filter(i=>i>=0);
+
+  const cpIdx=[...byType('coupang_cp'),...byType('coupang_a3')];
+  const f5Idx=byType('floor5');
+  const f4Idx=byType('floor4');
+  const f1Idx=byType('floor1');
+  const bdIdx=byType('bdong');
+  const f3Idx=byType('floor3');
+
+  // [규칙 1] CP/B동A3 최우선: 합계가 발주수량 충족하면 그것만 표기
+  if(cpIdx.length>0 && sumIdx(cpIdx)>=qty) return new Set(cpIdx);
+
+  // [규칙 2] 박스단위 여부: 발주수량 >= 1박스수량이면 박스, 아니면 낱개
+  const isBoxUnit = boxQty>0 ? qty>=boxQty : qty>10;
+
+  if(isBoxUnit){
+    // 박스: 5층→4층→1층→B동 순으로 단독 충족 확인, 모두 부족하면 3층
+    for(const idx of [f5Idx,f4Idx,f1Idx,bdIdx]){
+      if(idx.length>0 && sumIdx(idx)>=qty) return new Set(idx);
+    }
+    return new Set(f3Idx); // 폴백: 3층
+  } else {
+    // 낱개: 3층 재고만 표기
+    return new Set(f3Idx);
+  }
+}
+
+// 위치 유형별 형광펜 색상 (불투명도 높여 선명하게)
+const _HLCOLOR={
+  coupang_cp: 'rgba(255,140,0,0.80)',  // 주황 (4층과 동일)
+  coupang_a3: 'rgba(0,180,60,0.80)',   // 초록
+  floor5:     'rgba(255,220,0,0.85)',  // 노랑
+  floor4:     'rgba(255,140,0,0.80)',  // 주황
+  bdong:      'rgba(0,180,60,0.70)',   // 연초록
+  floor3:     'rgba(255,70,70,0.75)',  // 빨강
+  floor1:     'rgba(140,80,220,0.75)', // 보라 (1층/1층바닥)
+  other:      'rgba(120,120,120,0.65)'
+};
+
+// Box 내 총수량 조회 (SPEC → specBoxQtyMap, 없으면 extractSetCode 폴백)
+function _getBoxQty(spec){
+  if(!spec) return 0;
+  if(specBoxQtyMap[spec]) return specBoxQtyMap[spec];
+  const nspc=normId(spec);
+  if(nspc&&specBoxQtyMap[nspc]) return specBoxQtyMap[nspc];
+  const sc=extractSetCode(spec);
+  if(sc){
+    for(const [k,v] of Object.entries(specBoxQtyMap)){
+      if(extractSetCode(k)===sc) return v;
+    }
+  }
+  return 0;
+}
+
+// 세트구성품 조회 → [{spec, qty}, ...] 반환 (위치 없는 세트상품 픽킹용)
+function _getSetComps(spec){
+  if(!spec) return null;
+  const _fromQtyMap=(key)=>setComponentQtyMap[key]&&setComponentQtyMap[key].length?setComponentQtyMap[key]:null;
+  // setComponentQtyMap 우선 (수량 포함)
+  let r=_fromQtyMap(spec)||_fromQtyMap(normId(spec));
+  if(!r){
+    const sc=extractSetCode(spec);
+    if(sc){
+      r=_fromQtyMap(sc);
+      if(!r) for(const [k,v] of Object.entries(setComponentQtyMap)){ if(v&&v.length&&extractSetCode(k)===sc){ r=v; break; } }
+    }
+  }
+  if(r) return r;
+  // 폴백: setComponentMap → qty=1로 변환
+  let comps=setComponentMap[spec]||setComponentMap[normId(spec)];
+  if(!comps){
+    const sc=extractSetCode(spec);
+    if(sc){
+      if(setComponentMap[sc]) comps=setComponentMap[sc];
+      else for(const [k,v] of Object.entries(setComponentMap)){ if(v&&v.length&&extractSetCode(k)===sc){ comps=v; break; } }
+    }
+  }
+  return comps?comps.map(s=>({spec:s,qty:1})):null;
+}
+
+// 동적 행 높이: 상단(SPEC+품명) + 하단(위치 두 열)
+function _calcRowH(item){
+  const S=30, TOP=52; // S=행높이 계산용, TOP=상단(SPEC+품명) 고정 영역
+  const locs=_parseLocations(item.otherLoc);
+  const noPos=!item.warehouseName&&!item.rack&&!locs.length;
+  const comps=noPos?_getSetComps(item.spec):null;
+  const locL=Math.min(locs.length,4);
+  const locR=Math.max(0,locs.length-4);
+  const compR=comps?comps.length:0;
+  const bottomRows=Math.max(locL,locR,compR);
+  if(!bottomRows) return Math.max(60,TOP+8);
+  return Math.max(60, TOP+bottomRows*S+8);
+}
+
+async function _renderPickingImages(items, fileName){
+  // ── 레이아웃 상수 (A4 세로 150dpi: 1240×1754) ──
+  const PW=1240, PH=1754, M=28;
+  const TITLE_H=50, INFO_H=36, TH_H=44, GRP_H=26, LOC_LINE_H=15;
+  const DATA_Y=M+TITLE_H+INFO_H+TH_H;
+  const MAX_DATA_H=PH-DATA_Y-M;
+  const QTY_W=100;
+
+  // ── 열 정의 (총 테이블 폭: 1240-56=1184) ──
+  const cSpec   ={x:M,       w:630};        // SPEC/품명/위치 (No+창고명 흡수)
+  const cBox    ={x:M+630,   w:70};         // 1box내품수량
+  const cQty    ={x:M+700,   w:QTY_W};     // 수량
+  const cBarcode={x:M+700+QTY_W, w:PW-M*2-700-QTY_W}; // 바코드
+
+  // ── 그룹화: 창고+랙+열+단+최종입고일 기준 ──
+  const groups=[];
+  let prevKey=null;
+  items.forEach(item=>{
+    const key=[item.warehouse,item.rack,item.col,item.dan,item.lastDate].join('§');
+    if(key!==prevKey){
+      groups.push({warehouseName:item.warehouseName,rack:item.rack,col:item.col,dan:item.dan,
+        lastDate:item.lastDate,lastQty:item.lastQty,items:[]});
+      prevKey=key;
+    }
+    groups[groups.length-1].items.push(item);
+  });
+
+  // ── 렌더 단위 목록 (동적 행 높이 포함) ──
+  const units=[];
+  groups.forEach(g=>{
+    g.items.forEach(item=>units.push({type:'item',h:_calcRowH(item),data:item}));
+  });
+
+  // ── 페이지 분할 (동적 높이 반영) ──
+  const pages=[];
+  let pg=[], usedH=0;
+  units.forEach(u=>{
+    if(usedH+u.h>MAX_DATA_H&&pg.length){pages.push(pg);pg=[];usedH=0;}
+    pg.push(u); usedH+=u.h;
+  });
+  if(pg.length) pages.push(pg);
+  if(!pages.length){alert('데이터가 없습니다.');return;}
+
+  const now=new Date();
+  const nowStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')
+    +' '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  const totalPg=pages.length;
+  const {jsPDF}=window.jspdf;
+  const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  let no=1;
+
+  for(let pi=0;pi<totalPg;pi++){
+    const cv=document.createElement('canvas');
+    cv.width=PW; cv.height=PH;
+    const ctx=cv.getContext('2d');
+
+    // 흰 배경
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,PW,PH);
+
+    // 제목
+    ctx.fillStyle='#111';
+    ctx.font='bold 35px "Malgun Gothic",Arial,sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('픽킹위치정보(수주)',PW/2,M+TITLE_H/2);
+
+    // 헤더 정보
+    ctx.font='21px "Malgun Gothic",Arial,sans-serif';
+    ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText('창고선택: 전체',M,M+TITLE_H+INFO_H/2);
+    ctx.textAlign='right';
+    ctx.fillText('인쇄: '+nowStr,PW-M,M+TITLE_H+INFO_H/2);
+
+    // 테이블 헤더 배경
+    const thY=M+TITLE_H+INFO_H;
+    ctx.fillStyle='#FFFACD';
+    ctx.fillRect(M,thY,PW-M*2,TH_H);
+    ctx.strokeStyle='#888'; ctx.lineWidth=1.5;
+    ctx.strokeRect(M,thY,PW-M*2,TH_H);
+    ctx.lineWidth=1;
+    [cBox.x,cQty.x,cBarcode.x].forEach(x=>{
+      ctx.beginPath();ctx.moveTo(x,thY);ctx.lineTo(x,thY+TH_H);ctx.stroke();
+    });
+    const thMid=thY+TH_H/2;
+    ctx.fillStyle='#333'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font='bold 21px "Malgun Gothic",Arial,sans-serif';
+    ctx.fillText('SPEC / 품명 / 위치',cSpec.x+cSpec.w/2,thMid);
+    ctx.fillText('1박스',cBox.x+cBox.w/2,thMid-9);
+    ctx.fillText('수량',cBox.x+cBox.w/2,thMid+9);
+    ctx.fillText('수량',cQty.x+cQty.w/2,thMid);
+    ctx.fillText('바코드',cBarcode.x+cBarcode.w/2,thMid);
+
+    // 데이터 행
+    let y=DATA_Y;
+    for(const u of pages[pi]){
+      const rh=u.h;
+      if(u.type==='item'){
+        const item=u.data;
+        const locs=_parseLocations(item.otherLoc);
+        const locDetails=locs.map(_parseLocDetail);
+
+        // ── 레이아웃 상수 (행 내부) ──
+        const S=30, TOP=52; // S=줄높이, TOP=상단(SPEC+품명) 영역
+        const cSpecMid=cSpec.x+Math.floor(cSpec.w/2);
+        const noPos=!item.warehouseName&&!item.rack&&!locs.length;
+        const setComps=noPos?_getSetComps(item.spec):null;
+        const locsLeft=locs.slice(0,4);
+        const locsRight=locs.slice(4);
+        const hasBottom=locsLeft.length||locsRight.length||(setComps&&setComps.length);
+
+        // 행 배경
+        ctx.fillStyle=no%2===0?'#F7F8FA':'#fff';
+        ctx.fillRect(M,y,PW-M*2,rh);
+        ctx.strokeStyle='#888'; ctx.lineWidth=2;
+        ctx.strokeRect(M,y,PW-M*2,rh);
+        ctx.lineWidth=1;
+
+        // 세로선: cBox, cQty, cBarcode (cSpecMid는 하단에만)
+        [cBox.x,cQty.x,cBarcode.x].forEach(x=>{
+          ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+rh);ctx.stroke();
+        });
+
+        // ── 상단: SPEC + 품명 (전체 너비) ──
+        ctx.textAlign='left'; ctx.textBaseline='middle';
+        ctx.fillStyle='#111';
+        ctx.font='bold 21px "Malgun Gothic",Arial,sans-serif';
+        ctx.fillText(item.spec, cSpec.x+8, y+TOP*0.30);
+        ctx.fillStyle='#333';
+        ctx.font='21px "Malgun Gothic",Arial,sans-serif';
+        ctx.fillText(_pickTruncate(ctx,item.name,cSpec.w-16), cSpec.x+8, y+TOP*0.72);
+
+        // ── 하단: 위치 두 열 (가로 구분선 + 세로 구분선) ──
+        if(hasBottom){
+          // 가로 구분선
+          ctx.strokeStyle='#ddd'; ctx.lineWidth=0.8;
+          ctx.beginPath();ctx.moveTo(cSpec.x,y+TOP);ctx.lineTo(cQty.x,y+TOP);ctx.stroke();
+          // 세로 구분선 (하단만)
+          ctx.beginPath();ctx.moveTo(cSpecMid,y+TOP);ctx.lineTo(cSpecMid,y+rh);ctx.stroke();
+          ctx.strokeStyle='#ccc'; ctx.lineWidth=1;
+
+          const bottomRows=Math.max(locsLeft.length,locsRight.length,setComps?setComps.length:0);
+
+          // 픽킹 대상 위치 결정
+          const boxQtyForHL=_getBoxQty(item.spec);
+          const hlSet=_pickHighlightSet(locDetails, item.qty, boxQtyForHL);
+
+          // 위치 텍스트 렌더 헬퍼 (형광펜 하이라이트 포함)
+          const _drawLoc=(ld,globalIdx,tx,ty)=>{
+            const lp=[ld.warehouseName,ld.rack,ld.col,ld.dan].filter(v=>v);
+            const lb=(lp.length?'['+lp.join('-')+']':ld.full)+'- '+_fmtN(ld.qty)+' '+item.unit;
+            const text='▪ '+lb;
+            ctx.font='21px "Malgun Gothic",Arial,sans-serif';
+            ctx.textAlign='left';
+            if(hlSet.has(globalIdx)){
+              const tw=ctx.measureText(text).width;
+              ctx.fillStyle=_HLCOLOR[_locType(ld)]||_HLCOLOR.other;
+              ctx.fillRect(tx-2, ty-13, tw+6, 26);
+            }
+            ctx.fillStyle='#1565C0';
+            ctx.fillText(text, tx, ty);
+          };
+
+          // 왼쪽: 위치 1~4
+          for(let li=0;li<locsLeft.length;li++){
+            _drawLoc(locDetails[li], li, cSpec.x+8, y+TOP+S/2+li*S);
+          }
+
+          // 오른쪽: 위치 5+ or 세트구성품
+          if(locsRight.length){
+            for(let li=0;li<locsRight.length;li++){
+              _drawLoc(locDetails[4+li], 4+li, cSpecMid+8, y+TOP+S/2+li*S);
+            }
+          } else if(setComps&&setComps.length){
+            for(let li=0;li<setComps.length;li++){
+              const sc=setComps[li];
+              const slabel=typeof sc==='object'?(sc.spec+(sc.qty>=1?' '+sc.qty+'개':'')):sc;
+              ctx.fillStyle=li===0?'#BF360C':'#E64A19';
+              ctx.fillText('▷ '+slabel, cSpecMid+8, y+TOP+S/2+li*S);
+            }
+          }
+        }
+
+        // ── 1박스 수량 ──
+        const boxQty=_getBoxQty(item.spec);
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        if(boxQty){
+          const boxCount=Math.ceil(item.qty/boxQty);
+          const showBox=boxQty<=item.qty;
+          ctx.fillStyle='#555';
+          ctx.font='bold 21px "Malgun Gothic",Arial,sans-serif';
+          ctx.fillText(_fmtN(boxQty), cBox.x+cBox.w/2, showBox?y+rh/2-10:y+rh/2);
+          if(showBox){
+            ctx.font='18px "Malgun Gothic",Arial,sans-serif';
+            ctx.fillText('('+boxCount+' BOX)', cBox.x+cBox.w/2, y+rh/2+10);
+          }
+        }
+
+        // ── 수량 ──
+        ctx.fillStyle='#111'; ctx.textAlign='center';
+        ctx.font='bold 21px "Malgun Gothic",Arial,sans-serif';
+        ctx.fillText(_fmtN(item.qty), cQty.x+cQty.w/2, y+rh/2);
+
+        // ── 바코드 ──
+        try{
+          const bcCv=document.createElement('canvas');
+          JsBarcode(bcCv, item.barcode||item.spec, {
+            format:'CODE128', width:2, height:60, displayValue:false, margin:0
+          });
+          const bcW=cBarcode.w-8;
+          const bcH=Math.min(rh-16, 60);
+          ctx.drawImage(bcCv, cBarcode.x+4, y+(rh-bcH)/2, bcW, bcH);
+        }catch(e){
+          ctx.fillStyle='#bbb'; ctx.font='21px "Malgun Gothic",Arial,sans-serif'; ctx.textAlign='left';
+          ctx.fillText('[바코드 오류]', cBarcode.x+4, y+rh/2);
+        }
+
+        no++;
+        y+=rh;
+      }
+    }
+
+    // 전체 테이블 외곽선
+    ctx.strokeStyle='#888'; ctx.lineWidth=1.5;
+    ctx.strokeRect(M,thY,PW-M*2,y-thY);
+
+    // 페이지 번호
+    ctx.fillStyle='#aaa';
+    ctx.font='21px "Malgun Gothic",Arial,sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText(String(pi+1)+' / '+String(totalPg), PW/2, PH-8);
+
+    // PDF에 페이지 추가 (A4 세로, 여백 없음)
+    if(pi>0) pdf.addPage('a4','portrait');
+    pdf.addImage(cv.toDataURL('image/jpeg',0.95),'JPEG',0,0,210,297);
+    await new Promise(r=>setTimeout(r,50));
+  }
+
+  // PDF 저장
+  const today=new Date();
+  const ds=today.getFullYear()+String(today.getMonth()+1).padStart(2,'0')+String(today.getDate()).padStart(2,'0');
+  pdf.save('픽킹위치정보_'+ds+'.pdf');
+  alert(totalPg+'페이지 PDF 다운로드 완료');
 }
 
 function downloadPickingList(){
