@@ -10210,15 +10210,10 @@ async function pl_dbSet(key, value) {
 }
 
 // ===== Supabase 로그인 / 권한 / 클라우드 공유저장 =====
-// 이 파일 전용 Supabase 프로젝트(GABE_coupang_2.1.html과 별개). anon key는 RLS로 보호되는 공개용 키.
-const pl_SUPABASE_URL = 'https://yiyuwtrfzfyuehgzacxf.supabase.co';
-const pl_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpeXV3dHJmemZ5dWVoZ3phY3hmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NjY4NjEsImV4cCI6MjEwMTQ0Mjg2MX0.fpgLMfL59w9xFEz7yddftlmW9lW-QWkNo6mDbXczwbA';
-let pl_supabaseClient = null;
+// 메인 발주리스트(2.1)와 같은 Supabase 프로젝트를 공유해서 사용 (SUPABASE_URL/SUPABASE_ANON_KEY, _getSupabase() 재사용).
+// 로그인 계정(auth.users)도 메인과 공유되므로 팀원은 기존 계정 그대로 로그인 가능.
 function pl_getSupabase() {
-  if (!pl_supabaseClient && window.supabase) {
-    pl_supabaseClient = window.supabase.createClient(pl_SUPABASE_URL, pl_SUPABASE_ANON_KEY);
-  }
-  return pl_supabaseClient;
+  return _getSupabase();
 }
 
 let pl_currentUser = null;
