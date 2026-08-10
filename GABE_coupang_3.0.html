@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GABE 쿠팡발주리스트_2.1</title>
+<title>GABE 쿠팡발주리스트_3.0</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;900&display=swap');
@@ -154,6 +154,15 @@ body{padding:0!important;overflow:hidden;}
   font-style:normal;
 }
 .sb-divider{height:1px;background:rgba(255,255,255,0.07);margin:6px 16px;}
+.sb-sub-item{
+  display:block;width:calc(100% - 10px);text-align:left;
+  padding:7px 16px 7px 41px;font-size:12.5px;font-weight:500;
+  color:rgba(255,255,255,0.6);cursor:pointer;
+  background:none;border:none;font-family:inherit;
+  transition:all .15s;border-radius:0 9px 9px 0;margin-right:10px;
+}
+.sb-sub-item:hover{color:#fff;background:rgba(255,255,255,0.09);}
+.sb-sub-item.active{color:#fff;font-weight:700;background:rgba(255,255,255,0.12);}
 .sb-bottom{
   margin-top:auto;padding:12px 16px;
   border-top:1px solid rgba(255,255,255,0.08);flex-shrink:0;
@@ -431,7 +440,7 @@ body{padding:0!important;overflow:hidden;}
   <div style="background:#fff;border-radius:18px;padding:36px 40px;width:380px;max-width:94vw;box-shadow:0 16px 48px rgba(27,37,89,0.18);border:1px solid #E0E5FF;">
     <div style="text-align:center;margin-bottom:28px;">
       <div style="font-size:13px;font-weight:700;letter-spacing:0.15em;color:#4318FF;text-transform:uppercase;margin-bottom:6px;">GABE</div>
-      <div style="font-size:22px;font-weight:900;color:#1B2559;margin-bottom:4px;">쿠팡발주리스트 2.1</div>
+      <div style="font-size:22px;font-weight:900;color:#1B2559;margin-bottom:4px;">쿠팡발주리스트 3.0</div>
       <div style="font-size:12px;color:#A0AEC0;">계정으로 로그인하세요</div>
     </div>
     <div id="login-error" style="display:none;background:#FFF5F5;border:1px solid #FED7D7;border-radius:8px;padding:9px 13px;font-size:12px;color:#E53E3E;margin-bottom:14px;"></div>
@@ -752,52 +761,7 @@ body{padding:0!important;overflow:hidden;}
 
 <div id="pl_connErrorBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:10000;background:#c0392b;color:#fff;font-size:0.8rem;font-weight:600;padding:8px 16px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.25);"></div>
 
-<div id="pl_loginScreen" style="display:flex;position:fixed;inset:0;z-index:9999;background:var(--bg);align-items:center;justify-content:center;">
-  <div style="background:var(--panel);border-radius:14px;padding:32px 34px;width:340px;max-width:92vw;box-shadow:0 16px 40px rgba(0,0,0,0.2);border:1px solid var(--border);">
-    <div style="text-align:center;margin-bottom:22px;">
-      <div style="font-size:1.1rem;font-weight:800;color:var(--text);margin-bottom:4px;">가베패밀리 상품 리스트</div>
-      <div style="font-size:0.78rem;color:var(--muted);">계정으로 로그인하세요</div>
-    </div>
-    <div id="pl_loginError" style="display:none;background:#FFF5F5;border:1px solid #FED7D7;border-radius:8px;padding:9px 12px;font-size:0.78rem;color:#c0392b;margin-bottom:12px;"></div>
-    <div style="margin-bottom:12px;">
-      <label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">이메일</label>
-      <input id="pl_loginEmail" type="email" placeholder="example@company.com"
-        style="width:100%;box-sizing:border-box;height:38px;padding:0 12px;font-size:0.85rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);outline:none;"
-        onkeydown="if(event.key==='Enter')document.getElementById('pl_loginPw').focus()">
-    </div>
-    <div style="margin-bottom:18px;">
-      <label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:4px;">비밀번호</label>
-      <input id="pl_loginPw" type="password" placeholder="비밀번호 입력"
-        style="width:100%;box-sizing:border-box;height:38px;padding:0 12px;font-size:0.85rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);outline:none;"
-        onkeydown="if(event.key==='Enter')pl_doLogin()">
-    </div>
-    <button id="pl_loginBtn" onclick="pl_doLogin()" class="btn-primary" style="width:100%;height:40px;border-radius:8px;font-size:0.88rem;font-weight:700;">로그인</button>
-    <div id="pl_loginLoading" style="display:none;text-align:center;margin-top:12px;font-size:0.78rem;color:var(--muted);">⏳ 로그인 중...</div>
-    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);text-align:center;">
-      <span style="font-size:0.72rem;color:var(--muted);">계정 발급은 관리자에게 문의하세요</span>
-    </div>
-  </div>
-</div>
-
 <div class="pl-layout">
-  <nav class="pl-sidebar">
-    <h1>가베패밀리</h1>
-    <p class="side-subtitle">상품 리스트</p>
-    <div class="pl-sb-item" onclick="closeProductListPage()" style="margin-bottom:10px;opacity:0.85;">
-      <span class="pl-sb-item-icon">←</span>쿠팡 발주리스트로
-    </div>
-    <div id="pl_userBar" style="display:flex;flex-direction:column;gap:6px;padding:8px;margin:0 8px 14px;border:1px solid var(--border);border-radius:8px;background:var(--panel);font-size:0.74rem;">
-      <span id="pl_userEmailEl" style="color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-      <div style="display:flex;gap:6px;">
-        <button id="pl_permPanelBtn" onclick="pl_openPermPanel()" style="display:none;flex:1;padding:4px 6px;font-size:0.7rem;">권한관리</button>
-        <button onclick="pl_doLogout()" style="flex:1;padding:4px 6px;font-size:0.7rem;">로그아웃</button>
-      </div>
-    </div>
-    <button class="pl-sb-item active" data-page="list">가베상품리스트</button>
-    <button class="pl-sb-item" data-page="upload">데이터업로드</button>
-    <button class="pl-sb-item" data-page="sales">매출</button>
-  </nav>
-
   <main class="pl-content-area">
     <section id="list-page" class="pl-page-tab active">
       <h1 class="page-title">가베상품리스트</h1>
@@ -1072,7 +1036,7 @@ body{padding:0!important;overflow:hidden;}
 <aside class="sidebar">
   <div class="sb-logo">
     GABE <span>Coupang</span>
-    <div class="sb-version">발주리스트 v2.1</div>
+    <div class="sb-version">발주리스트 v3.0</div>
   </div>
 
   <div class="sb-section">MAIN</div>
@@ -1090,6 +1054,12 @@ body{padding:0!important;overflow:hidden;}
   </div>
   <div class="sb-item" data-page="productlist" onclick="openProductListPage()">
     <span class="sb-item-icon">📦</span>상품리스트
+  </div>
+  <div id="sb-productlist-submenu" style="display:none;">
+    <button class="sb-sub-item pl-sb-item active" data-page="list">가베상품리스트</button>
+    <button class="sb-sub-item pl-sb-item" data-page="upload">데이터업로드</button>
+    <button class="sb-sub-item pl-sb-item" data-page="sales">매출</button>
+    <button id="sb-productlist-admin-item" class="sb-sub-item" onclick="pl_openPermPanel()" style="display:none;">권한관리</button>
   </div>
 
   <div class="sb-divider"></div>
@@ -1721,6 +1691,8 @@ async function doLogout() {
   if (sb) await sb.auth.signOut();
   _currentUser = null;
   _serverConnected = false;
+  pl_currentUser = null;
+  pl_isAdmin = false;
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-email').value = '';
   document.getElementById('login-pw').value = '';
@@ -7439,13 +7411,21 @@ function closeAllSubPages(){
   ['outgoing-page','delivery-page','settlement-page','productlist-page'].forEach(id=>{
     document.getElementById(id).style.display='none';
   });
+  document.getElementById('sb-productlist-submenu').style.display='none';
   setSidebarActive('main');
 }
 
-function openProductListPage(){
+async function openProductListPage(){
+  if(!_currentUser){ alert('로그인이 필요합니다.'); return; }
   closeAllSubPages();
   document.getElementById('productlist-page').style.display='block';
+  document.getElementById('sb-productlist-submenu').style.display='block';
   setSidebarActive('productlist');
+  // 쿠팡 발주리스트 로그인과 통합: 별도 로그인 없이 이미 로그인된 계정을 그대로 사용
+  if(!pl_currentUser){
+    pl_currentUser = _currentUser;
+    await pl_onLoginSuccess();
+  }
 }
 function closeProductListPage(){
   document.getElementById('productlist-page').style.display='none';
@@ -10246,54 +10226,7 @@ function pl_requireEdit(page) {
   return false;
 }
 
-async function pl_doLogin() {
-  const email = document.getElementById('pl_loginEmail').value.trim();
-  const pw = document.getElementById('pl_loginPw').value;
-  const errEl = document.getElementById('pl_loginError');
-  const loadEl = document.getElementById('pl_loginLoading');
-  const btn = document.getElementById('pl_loginBtn');
-
-  if (!email || !pw) { errEl.textContent = '이메일과 비밀번호를 입력하세요.'; errEl.style.display = 'block'; return; }
-  errEl.style.display = 'none';
-  btn.disabled = true;
-  loadEl.style.display = 'block';
-
-  const sb = pl_getSupabase();
-  if (!sb) {
-    errEl.textContent = 'Supabase 설정이 완료되지 않았습니다.';
-    errEl.style.display = 'block';
-    btn.disabled = false; loadEl.style.display = 'none';
-    return;
-  }
-  try {
-    const { data, error } = await sb.auth.signInWithPassword({ email, password: pw });
-    if (error) {
-      errEl.textContent = error.message.includes('Invalid') ? '이메일 또는 비밀번호가 올바르지 않습니다.' : error.message;
-      errEl.style.display = 'block';
-      btn.disabled = false; loadEl.style.display = 'none';
-      return;
-    }
-    pl_currentUser = data.user;
-    await pl_onLoginSuccess();
-  } catch (e) {
-    errEl.textContent = '로그인 중 오류가 발생했습니다: ' + e.message;
-    errEl.style.display = 'block';
-    btn.disabled = false; loadEl.style.display = 'none';
-  }
-}
-
-async function pl_doLogout() {
-  const sb = pl_getSupabase();
-  if (sb) await sb.auth.signOut();
-  pl_currentUser = null;
-  pl_isAdmin = false;
-  document.getElementById('pl_loginScreen').style.display = 'flex';
-  document.getElementById('pl_loginEmail').value = '';
-  document.getElementById('pl_loginPw').value = '';
-  document.getElementById('pl_loginError').style.display = 'none';
-  document.getElementById('pl_loginBtn').disabled = false;
-  document.getElementById('pl_loginLoading').style.display = 'none';
-}
+// 로그인/로그아웃은 쿠팡 발주리스트(메인 앱)와 통합됨 — doLogout()/openProductListPage() 참고.
 
 async function pl_registerUser() {
   const sb = pl_getSupabase();
@@ -10351,22 +10284,10 @@ async function pl_onLoginSuccess() {
   await pl_registerUser();
   await pl_loadPermissions();
 
-  document.getElementById('pl_userEmailEl').textContent = pl_currentUser.email || pl_currentUser.id;
-  document.getElementById('pl_permPanelBtn').style.display = pl_isAdmin ? 'block' : 'none';
-  document.getElementById('pl_loginScreen').style.display = 'none';
+  document.getElementById('sb-productlist-admin-item').style.display = pl_isAdmin ? 'block' : 'none';
   pl_applyPermissionsUI();
 
   await pl_init();
-}
-
-async function pl_checkExistingSession() {
-  const sb = pl_getSupabase();
-  if (!sb) return false;
-  try {
-    const { data: { session } } = await sb.auth.getSession();
-    if (session && session.user) { pl_currentUser = session.user; return true; }
-  } catch (e) {}
-  return false;
 }
 
 // ── 관리자 권한 패널 ──
@@ -12228,13 +12149,7 @@ async function pl_init() {
   pl_refreshSalesSummary();
 }
 
-window.addEventListener('DOMContentLoaded', async () => {
-  const hasSession = await pl_checkExistingSession();
-  if (hasSession) {
-    await pl_onLoginSuccess();
-  }
-  // 세션 없으면 로그인 화면(기본 표시 상태)에서 대기 — pl_doLogin() 성공 시 pl_onLoginSuccess()가 pl_init()을 호출한다.
-});
+// 상품리스트 모듈 로그인/초기화는 openProductListPage()에서 메인 세션을 그대로 이어받아 처리한다.
 </script>
 </body>
 </html>
