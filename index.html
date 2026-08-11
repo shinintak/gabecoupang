@@ -1109,6 +1109,7 @@ async function _sharedSyncAll() {
     if (typeof renderSessionList === 'function') renderSessionList();
   }
   if (typeof _markDeliveryDirty === 'function') _markDeliveryDirty();
+  if (typeof _markSettlementDirty === 'function') _markSettlementDirty();
 }
 
 function _sharedSetUI(connected) {
@@ -7111,12 +7112,14 @@ async function syncOutgoingFromServer(silent=false){
     renderOutgoingTable();
     return;
   }
-  const d = await _sharedRead('gabe_outgoing_v1');
+  // 3개의 독립적인 네트워크 요청을 병렬로 처리(순차 대기 대비 대기시간 단축)
+  const [d, m, erpLoaded] = await Promise.all([
+    _sharedRead('gabe_outgoing_v1'),
+    _sharedRead('gabe_outgoing_mkt_v1'),
+    _loadErpDataFromServer() // ERP 데이터 로드 (잔여수량·세트 기능)
+  ]);
   if(d!==null) try{ localStorage.setItem(OUTGOING_LS_KEY, JSON.stringify(d)); }catch(e){}
-  const m = await _sharedRead('gabe_outgoing_mkt_v1');
   if(m!==null) try{ localStorage.setItem(OUTGOING_MKT_KEY, JSON.stringify(m)); }catch(e){}
-  // ERP 데이터 로드 (잔여수량·세트 기능)
-  const erpLoaded = await _loadErpDataFromServer();
   _updateErpStatus(erpLoaded);
   renderOutgoingTable();
   const el=document.getElementById('outgoing-sync-msg');
@@ -9419,12 +9422,16 @@ let smtOrderData = null;
 let smtSettleData = null;
 let smtSelectedMonth = '전체';
 
+// 정산데이터 페이지 재렌더링 캐시 — 관련 데이터가 실제로 바뀌었을 때만 다시 그림
+let _settlementPageDirty=true;
+function _markSettlementDirty(){ _settlementPageDirty=true; }
+
 function smtLoadDB(){
   try{ const raw=localStorage.getItem(SMT_LS_KEY); if(raw) smtDB=JSON.parse(raw); }catch(e){}
   if(!smtDB.orders) smtDB.orders={};
   if(!smtDB.settlements) smtDB.settlements={};
 }
-function smtSaveDB(){ smtDB.savedAt=new Date().toISOString(); localStorage.setItem(SMT_LS_KEY,JSON.stringify(smtDB)); _sharedWrite(SMT_LS_KEY,smtDB); }
+function smtSaveDB(){ smtDB.savedAt=new Date().toISOString(); localStorage.setItem(SMT_LS_KEY,JSON.stringify(smtDB)); _sharedWrite(SMT_LS_KEY,smtDB); _markSettlementDirty(); }
 
 function smtMergeAndSave(){
   if(!canEdit('settlement_view')){ alert('정산데이터 저장 권한이 없습니다.'); return; }
@@ -9701,7 +9708,11 @@ function openSettlementPage(){
   closeAllSubPages();
   document.getElementById('settlement-page').style.display='block';
   setSidebarActive('settlement');
-  smtLoadDB(); smtRenderPage();
+  smtLoadDB();
+  if(_settlementPageDirty){
+    smtRenderPage();
+    _settlementPageDirty=false;
+  }
 }
 function closeSettlementPage(){
   document.getElementById('settlement-page').style.display='none';
