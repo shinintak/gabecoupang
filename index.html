@@ -1108,6 +1108,7 @@ async function _sharedSyncAll() {
     });
     if (typeof renderSessionList === 'function') renderSessionList();
   }
+  if (typeof _markDeliveryDirty === 'function') _markDeliveryDirty();
 }
 
 function _sharedSetUI(connected) {
@@ -2464,11 +2465,16 @@ const IDB_STORE='sessions';
 let _idb=null;
 let _sessionCache={}; // 인메모리 캐시 — ssLoad/ssSave 동기 인터페이스 유지
 
+// 납품데이터 페이지 재렌더링 캐시 — 관련 데이터가 실제로 바뀌었을 때만 다시 그림
+let _deliveryPageDirty=true;
+function _markDeliveryDirty(){ _deliveryPageDirty=true; }
+
 function ssLoad(){ return _sessionCache; }
 
 function ssSave(obj){
   _sessionCache=obj;
   _idbWriteAll(obj); // 비동기 백그라운드 저장
+  _markDeliveryDirty();
   return true;
 }
 
@@ -2954,7 +2960,7 @@ const ANNUAL_LS_KEY = 'coupang_annual_extra_v1'; // 택배비·밀크런 별도 
 const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 
 function annualExtraLoad(){ try{ return JSON.parse(localStorage.getItem(ANNUAL_LS_KEY)||'{}'); }catch(e){ return {}; } }
-function annualExtraSave(d){ try{ localStorage.setItem(ANNUAL_LS_KEY, JSON.stringify(d)); }catch(e){} _sharedWrite(ANNUAL_LS_KEY,d); }
+function annualExtraSave(d){ try{ localStorage.setItem(ANNUAL_LS_KEY, JSON.stringify(d)); }catch(e){} _sharedWrite(ANNUAL_LS_KEY,d); _markDeliveryDirty(); }
 
 function updateAnnualCell(year, month, field, value){
   const d=annualExtraLoad();
@@ -3383,7 +3389,7 @@ let returnErrSelYear='';
 let _returnErrPopupYear='', _returnErrPopupMonth='';
 
 function returnErrLoad(){ try{ return JSON.parse(localStorage.getItem(RETURN_ERR_LS_KEY)||'{}'); }catch(e){ return {}; } }
-function returnErrSave(d){ try{ localStorage.setItem(RETURN_ERR_LS_KEY,JSON.stringify(d)); }catch(e){ alert('저장 용량이 초과되었습니다.'); } _sharedWrite(RETURN_ERR_LS_KEY,d); }
+function returnErrSave(d){ try{ localStorage.setItem(RETURN_ERR_LS_KEY,JSON.stringify(d)); }catch(e){ alert('저장 용량이 초과되었습니다.'); } _sharedWrite(RETURN_ERR_LS_KEY,d); _markDeliveryDirty(); }
 
 // 회송여부/ERP재고복구여부 등 Y/N성 텍스트 판정 ('0'·빈값·'미완료'·N 계열 → 미완료)
 function _returnErrIsDone(v){
@@ -7066,9 +7072,12 @@ function openDeliveryPage(){
   closeAllSubPages();
   document.getElementById('delivery-page').style.display='block';
   setSidebarActive('delivery');
-  renderAnnualPanel();
-  renderSalesPanel();
-  renderReturnErrPanel();
+  if(_deliveryPageDirty){
+    renderAnnualPanel();
+    renderSalesPanel();
+    renderReturnErrPanel();
+    _deliveryPageDirty=false;
+  }
 }
 function closeDeliveryPage(){
   document.getElementById('delivery-page').style.display='none';
@@ -7895,6 +7904,7 @@ function salesSave(d){
     Object.entries(byYear).forEach(([y,yd])=>{ try{localStorage.setItem(SALES_LS_KEY+'_'+y,JSON.stringify(yd));}catch(e){ alert(`${y}년 저장 실패. 브라우저 저장 공간을 확인해주세요.`); } });
   }
   _sharedWrite(SALES_LS_KEY,d);
+  _markDeliveryDirty();
 }
 
 function _csvLine(line){
@@ -8396,7 +8406,7 @@ window.addEventListener('keydown',e=>{
 // ── 월간 세부 팝업 ──
 const DAILY_EXTRA_KEY='coupang_daily_extra_v1';
 function dailyExtraLoad(){ try{ return JSON.parse(localStorage.getItem(DAILY_EXTRA_KEY)||'{}'); }catch(e){ return {}; } }
-function dailyExtraSave(d){ try{ localStorage.setItem(DAILY_EXTRA_KEY,JSON.stringify(d)); }catch(e){} _sharedWrite(DAILY_EXTRA_KEY,d); }
+function dailyExtraSave(d){ try{ localStorage.setItem(DAILY_EXTRA_KEY,JSON.stringify(d)); }catch(e){} _sharedWrite(DAILY_EXTRA_KEY,d); _markDeliveryDirty(); }
 
 function showCancelDetail(event, title, dataStr){
   event.stopPropagation();
