@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GABE 쿠팡발주리스트_2.1</title>
+<title>GABE offline 프로그램_2.1</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;900&display=swap');
@@ -89,6 +89,26 @@ td.col-qty{padding:6px 9px;}
 .back-btn{font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid #E0E5FF;background:#fff;cursor:pointer;color:#4A5568;}
 .back-btn:hover{background:#F4F6F9;border-color:#4318FF;color:#4318FF;}
 #settlement-page{display:none;position:fixed;top:0;left:190px;right:0;bottom:0;z-index:150;background:#F4F6F9;overflow-y:auto;}
+#lotte-page{display:none;position:fixed;top:0;left:190px;right:0;bottom:0;z-index:150;background:#F4F6F9;overflow-y:auto;}
+.lotte-header{display:flex;align-items:center;gap:10px;padding:11px 18px;background:#fff;border-bottom:1px solid #E0E5FF;position:sticky;top:0;z-index:10;box-shadow:0 2px 8px rgba(27,37,89,0.06);}
+.lotte-back-btn{font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid #E0E5FF;background:#fff;cursor:pointer;color:#4A5568;}
+.lotte-back-btn:hover{background:#F4F6F9;border-color:#4318FF;color:#4318FF;}
+.lotte-card{background:#fff;border:1px solid #E0E5FF;border-radius:14px;padding:16px 18px;box-shadow:0 2px 10px rgba(67,24,255,0.06);margin-bottom:14px;}
+.lotte-card .t{font-size:13px;font-weight:800;color:#1E2530;margin-bottom:8px;}
+.lotte-drop{display:block;border:1.5px dashed #C3CBFF;border-radius:10px;padding:22px;text-align:center;cursor:pointer;color:#4A5568;font-size:12px;background:#F8F9FD;transition:all .15s;}
+.lotte-drop:hover{background:#F0F2FF;border-color:#4318FF;}
+.lotte-stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.lotte-stat{background:#fff;border:1px solid #E0E5FF;border-radius:10px;padding:12px 18px;box-shadow:0 2px 8px rgba(67,24,255,0.05);min-width:140px;}
+.lotte-stat .sl{font-size:11px;color:#8A94A6;font-weight:600;margin-bottom:3px;}
+.lotte-stat .sv{font-size:18px;color:#1E2530;font-weight:800;}
+.lotte-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.lotte-tbl th{background:#4318FF;color:#fff;padding:8px 10px;text-align:center;white-space:nowrap;}
+.lotte-tbl td{padding:6px 10px;border-bottom:1px solid #EDF0FB;text-align:right;}
+.lotte-tbl td:nth-child(1){text-align:left;}
+.lotte-unmatched{background:#FFF6E5;border:1px solid #F5D98B;border-radius:10px;padding:10px 14px;font-size:11.5px;color:#8A5A00;margin-bottom:14px;line-height:1.7;}
+.lotte-centers-row{display:flex;gap:20px;align-items:flex-start;}
+.lotte-center-col{flex:1;min-width:0;}
+@media(max-width:900px){.lotte-centers-row{flex-direction:column;}}
 .smt-inv-badge{font-size:11px;padding:1px 6px;border-radius:10px;background:#E0E5FF;color:#4318FF;font-weight:600;}
 .smt-date-row td{background:#EDF2F7!important;font-size:11px;font-weight:700;color:#4A5568;border-top:2px solid #C3CBFF!important;}
 #settlement-page .tbl-scroll{overflow-x:auto;}
@@ -224,6 +244,16 @@ body:not([data-theme="classic"]) .sb-divider{
 .mascot-img{animation:palrongBounce 2.6s ease-in-out infinite;}
 .mascot-spk{position:absolute;color:#FFC93C;font-size:11px;pointer-events:none;animation:palrongTwinkle 1.8s ease-in-out infinite;}
 .mascot-spk.s2{color:#FF8FC0;font-size:8px;animation-delay:0.6s;}
+
+/* ── 브랜드 탭(쿠팡/롯데마트) : 로고/하단은 공유, 탭+메뉴 블록만 브랜드 컬러로 전환 ── */
+.sb-menu-stack{background:var(--sb-bg);padding-bottom:10px;transition:background .3s ease;}
+#sb-menu-coupang{display:block;}
+#sb-menu-lotte{display:none;}
+.sb-menu-stack.lotte-active #sb-menu-coupang{display:none;}
+.sb-menu-stack.lotte-active #sb-menu-lotte{display:block;}
+.brand-tab-row{display:flex;padding:0;border-bottom:1px solid var(--sb-border);}
+.brand-tab{flex:1;font-size:12px;font-weight:700;padding:12px 4px;border:none;background:transparent;color:var(--sb-section-color);border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;transition:all .18s;white-space:nowrap;}
+.brand-tab.active{color:var(--sb-item-color);border-bottom-color:currentColor;background:var(--sb-item-hover-bg);}
 .sb-bottom{
   margin-top:auto;padding:12px 16px;
   border-top:1px solid var(--sb-border);flex-shrink:0;
@@ -313,6 +343,50 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
   </div>
 </div>
 
+<div id="lotte-product-modal" style="display:none;position:fixed;inset:0;z-index:3200;background:rgba(27,37,89,.5);align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;width:440px;max-width:94vw;max-height:88vh;overflow-y:auto;box-shadow:0 16px 48px rgba(27,37,89,0.22);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #E0E5FF;">
+      <div id="lotte-product-modal-title" style="font-size:15px;font-weight:800;color:#1B2559;">상품 추가</div>
+      <button onclick="closeLotteProductModal()" style="width:28px;height:28px;border-radius:50%;border:none;background:#F4F6F9;cursor:pointer;font-size:13px;">✕</button>
+    </div>
+    <div style="padding:18px 20px;">
+      <input type="hidden" id="lp-orig-barcode">
+      <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">상품바코드(EAN13) *</label>
+      <input id="lp-barcode" type="text" placeholder="예: 8809587625031" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:12px;">
+      <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">SPEC(상품코드) *</label>
+      <input id="lp-spec" type="text" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:12px;">
+      <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">쇼카드상품명</label>
+      <input id="lp-name" type="text" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:12px;">
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;">
+          <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">무게(g)</label>
+          <input id="lp-weight" type="number" step="any" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:12px;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">입수</label>
+          <input id="lp-pack" type="number" step="any" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:12px;">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;">
+          <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">공급가(vat포함)</label>
+          <input id="lp-price-vat" type="number" step="any" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:12px;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">공급가(vat제외) *</label>
+          <input id="lp-price-novat" type="number" step="any" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:12px;">
+        </div>
+      </div>
+      <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">업체상품코드</label>
+      <input id="lp-vendor" type="text" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:4px;">
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #EDF2F7;text-align:right;display:flex;gap:8px;justify-content:flex-end;">
+      <button onclick="closeLotteProductModal()" style="height:34px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #E0E5FF;background:#fff;color:#4A5568;cursor:pointer;">취소</button>
+      <button onclick="saveLotteProduct()" style="height:34px;padding:0 18px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#4318FF;color:#fff;cursor:pointer;">저장</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════
      로그인 화면 (Supabase 인증)
 ══════════════════════════════════════ -->
@@ -320,7 +394,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
   <div style="background:#fff;border-radius:18px;padding:36px 40px;width:380px;max-width:94vw;box-shadow:0 16px 48px rgba(27,37,89,0.18);border:1px solid #E0E5FF;">
     <div style="text-align:center;margin-bottom:28px;">
       <div style="font-size:13px;font-weight:700;letter-spacing:0.15em;color:#4318FF;text-transform:uppercase;margin-bottom:6px;">GABE</div>
-      <div style="font-size:22px;font-weight:900;color:#1B2559;margin-bottom:4px;">쿠팡발주리스트 2.1</div>
+      <div style="font-size:22px;font-weight:900;color:#1B2559;margin-bottom:4px;">offline 프로그램 2.1</div>
       <div style="font-size:12px;color:#A0AEC0;">계정으로 로그인하세요</div>
     </div>
     <div id="login-error" style="display:none;background:#FFF5F5;border:1px solid #FED7D7;border-radius:8px;padding:9px 13px;font-size:12px;color:#E53E3E;margin-bottom:14px;"></div>
@@ -637,6 +711,61 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
     <div id="return-err-popup-content" style="overflow:auto;flex:1;padding:16px;background:#F4F6F9;"></div>
   </div>
 </div>
+
+<!-- ── 롯데마트 페이지 ── -->
+<div id="lotte-page">
+  <div class="lotte-header">
+    <button class="lotte-back-btn" onclick="switchBrand('coupang')">← 쿠팡으로</button>
+    <span id="lotte-page-title" style="font-size:14px;font-weight:800;color:#1E2530;">🏬 롯데마트 · 기본데이터</span>
+  </div>
+  <div style="padding:20px 24px;max-width:1600px;">
+
+    <div id="lotte-sec-base">
+      <div class="lotte-card">
+        <div class="t">📦 기본데이터 업로드</div>
+        <div style="font-size:11.5px;color:#8A94A6;margin-bottom:10px;line-height:1.6;">상품바코드·상품코드(SPEC)·공급가·무게·입수가 담긴 롯데마트 상품리스트 엑셀을 업로드하세요.<br>신상품이 추가되면 같은 파일(또는 갱신된 파일)을 다시 업로드하면 기존 데이터에 자동으로 합쳐집니다.</div>
+        <label class="lotte-drop" for="lotte-base-file">클릭하여 엑셀 파일 선택</label>
+        <input type="file" id="lotte-base-file" accept=".xls,.xlsx" style="display:none;" onchange="handleLotteBaseUpload(event)">
+      </div>
+      <div class="lotte-card">
+        <div class="t" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>현재 상태</span>
+          <button onclick="openLotteProductModal()" style="height:30px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#4318FF;color:#fff;cursor:pointer;">+ 상품 추가</button>
+        </div>
+        <div id="lotte-base-summary" style="font-size:13px;color:#1E2530;font-weight:700;margin-bottom:10px;">저장된 기본데이터가 없습니다.</div>
+        <input id="lotte-base-search" type="text" placeholder="바코드·SPEC·상품명 검색" oninput="_lotteRenderBaseList()" style="display:none;width:100%;box-sizing:border-box;height:34px;padding:0 12px;font-size:12px;border:1px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:10px;">
+        <div id="lotte-base-list" style="overflow-x:auto;"></div>
+      </div>
+    </div>
+
+    <div id="lotte-sec-centers" style="display:none;">
+      <div class="lotte-centers-row">
+        <div class="lotte-center-col">
+          <div style="font-size:15px;font-weight:800;color:#1E2530;margin:4px 0 10px;">🏭 오산센터</div>
+          <div class="lotte-card">
+            <div class="t">📥 발주서 업로드</div>
+            <div style="font-size:11.5px;color:#8A94A6;margin-bottom:10px;">롯데마트 시스템에서 다운로드한 입고예약 상세내역(.xls) 파일을 업로드하세요.</div>
+            <label class="lotte-drop" for="lotte-file-osan">클릭하여 발주서 파일 선택</label>
+            <input type="file" id="lotte-file-osan" accept=".xls,.xlsx" style="display:none;" onchange="handleLotteOrderUpload('osan',event)">
+          </div>
+          <div id="lotte-result-osan"></div>
+        </div>
+        <div class="lotte-center-col">
+          <div style="font-size:15px;font-weight:800;color:#1E2530;margin:4px 0 10px;">🏭 김해센터</div>
+          <div class="lotte-card">
+            <div class="t">📥 발주서 업로드</div>
+            <div style="font-size:11.5px;color:#8A94A6;margin-bottom:10px;">롯데마트 시스템에서 다운로드한 입고예약 상세내역(.xls) 파일을 업로드하세요.</div>
+            <label class="lotte-drop" for="lotte-file-gimhae">클릭하여 발주서 파일 선택</label>
+            <input type="file" id="lotte-file-gimhae" accept=".xls,.xlsx" style="display:none;" onchange="handleLotteOrderUpload('gimhae',event)">
+          </div>
+          <div id="lotte-result-gimhae"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════
      앱 레이아웃: 사이드바 + 메인 콘텐츠
 ══════════════════════════════════════ -->
@@ -653,9 +782,16 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
   </div>
 
   <div id="sb-logo-classic" class="theme-classic-only" onclick="closeAllSubPages()" style="cursor:pointer;padding:18px 16px 14px;font-size:17px;font-weight:900;color:#fff;border-bottom:1px solid rgba(255,255,255,0.08);letter-spacing:-0.3px;flex-shrink:0;">
-    GABE <span style="color:#68E6B8;font-weight:300;">Coupang</span>
-    <div style="font-size:11px;color:rgba(255,255,255,0.25);font-weight:400;margin-top:2px;">발주리스트 v2.1</div>
+    GABE <span style="color:#68E6B8;font-weight:300;">Offline</span>
+    <div style="font-size:11px;color:rgba(255,255,255,0.25);font-weight:400;margin-top:2px;">가베 오프라인전용</div>
   </div>
+
+  <div class="sb-menu-stack" id="sb-menu-stack">
+  <div class="brand-tab-row">
+    <button class="brand-tab active" id="brand-tab-coupang" onclick="switchBrand('coupang')">🛒 쿠팡</button>
+    <button class="brand-tab lotte-tab" id="brand-tab-lotte" onclick="switchBrand('lotte')">🏬 롯데마트</button>
+  </div>
+  <div id="sb-menu-coupang">
 
   <div class="sb-section">MAIN</div>
   <div class="sb-item active" data-page="main" onclick="closeAllSubPages()">
@@ -689,6 +825,18 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
     <div class="sb-item" onclick="openPermPanel()">
       <span class="sb-item-icon">⚙</span>권한관리
     </div>
+  </div>
+
+  </div>
+  <div id="sb-menu-lotte">
+    <div class="sb-section">롯데마트</div>
+    <div class="sb-item active" data-lotte-page="base" onclick="openLotteBasePage()">
+      <span class="sb-item-icon">📦</span>기본데이터
+    </div>
+    <div class="sb-item" data-lotte-page="centers" onclick="openLotteCentersPage()">
+      <span class="sb-item-icon">📊</span>센터별 데이터추출
+    </div>
+  </div>
   </div>
 
   <!-- GABE-BOT -->
@@ -1010,6 +1158,9 @@ const _SHARED_KEYS = [
   'coupang_daily_extra_v1',  // 월간 세부 데이터
   'gabe_settlement_v1',      // 정산데이터
   'gabe_return_err_v1',      // 회송·오류 현황
+  'gabe_lotte_base_v1',      // 롯데마트 기본데이터
+  'gabe_lotte_gimhae_v1',    // 롯데마트 김해센터
+  'gabe_lotte_osan_v1',      // 롯데마트 오산센터
 ];
 let _serverConnected = false;
 
@@ -1598,6 +1749,9 @@ const _DATA_KEYS = [
   'coupang_daily_extra_v1',  // 월간 세부 데이터
   'gabe_settlement_v1',      // 정산데이터
   'gabe_return_err_v1',      // 회송·오류 현황
+  'gabe_lotte_base_v1',      // 롯데마트 기본데이터
+  'gabe_lotte_gimhae_v1',    // 롯데마트 김해센터
+  'gabe_lotte_osan_v1',      // 롯데마트 오산센터
 ];
 
 async function exportAllData() {
@@ -7062,10 +7216,335 @@ function setSidebarActive(pageKey){
   if(target) target.classList.add('active');
 }
 function closeAllSubPages(){
-  ['outgoing-page','delivery-page','settlement-page'].forEach(id=>{
+  ['outgoing-page','delivery-page','settlement-page','lotte-page'].forEach(id=>{
     document.getElementById(id).style.display='none';
   });
   setSidebarActive('main');
+}
+
+// ══════════════════════════════════════
+// 롯데마트
+// ══════════════════════════════════════
+const LOTTE_BASE_KEY='gabe_lotte_base_v1';
+const LOTTE_CENTER_KEYS={ gimhae:'gabe_lotte_gimhae_v1', osan:'gabe_lotte_osan_v1' };
+
+function switchBrand(brand){
+  const stack=document.getElementById('sb-menu-stack');
+  const btnC=document.getElementById('brand-tab-coupang');
+  const btnL=document.getElementById('brand-tab-lotte');
+  if(brand==='lotte'){
+    stack.classList.add('lotte-active');
+    btnC.classList.remove('active'); btnL.classList.add('active');
+    ['outgoing-page','delivery-page','settlement-page'].forEach(id=>{ document.getElementById(id).style.display='none'; });
+    openLotteBasePage();
+  } else {
+    stack.classList.remove('lotte-active');
+    btnL.classList.remove('active'); btnC.classList.add('active');
+    document.getElementById('lotte-page').style.display='none';
+    setSidebarActive('main');
+  }
+}
+
+function setLotteSidebarActive(pageKey){
+  document.querySelectorAll('#sb-menu-lotte .sb-item').forEach(el=>el.classList.remove('active'));
+  const target=document.querySelector('#sb-menu-lotte .sb-item[data-lotte-page="'+pageKey+'"]');
+  if(target) target.classList.add('active');
+}
+
+function openLotteBasePage(){
+  document.getElementById('lotte-page').style.display='block';
+  document.getElementById('lotte-page-title').textContent='🏬 롯데마트 · 기본데이터';
+  document.getElementById('lotte-sec-base').style.display='block';
+  document.getElementById('lotte-sec-centers').style.display='none';
+  setLotteSidebarActive('base');
+  _lotteRenderBaseSummary();
+}
+
+function openLotteCentersPage(){
+  document.getElementById('lotte-page').style.display='block';
+  document.getElementById('lotte-page-title').textContent='🏬 롯데마트 · 센터별 데이터추출';
+  document.getElementById('lotte-sec-base').style.display='none';
+  document.getElementById('lotte-sec-centers').style.display='block';
+  setLotteSidebarActive('centers');
+  _lotteRenderCenterPage('gimhae');
+  _lotteRenderCenterPage('osan');
+}
+
+function lotteBaseLoad(){ try{ return JSON.parse(localStorage.getItem(LOTTE_BASE_KEY)||'{}'); }catch(e){ return {}; } }
+function lotteBaseSave(d){
+  try{ localStorage.setItem(LOTTE_BASE_KEY, JSON.stringify(d)); }catch(e){ alert('저장 용량이 초과되었습니다.'); }
+  _sharedWrite(LOTTE_BASE_KEY,d);
+}
+function lotteCenterLoad(center){ try{ return JSON.parse(localStorage.getItem(LOTTE_CENTER_KEYS[center])||'null'); }catch(e){ return null; } }
+function lotteCenterSave(center,d){
+  try{ localStorage.setItem(LOTTE_CENTER_KEYS[center], JSON.stringify(d)); }catch(e){ alert('저장 용량이 초과되었습니다.'); }
+  _sharedWrite(LOTTE_CENTER_KEYS[center],d);
+}
+
+function _lotteParseWeight(v){
+  if(v==null||v==='') return 0;
+  if(typeof v==='number') return v;
+  const m=String(v).replace(/,/g,'').match(/[\d.]+/);
+  return m?parseFloat(m[0]):0;
+}
+
+function _lotteFindBaseSheet(wb){
+  for(const name of wb.SheetNames){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:''});
+    if(!rows.length) continue;
+    const hdr=rows[0].map(h=>String(h||'').replace(/\s+/g,''));
+    if(hdr.some(h=>h.includes('상품바코드'))) return rows;
+  }
+  return null;
+}
+
+function handleLotteBaseUpload(e){
+  const file=e.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      const wb=XLSX.read(ev.target.result,{type:'array'});
+      const rows=_lotteFindBaseSheet(wb);
+      if(!rows){ alert('"상품바코드" 헤더가 있는 시트를 찾을 수 없습니다.'); return; }
+      const db=lotteBaseLoad();
+      let added=0, updated=0;
+      for(let i=1;i<rows.length;i++){
+        const r=rows[i];
+        const barcode=String(r[0]||'').trim().replace(/^﻿/,'').replace(/\s+/g,'');
+        if(!barcode) continue;
+        if(db[barcode]) updated++; else added++;
+        db[barcode]={
+          spec:String(r[1]||'').trim(),
+          priceVat:parseFloat(r[2])||0,
+          displayName:String(r[3]||'').trim(),
+          weightG:_lotteParseWeight(r[4]),
+          priceNoVat:parseFloat(r[5])||0,
+          vendorCode:String(r[6]||'').trim(),
+          packQty:parseFloat(r[7])||0
+        };
+      }
+      lotteBaseSave(db);
+      _lotteRenderBaseSummary();
+      alert(`기본데이터 업로드 완료\n신규 ${added}건 · 갱신 ${updated}건 · 전체 ${Object.keys(db).length}건`);
+    }catch(err){ alert('파일 처리 중 오류: '+err.message); }
+    e.target.value='';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function _lotteRenderBaseSummary(){
+  const el=document.getElementById('lotte-base-summary');
+  if(!el) return;
+  const n=Object.keys(lotteBaseLoad()).length;
+  el.textContent=n?`현재 저장된 상품: ${n}개`:'저장된 기본데이터가 없습니다. 엑셀 파일을 업로드해주세요.';
+  _lotteRenderBaseList();
+}
+
+function _lotteRenderBaseList(){
+  const listEl=document.getElementById('lotte-base-list');
+  const searchEl=document.getElementById('lotte-base-search');
+  if(!listEl) return;
+  const db=lotteBaseLoad();
+  const entries=Object.entries(db);
+  if(!entries.length){
+    listEl.innerHTML='';
+    if(searchEl) searchEl.style.display='none';
+    return;
+  }
+  if(searchEl) searchEl.style.display='block';
+  const q=((searchEl&&searchEl.value)||'').trim().toLowerCase();
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const filtered=entries.filter(([barcode,p])=>{
+    if(!q) return true;
+    return barcode.toLowerCase().includes(q) || String(p.spec||'').toLowerCase().includes(q) || String(p.displayName||'').toLowerCase().includes(q);
+  }).sort((a,b)=>String(a[1].spec||'').localeCompare(String(b[1].spec||'')));
+  if(!filtered.length){
+    listEl.innerHTML='<div style="font-size:12px;color:#A0AEC0;padding:10px 0;">검색 결과가 없습니다.</div>';
+    return;
+  }
+  let html='<table class="lotte-tbl"><thead><tr>'
+    +'<th style="text-align:left;">상품바코드(EAN13)</th>'
+    +'<th style="text-align:left;">상품코드</th>'
+    +'<th>공급가(vat포함)</th>'
+    +'<th style="text-align:left;">쇼카드상품명</th>'
+    +'<th>무게</th>'
+    +'<th>공급가(vat제외)</th>'
+    +'<th style="text-align:left;">상품코드(업체코드)</th>'
+    +'<th>입수</th>'
+    +'<th>관리</th></tr></thead><tbody>';
+  filtered.forEach(([barcode,p])=>{
+    html+=`<tr>
+      <td style="text-align:left;">${esc(barcode)}</td>
+      <td style="text-align:left;">${esc(p.spec)}</td>
+      <td>${(p.priceVat||0).toLocaleString()}</td>
+      <td style="text-align:left;">${esc(p.displayName)}</td>
+      <td>${(p.weightG||0).toLocaleString()}g</td>
+      <td>${(p.priceNoVat||0).toLocaleString()}</td>
+      <td style="text-align:left;">${esc(p.vendorCode)}</td>
+      <td>${(p.packQty||0).toLocaleString()}</td>
+      <td style="white-space:nowrap;">
+        <button onclick="openLotteProductModal('${esc(barcode)}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #E0E5FF;background:#fff;color:#4318FF;cursor:pointer;">수정</button>
+        <button onclick="deleteLotteProduct('${esc(barcode)}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #FED7D7;background:#fff;color:#E53E3E;cursor:pointer;margin-left:4px;">삭제</button>
+      </td>
+    </tr>`;
+  });
+  html+='</tbody></table>';
+  listEl.innerHTML=html;
+}
+
+function openLotteProductModal(barcode){
+  const modal=document.getElementById('lotte-product-modal');
+  const db=lotteBaseLoad();
+  const p=barcode?db[barcode]:null;
+  document.getElementById('lotte-product-modal-title').textContent=barcode?'상품 수정':'상품 추가';
+  document.getElementById('lp-orig-barcode').value=barcode||'';
+  const barcodeInput=document.getElementById('lp-barcode');
+  barcodeInput.value=barcode||'';
+  barcodeInput.disabled=!!barcode;
+  document.getElementById('lp-spec').value=p?p.spec||'':'';
+  document.getElementById('lp-name').value=p?p.displayName||'':'';
+  document.getElementById('lp-weight').value=p&&p.weightG?p.weightG:'';
+  document.getElementById('lp-pack').value=p&&p.packQty?p.packQty:'';
+  document.getElementById('lp-price-vat').value=p&&p.priceVat?p.priceVat:'';
+  document.getElementById('lp-price-novat').value=p&&p.priceNoVat?p.priceNoVat:'';
+  document.getElementById('lp-vendor').value=p?p.vendorCode||'':'';
+  modal.style.display='flex';
+}
+function closeLotteProductModal(){
+  document.getElementById('lotte-product-modal').style.display='none';
+}
+function saveLotteProduct(){
+  const orig=document.getElementById('lp-orig-barcode').value.trim();
+  const barcode=document.getElementById('lp-barcode').value.trim().replace(/\s+/g,'');
+  const spec=document.getElementById('lp-spec').value.trim();
+  if(!barcode||!spec){ alert('상품바코드와 SPEC은 필수입니다.'); return; }
+  const db=lotteBaseLoad();
+  if(!orig && db[barcode]){
+    if(!confirm('이미 등록된 바코드입니다. 기존 정보를 덮어쓸까요?')) return;
+  }
+  db[barcode]={
+    spec,
+    priceVat:parseFloat(document.getElementById('lp-price-vat').value)||0,
+    displayName:document.getElementById('lp-name').value.trim(),
+    weightG:parseFloat(document.getElementById('lp-weight').value)||0,
+    priceNoVat:parseFloat(document.getElementById('lp-price-novat').value)||0,
+    vendorCode:document.getElementById('lp-vendor').value.trim(),
+    packQty:parseFloat(document.getElementById('lp-pack').value)||0
+  };
+  lotteBaseSave(db);
+  closeLotteProductModal();
+  _lotteRenderBaseSummary();
+}
+function deleteLotteProduct(barcode){
+  if(!confirm(`'${barcode}' 상품을 삭제할까요?`)) return;
+  const db=lotteBaseLoad();
+  delete db[barcode];
+  lotteBaseSave(db);
+  _lotteRenderBaseSummary();
+}
+
+// 롯데마트 시스템에서 다운로드한 "입고예약 상세내역" 파일은 .xls 확장자지만 실제로는 HTML 문서
+function _lotteParseOrderHtml(text){
+  const doc=new DOMParser().parseFromString(text,'text/html');
+  const trs=[...doc.querySelectorAll('tr[bgcolor="white"]')];
+  const rows=[];
+  trs.forEach(tr=>{
+    const tds=[...tr.children].map(td=>td.textContent.replace(/\s+/g,' ').trim());
+    if(tds.length<10) return;
+    rows.push({
+      orderDate:tds[0], orderNo:tds[1], deliveryType:tds[2],
+      productCode:tds[3].replace(/\s+/g,''), productName:tds[4], orderer:tds[5],
+      packQty:parseFloat(tds[6].replace(/,/g,''))||0,
+      orderQty:parseFloat(tds[7].replace(/,/g,''))||0,
+      receiveQty:parseFloat(tds[8].replace(/,/g,''))||0,
+      unit:tds[9]
+    });
+  });
+  return rows;
+}
+
+function _lotteComputeCenterResult(rows){
+  const db=lotteBaseLoad();
+  const erpRows=[], unmatched=[];
+  let totalBox=0, totalWeightG=0;
+  rows.forEach(r=>{
+    totalBox+=r.receiveQty;
+    const base=db[r.productCode];
+    const qty=r.packQty*r.orderQty;
+    if(base){
+      erpRows.push({ SPEC:base.spec, qty, price:Math.round(base.priceNoVat), saleType:1 });
+      totalWeightG+=(base.weightG||0)*qty;
+    } else {
+      unmatched.push(r);
+    }
+  });
+  return { erpRows, unmatched, totalBox, totalWeightKg: totalWeightG/1000 };
+}
+
+function handleLotteOrderUpload(center,e){
+  const file=e.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      const rows=_lotteParseOrderHtml(ev.target.result);
+      if(!rows.length){ alert('발주 항목을 찾을 수 없습니다. 파일 형식을 확인해주세요.'); return; }
+      const result=_lotteComputeCenterResult(rows);
+      lotteCenterSave(center,{ uploadedAt:new Date().toISOString(), fileName:file.name, rows, result });
+      _lotteRenderCenterPage(center);
+    }catch(err){ alert('파일 처리 중 오류: '+err.message); }
+    e.target.value='';
+  };
+  reader.readAsText(file,'utf-8');
+}
+
+function _lotteRenderCenterPage(center){
+  const el=document.getElementById('lotte-result-'+center);
+  if(!el) return;
+  const data=lotteCenterLoad(center);
+  if(!data){ el.innerHTML=''; return; }
+  const {result, uploadedAt, fileName}=data;
+  const dt=new Date(uploadedAt);
+  const dtStr=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
+  let html=`<div class="lotte-stats">
+    <div class="lotte-stat"><div class="sl">총 박스수</div><div class="sv">${result.totalBox.toLocaleString()} 박스</div></div>
+    <div class="lotte-stat"><div class="sl">총 무게</div><div class="sv">${result.totalWeightKg.toLocaleString(undefined,{maximumFractionDigits:1})} kg</div></div>
+    <div class="lotte-stat"><div class="sl">ERP 등록 대상</div><div class="sv">${result.erpRows.length} 건</div></div>
+  </div>`;
+  if(result.unmatched.length){
+    html+=`<div class="lotte-unmatched">⚠ 기본데이터에서 상품코드를 찾지 못한 항목 ${result.unmatched.length}건 (ERP·무게 계산에서 제외됨)<br>`+
+      result.unmatched.map(r=>`· ${r.productCode} — ${r.productName}`).join('<br>')+`</div>`;
+  }
+  html+=`<div class="lotte-card">
+    <div class="t" style="display:flex;align-items:center;justify-content:space-between;">
+      <span>ERP 등록용 추출 결과</span>
+      <button onclick="downloadLotteErp('${center}')" style="height:30px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#4318FF;color:#fff;cursor:pointer;">📥 엑셀 다운로드</button>
+    </div>
+    <div style="font-size:11px;color:#8A94A6;margin-bottom:8px;">${fileName} · ${dtStr} 업로드</div>
+    <div style="overflow-x:auto;">
+      <table class="lotte-tbl">
+        <thead><tr><th>SPEC</th><th>수량</th><th>단가</th><th>매출구분</th></tr></thead>
+        <tbody>${result.erpRows.map(r=>`<tr><td>${r.SPEC}</td><td>${r.qty.toLocaleString()}</td><td>${r.price.toLocaleString()}</td><td>${r.saleType}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>
+  </div>`;
+  el.innerHTML=html;
+}
+
+function downloadLotteErp(center){
+  const data=lotteCenterLoad(center);
+  if(!data||!data.result.erpRows.length){ alert('추출된 데이터가 없습니다.'); return; }
+  const S=typeof XLSXStyle!=='undefined'?XLSXStyle:XLSX;
+  const label=center==='gimhae'?'김해':'오산';
+  const aoa=[['SPEC','수량','단가','매출구분'], ...data.result.erpRows.map(r=>[r.SPEC,r.qty,r.price,r.saleType])];
+  const ws=S.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:14},{wch:8},{wch:12},{wch:10}];
+  const wb=S.utils.book_new();
+  S.utils.book_append_sheet(wb,ws,label+'2');
+  const n=new Date();
+  const ds=n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');
+  S.writeFile(wb,`ERP등록용_${label}_${ds}.xlsx`);
 }
 
 function openDeliveryPage(){
