@@ -869,11 +869,8 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
   <div id="sb-session-item" class="sb-item" onclick="openSessionModal()">
     <span class="sb-item-icon">⬇</span>데이터 불러오기
   </div>
-  <div id="sb-export-item" class="sb-item" onclick="exportAllData()">
-    <span class="sb-item-icon">⬆</span>전체 내보내기
-  </div>
-  <div id="sb-import-item" class="sb-item" onclick="importAllData()">
-    <span class="sb-item-icon">⊕</span>가져오기
+  <div id="sb-datamgmt-item" class="sb-item" onclick="toggleDataMgmtMenu(event)">
+    <span class="sb-item-icon">⬆</span>전체 데이터 관리
   </div>
   <div class="sb-item" data-page="basedata" onclick="openBaseDataPage()">
     <span class="sb-item-icon">▥</span>기초데이터 업로드
@@ -1662,8 +1659,6 @@ function _applyPermissionsUI() {
     'hdr-xlsx-btn':       'main_extract',
     'hdr-pick-btn':       'main_extract',
     'sb-session-item':    'session_view',
-    'sb-export-item':     'data_export',
-    'sb-import-item':     'data_import',
     'outgoing-mkt-save-btn': 'outgoing_mkt',
     'sb-delivery-item':   'delivery_view',
     'sales-upload-btn':   'delivery_sales',
@@ -1675,6 +1670,10 @@ function _applyPermissionsUI() {
     if (!el) return;
     el.style.display = canEdit(key) ? '' : 'none';
   });
+
+  // 전체 데이터 관리 (내보내기+가져오기 통합): 둘 중 하나라도 권한 있으면 메뉴 노출
+  const dm = document.getElementById('sb-datamgmt-item');
+  if (dm) dm.style.display = (canEdit('data_export') || canEdit('data_import')) ? '' : 'none';
 }
 
 function _applyOutgoingPerms() {
@@ -1841,6 +1840,25 @@ const _DATA_KEYS = [
   'gabe_basedata_ref_v1',    // 기초데이터: SKU ID·세트구성·바코드
   'gabe_basedata_margin_v1', // 기초데이터: 마진율
 ];
+
+function toggleDataMgmtMenu(event){
+  event.stopPropagation();
+  const existing=document.getElementById('_datamgmt-pop_');
+  if(existing){ existing.remove(); return; }
+  const pop=document.createElement('div');
+  pop.id='_datamgmt-pop_';
+  pop.style.cssText='position:fixed;z-index:9999;background:#fff;border:1px solid #E0E5FF;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:6px;min-width:170px;';
+  const btnStyle='display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:8px 10px;border:none;background:none;cursor:pointer;font-size:13px;color:#1E2530;border-radius:6px;box-sizing:border-box;';
+  let html='';
+  if(canEdit('data_export')) html+=`<button onclick="exportAllData();document.getElementById('_datamgmt-pop_').remove();" style="${btnStyle}" onmouseover="this.style.background='#F4F6F9'" onmouseout="this.style.background='none'">⬆ 전체 내보내기</button>`;
+  if(canEdit('data_import')) html+=`<button onclick="importAllData();document.getElementById('_datamgmt-pop_').remove();" style="${btnStyle}" onmouseover="this.style.background='#F4F6F9'" onmouseout="this.style.background='none'">⊕ 가져오기</button>`;
+  pop.innerHTML=html;
+  const rect=event.currentTarget.getBoundingClientRect();
+  pop.style.top=rect.top+'px';
+  pop.style.left=(rect.right+8)+'px';
+  document.body.appendChild(pop);
+  setTimeout(()=>document.addEventListener('click',function h(e){ if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('click',h); } }),0);
+}
 
 async function exportAllData() {
   if(!canEdit('data_export')){ alert('전체 내보내기 권한이 없습니다.'); return; }
