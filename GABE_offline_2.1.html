@@ -229,6 +229,15 @@ body[data-theme="classic"] #mascot-classic{display:flex!important;}
 }
 .sb-item.active .sb-item-icon{background:rgba(255,255,255,0.2);}
 .sb-item-icon{width:26px;height:26px;border-radius:7px;background:var(--sb-icon-bg);display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;line-height:1;font-style:normal;color:var(--sb-item-color);}
+/* 팔롱이 테마: 섹션별 둥근 카드 배경(참고 디자인 색상 그대로 샘플링) */
+.sb-card{border-radius:14px;margin:6px 10px;padding:6px 6px 8px;transition:background .3s ease;}
+body[data-theme="classic"] .sb-card{background:transparent!important;border-radius:0;margin:0;padding:0;box-shadow:none;}
+body:not([data-theme="classic"]) .sb-card-main{background:#FFF8EC;}
+body:not([data-theme="classic"]) .sb-card-data{background:#F4FBFF;}
+body:not([data-theme="classic"]) .sb-card-admin{background:#F3F5FF;}
+body:not([data-theme="classic"]) .sb-card .sb-item{border-radius:9px;margin-right:0;font-size:12.5px;white-space:nowrap;}
+body:not([data-theme="classic"]) .sb-card + .sb-divider,
+body:not([data-theme="classic"]) #sb-admin-menu > .sb-divider{display:none;}
 .sb-divider{height:1px;background:var(--sb-divider);margin:6px 16px;}
 body:not([data-theme="classic"]) .sb-item.active::after{
   content:"✦";position:absolute;right:10px;top:50%;transform:translateY(-50%);
@@ -716,7 +725,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
 <div id="lotte-page">
   <div class="lotte-header">
     <button class="lotte-back-btn" onclick="switchBrand('coupang')">← 쿠팡으로</button>
-    <span id="lotte-page-title" style="font-size:14px;font-weight:800;color:#1E2530;">🏬 롯데마트 · 기본데이터</span>
+    <span id="lotte-page-title" style="font-size:14px;font-weight:800;color:#1E2530;">🏬 롯데마트 · 데이터업로드</span>
   </div>
   <div style="padding:20px 24px;max-width:1600px;">
 
@@ -789,11 +798,18 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
 
   <div class="sb-menu-stack" id="sb-menu-stack">
   <div class="brand-tab-row">
-    <button class="brand-tab active" id="brand-tab-coupang" onclick="switchBrand('coupang')">🛒 쿠팡</button>
-    <button class="brand-tab lotte-tab" id="brand-tab-lotte" onclick="switchBrand('lotte')">🏬 롯데마트</button>
+    <button class="brand-tab active" id="brand-tab-coupang" onclick="switchBrand('coupang')" style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+      <img src="data:image/png;base64,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" alt="쿠팡" style="height:16px;width:auto;object-fit:contain;">
+      <span>쿠팡</span>
+    </button>
+    <button class="brand-tab lotte-tab" id="brand-tab-lotte" onclick="switchBrand('lotte')" style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+      <img src="data:image/png;base64,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" alt="롯데마트" style="height:16px;width:auto;object-fit:contain;">
+      <span>롯데마트</span>
+    </button>
   </div>
   <div id="sb-menu-coupang">
 
+  <div class="sb-card sb-card-main">
   <div class="sb-section">MAIN</div>
   <div class="sb-item active" data-page="main" onclick="closeAllSubPages()">
     <span class="sb-item-icon">☰</span>발주리스트
@@ -807,8 +823,10 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
   <div id="sb-settlement-item" class="sb-item" data-page="settlement" onclick="openSettlementPage()">
     <span class="sb-item-icon">₩</span>정산데이터
   </div>
+  </div>
 
   <div class="sb-divider"></div>
+  <div class="sb-card sb-card-data">
   <div class="sb-section">DATA</div>
   <div id="sb-session-item" class="sb-item" onclick="openSessionModal()">
     <span class="sb-item-icon">⬇</span>데이터 불러오기
@@ -819,26 +837,31 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
   <div id="sb-import-item" class="sb-item" onclick="importAllData()">
     <span class="sb-item-icon">⊕</span>가져오기
   </div>
+  </div>
 
   <div id="sb-admin-menu" style="display:none;">
     <div class="sb-divider"></div>
+    <div class="sb-card sb-card-admin">
     <div class="sb-section">ADMIN</div>
     <div class="sb-item" onclick="openPermPanel()">
       <span class="sb-item-icon">⚙</span>권한관리
+    </div>
     </div>
   </div>
 
   </div>
   <div id="sb-menu-lotte">
-    <div class="sb-section">롯데마트</div>
+    <div class="sb-card sb-card-main">
+    <div class="sb-section">MAIN</div>
     <div class="sb-item active" data-lotte-page="base" onclick="openLotteBasePage()">
-      <span class="sb-item-icon">▤</span>기본데이터
+      <span class="sb-item-icon">▤</span>데이터업로드
     </div>
     <div class="sb-item" data-lotte-page="centers" onclick="openLotteCentersPage()">
       <span class="sb-item-icon">⬆</span>센터별 데이터추출
     </div>
     <div class="sb-item" data-lotte-page="delivery" onclick="openLotteDeliveryPage()">
-      <span class="sb-item-icon">▦</span>납품데이터
+      <span class="sb-item-icon">▤</span>납품데이터
+    </div>
     </div>
   </div>
   </div>
@@ -7260,7 +7283,7 @@ function setLotteSidebarActive(pageKey){
 
 function openLotteBasePage(){
   document.getElementById('lotte-page').style.display='block';
-  document.getElementById('lotte-page-title').textContent='🏬 롯데마트 · 기본데이터';
+  document.getElementById('lotte-page-title').textContent='🏬 롯데마트 · 데이터업로드';
   document.getElementById('lotte-sec-base').style.display='block';
   document.getElementById('lotte-sec-centers').style.display='none';
   document.getElementById('lotte-sec-delivery').style.display='none';
