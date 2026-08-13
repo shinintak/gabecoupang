@@ -1387,12 +1387,24 @@ function toggleMktCheck(event, date, skuId, field) {
   if (!db[date][skuId]) db[date][skuId] = {};
   const newVal = !db[date][skuId][field];
   db[date][skuId][field] = newVal;
+  const base = field.replace('Chk','');
+  db[date][skuId][base+'By'] = _currentUser?.email || 'unknown';
+  db[date][skuId][base+'At'] = new Date().toISOString();
   mktSave(db);
   const td = event.target.closest('td');
   if (td) td.style.background = newVal ? '#e74c3c' : '';
   // 메모 텍스트 색상도 업데이트
   const memo = td && td.querySelector('.mkt-memo');
   if (memo) memo.style.color = newVal ? '#fff' : '';
+  const rec = db[date][skuId];
+  const who = `${rec[base+'By']} · ${_fmtMktTs(rec[base+'At'])}`;
+  event.target.title = who;
+  if (memo) memo.title = '클릭하여 편집 (마지막 수정: '+who+')';
+}
+function _fmtMktTs(iso){
+  if(!iso) return '';
+  const d=new Date(iso);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
 }
 
 function _updateErpStatus(loaded) {
@@ -2124,8 +2136,9 @@ function addExtraPurchaseOrder(buf, file){
 
 
 function parseAllInOne(buf, file){
-  // 새 파일 로드 전 전체 상태 초기화
-  marginMap={}; skuErpMap={}; skuNameMap={}; eprQtyMap={}; eprNameMap={}; eprSpecSet=new Set();
+  // 새 파일 로드 전 전체 상태 초기화 (PDA재고 eprQtyMap/eprNameMap/eprSpecSet은 제외 —
+  // 발주리스트를 재업로드할 때마다 PDA수량이 바뀌지 않도록 최초 로드 이후 고정 유지)
+  marginMap={}; skuErpMap={}; skuNameMap={};
   discontinuedSet=new Set(); skuTotalQtyMap={}; setComponentMap={}; setComponentQtyMap={}; skuIdSetComponents={};
   milkRunCenterSet=new Set(); autoMilkRunCenterSet=new Set(); milkRunCenterOverrides={}; poDeliveryMap={}; manualReasonMap={}; colFilters={};
   outAmtOverrides={}; sortStack=[]; undoStack=[]; printSkuSet=new Set();
@@ -2176,25 +2189,27 @@ function parseAllInOne(buf, file){
 
   // ── 3. EPR 재고 시트: A=SPEC → C=PDA수량 ──
   // 같은 SPEC 여러 행: 합산 저장
-  eprQtyMap={}; eprNameMap={}; eprSpecSet=new Set();
-  const rn=wb.SheetNames.find(n=>n.includes('ERP 재고')||n.includes('ERP재고')||n.includes('EPR 재고')||n.includes('EPR재고')||n.includes('재고'))||'';
-  if(rn){
-    const ws=wb.Sheets[rn];
-    const rng=XLSX.utils.decode_range(ws['!ref']||'A1');
-    for(let R=1;R<=rng.e.r;R++){
-      const cA=ws[XLSX.utils.encode_cell({r:R,c:0})];
-      const cB=ws[XLSX.utils.encode_cell({r:R,c:1})]; // B열: 품명
-      const cC=ws[XLSX.utils.encode_cell({r:R,c:2})];
-      if(!cA) continue;
-      const specRaw=String(cA.v||'').trim(); if(!specRaw) continue;
-      const spec=normId(specRaw);
-      eprSpecSet.add(spec);
-      const qty=(!cC||cC.t==='e')?0:(parseFloat(cC.v)||0);
-      eprQtyMap[spec]=(eprQtyMap[spec]||0)+qty;
-      // 품명(B열) → PDA 역방향 맵 (세트구성 E열이 한글명일 때 폴백 매칭)
-      if(cB&&cB.v){
-        const nm=String(cB.v).trim();
-        if(nm) eprNameMap[nm]=(eprNameMap[nm]||0)+qty;
+  // PDA수량은 최초 로드시에만 채우고, 이후 발주리스트 재업로드에서는 건드리지 않음(고정)
+  if(Object.keys(eprQtyMap).length===0){
+    const rn=wb.SheetNames.find(n=>n.includes('ERP 재고')||n.includes('ERP재고')||n.includes('EPR 재고')||n.includes('EPR재고')||n.includes('재고'))||'';
+    if(rn){
+      const ws=wb.Sheets[rn];
+      const rng=XLSX.utils.decode_range(ws['!ref']||'A1');
+      for(let R=1;R<=rng.e.r;R++){
+        const cA=ws[XLSX.utils.encode_cell({r:R,c:0})];
+        const cB=ws[XLSX.utils.encode_cell({r:R,c:1})]; // B열: 품명
+        const cC=ws[XLSX.utils.encode_cell({r:R,c:2})];
+        if(!cA) continue;
+        const specRaw=String(cA.v||'').trim(); if(!specRaw) continue;
+        const spec=normId(specRaw);
+        eprSpecSet.add(spec);
+        const qty=(!cC||cC.t==='e')?0:(parseFloat(cC.v)||0);
+        eprQtyMap[spec]=(eprQtyMap[spec]||0)+qty;
+        // 품명(B열) → PDA 역방향 맵 (세트구성 E열이 한글명일 때 폴백 매칭)
+        if(cB&&cB.v){
+          const nm=String(cB.v).trim();
+          if(nm) eprNameMap[nm]=(eprNameMap[nm]||0)+qty;
+        }
       }
     }
   }
@@ -7935,6 +7950,8 @@ function showMktEdit(event, date, skuId, field, currentVal) {
     if (!db[date]) db[date] = {};
     if (!db[date][skuId]) db[date][skuId] = {};
     db[date][skuId][field] = val;
+    db[date][skuId][field+'By'] = _currentUser?.email || 'unknown';
+    db[date][skuId][field+'At'] = new Date().toISOString();
     mktSave(db);
     pop.remove();
     renderOutgoingTable();
@@ -8123,7 +8140,9 @@ function renderOutgoingTable(){
   if(mf.mkt1 || mf.mkt2){
     merged=merged.filter(r=>{
       const mkt=mktDateData[r.skuId]||{};
-      return (mf.mkt1 && !!mkt.mkt1Chk) || (mf.mkt2 && !!mkt.mkt2Chk);
+      const has1 = !!mkt.mkt1Chk || !!(mkt.mkt1&&mkt.mkt1.trim());
+      const has2 = !!mkt.mkt2Chk || !!(mkt.mkt2&&mkt.mkt2.trim());
+      return (mf.mkt1 && has1) || (mf.mkt2 && has2);
     });
   }
   // 필터 버튼 상태 표시
@@ -8200,9 +8219,10 @@ function renderOutgoingTable(){
       const chk = !!mkt.mkt1Chk;
       const bg = chk ? 'background:#e74c3c;' : '';
       const memoColor = chk ? '#fff' : (val ? '#1B2559' : '#bbb');
+      const who = mkt.mkt1By ? `${mkt.mkt1By} · ${_fmtMktTs(mkt.mkt1At)}` : '';
       return `<td style="text-align:center;vertical-align:middle;padding:4px 2px;${bg}">
-        <div><input type="checkbox" ${chk?'checked':''} onclick="toggleMktCheck(event,'${outgoingSelMonth}','${mktKey}','mkt1Chk')" style="cursor:pointer;margin:0 0 3px;"></div>
-        <div class="mkt-memo" onclick="showMktEdit(event,'${outgoingSelMonth}','${mktKey}','mkt1','${val.replace(/'/g,"&#39;")}')" style="cursor:pointer;font-size:11px;font-weight:${val?'600':'400'};color:${memoColor};" title="클릭하여 편집">${val||'메모란'}</div>
+        <div><input type="checkbox" ${chk?'checked':''} onclick="toggleMktCheck(event,'${outgoingSelMonth}','${mktKey}','mkt1Chk')" style="cursor:pointer;margin:0 0 3px;" title="${who}"></div>
+        <div class="mkt-memo" onclick="showMktEdit(event,'${outgoingSelMonth}','${mktKey}','mkt1','${val.replace(/'/g,"&#39;")}')" style="cursor:pointer;font-size:11px;font-weight:${val?'600':'400'};color:${memoColor};" title="클릭하여 편집${who?' (마지막 수정: '+who+')':''}">${val||'메모란'}</div>
       </td>`;
     })()+
     (()=>{
@@ -8212,9 +8232,10 @@ function renderOutgoingTable(){
       const chk = !!mkt.mkt2Chk;
       const bg = chk ? 'background:#e74c3c;' : '';
       const memoColor = chk ? '#fff' : (val ? '#1B2559' : '#bbb');
+      const who = mkt.mkt2By ? `${mkt.mkt2By} · ${_fmtMktTs(mkt.mkt2At)}` : '';
       return `<td style="text-align:center;vertical-align:middle;padding:4px 2px;${bg}">
-        <div><input type="checkbox" ${chk?'checked':''} onclick="toggleMktCheck(event,'${outgoingSelMonth}','${mktKey}','mkt2Chk')" style="cursor:pointer;margin:0 0 3px;"></div>
-        <div class="mkt-memo" onclick="showMktEdit(event,'${outgoingSelMonth}','${mktKey}','mkt2','${val.replace(/'/g,"&#39;")}')" style="cursor:pointer;font-size:11px;font-weight:${val?'600':'400'};color:${memoColor};" title="클릭하여 편집">${val||'메모란'}</div>
+        <div><input type="checkbox" ${chk?'checked':''} onclick="toggleMktCheck(event,'${outgoingSelMonth}','${mktKey}','mkt2Chk')" style="cursor:pointer;margin:0 0 3px;" title="${who}"></div>
+        <div class="mkt-memo" onclick="showMktEdit(event,'${outgoingSelMonth}','${mktKey}','mkt2','${val.replace(/'/g,"&#39;")}')" style="cursor:pointer;font-size:11px;font-weight:${val?'600':'400'};color:${memoColor};" title="클릭하여 편집${who?' (마지막 수정: '+who+')':''}">${val||'메모란'}</div>
       </td>`;
     })()+
     `</tr>`;
