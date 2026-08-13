@@ -739,28 +739,29 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
     </div>
 
     <div id="lotte-sec-centers" style="display:none;">
-      <div class="lotte-centers-row">
+      <div class="lotte-card">
+        <div class="t" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <span>📥 발주서 업로드 (오산·김해 동시 등록)</span>
+          <button onclick="downloadLotteErpAll()" style="height:30px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#4318FF;color:#fff;cursor:pointer;">📥 엑셀 전체 다운로드</button>
+        </div>
+        <div style="font-size:11.5px;color:#8A94A6;margin-bottom:10px;">롯데마트 시스템에서 다운로드한 입고예약 상세내역(.xls) 파일을 오산·김해 두 개를 한 번에 선택(Ctrl/Shift로 다중 선택)하면 자동으로 각 센터에 등록됩니다. 한 개만 선택해도 됩니다.</div>
+        <label class="lotte-drop" for="lotte-file-combined">클릭하여 발주서 파일 선택 (여러 개 선택 가능)</label>
+        <input type="file" id="lotte-file-combined" accept=".xls,.xlsx" multiple style="display:none;" onchange="handleLotteOrderUploadMulti(event)">
+      </div>
+      <div class="lotte-centers-row" style="margin-top:20px;">
         <div class="lotte-center-col">
           <div style="font-size:15px;font-weight:800;color:#1E2530;margin:4px 0 10px;">🏭 오산센터</div>
-          <div class="lotte-card">
-            <div class="t">📥 발주서 업로드</div>
-            <div style="font-size:11.5px;color:#8A94A6;margin-bottom:10px;">롯데마트 시스템에서 다운로드한 입고예약 상세내역(.xls) 파일을 업로드하세요.</div>
-            <label class="lotte-drop" for="lotte-file-osan">클릭하여 발주서 파일 선택</label>
-            <input type="file" id="lotte-file-osan" accept=".xls,.xlsx" style="display:none;" onchange="handleLotteOrderUpload('osan',event)">
-          </div>
           <div id="lotte-result-osan"></div>
         </div>
         <div class="lotte-center-col">
           <div style="font-size:15px;font-weight:800;color:#1E2530;margin:4px 0 10px;">🏭 김해센터</div>
-          <div class="lotte-card">
-            <div class="t">📥 발주서 업로드</div>
-            <div style="font-size:11.5px;color:#8A94A6;margin-bottom:10px;">롯데마트 시스템에서 다운로드한 입고예약 상세내역(.xls) 파일을 업로드하세요.</div>
-            <label class="lotte-drop" for="lotte-file-gimhae">클릭하여 발주서 파일 선택</label>
-            <input type="file" id="lotte-file-gimhae" accept=".xls,.xlsx" style="display:none;" onchange="handleLotteOrderUpload('gimhae',event)">
-          </div>
           <div id="lotte-result-gimhae"></div>
         </div>
       </div>
+    </div>
+
+    <div id="lotte-sec-delivery" style="display:none;">
+      <div id="lotte-delivery-content"></div>
     </div>
 
   </div>
@@ -831,10 +832,13 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
   <div id="sb-menu-lotte">
     <div class="sb-section">롯데마트</div>
     <div class="sb-item active" data-lotte-page="base" onclick="openLotteBasePage()">
-      <span class="sb-item-icon">📦</span>기본데이터
+      <span class="sb-item-icon">▤</span>기본데이터
     </div>
     <div class="sb-item" data-lotte-page="centers" onclick="openLotteCentersPage()">
-      <span class="sb-item-icon">📊</span>센터별 데이터추출
+      <span class="sb-item-icon">⬆</span>센터별 데이터추출
+    </div>
+    <div class="sb-item" data-lotte-page="delivery" onclick="openLotteDeliveryPage()">
+      <span class="sb-item-icon">▦</span>납품데이터
     </div>
   </div>
   </div>
@@ -1161,6 +1165,7 @@ const _SHARED_KEYS = [
   'gabe_lotte_base_v1',      // 롯데마트 기본데이터
   'gabe_lotte_gimhae_v1',    // 롯데마트 김해센터
   'gabe_lotte_osan_v1',      // 롯데마트 오산센터
+  'gabe_lotte_history_v1',   // 롯데마트 날짜별 납품데이터 이력
 ];
 let _serverConnected = false;
 
@@ -1752,6 +1757,7 @@ const _DATA_KEYS = [
   'gabe_lotte_base_v1',      // 롯데마트 기본데이터
   'gabe_lotte_gimhae_v1',    // 롯데마트 김해센터
   'gabe_lotte_osan_v1',      // 롯데마트 오산센터
+  'gabe_lotte_history_v1',   // 롯데마트 날짜별 납품데이터 이력
 ];
 
 async function exportAllData() {
@@ -7227,6 +7233,7 @@ function closeAllSubPages(){
 // ══════════════════════════════════════
 const LOTTE_BASE_KEY='gabe_lotte_base_v1';
 const LOTTE_CENTER_KEYS={ gimhae:'gabe_lotte_gimhae_v1', osan:'gabe_lotte_osan_v1' };
+const LOTTE_HISTORY_KEY='gabe_lotte_history_v1';
 
 function switchBrand(brand){
   const stack=document.getElementById('sb-menu-stack');
@@ -7256,6 +7263,7 @@ function openLotteBasePage(){
   document.getElementById('lotte-page-title').textContent='🏬 롯데마트 · 기본데이터';
   document.getElementById('lotte-sec-base').style.display='block';
   document.getElementById('lotte-sec-centers').style.display='none';
+  document.getElementById('lotte-sec-delivery').style.display='none';
   setLotteSidebarActive('base');
   _lotteRenderBaseSummary();
 }
@@ -7265,15 +7273,31 @@ function openLotteCentersPage(){
   document.getElementById('lotte-page-title').textContent='🏬 롯데마트 · 센터별 데이터추출';
   document.getElementById('lotte-sec-base').style.display='none';
   document.getElementById('lotte-sec-centers').style.display='block';
+  document.getElementById('lotte-sec-delivery').style.display='none';
   setLotteSidebarActive('centers');
   _lotteRenderCenterPage('gimhae');
   _lotteRenderCenterPage('osan');
+}
+
+function openLotteDeliveryPage(){
+  document.getElementById('lotte-page').style.display='block';
+  document.getElementById('lotte-page-title').textContent='🏬 롯데마트 · 납품데이터';
+  document.getElementById('lotte-sec-base').style.display='none';
+  document.getElementById('lotte-sec-centers').style.display='none';
+  document.getElementById('lotte-sec-delivery').style.display='block';
+  setLotteSidebarActive('delivery');
+  _lotteRenderDeliveryCharts();
 }
 
 function lotteBaseLoad(){ try{ return JSON.parse(localStorage.getItem(LOTTE_BASE_KEY)||'{}'); }catch(e){ return {}; } }
 function lotteBaseSave(d){
   try{ localStorage.setItem(LOTTE_BASE_KEY, JSON.stringify(d)); }catch(e){ alert('저장 용량이 초과되었습니다.'); }
   _sharedWrite(LOTTE_BASE_KEY,d);
+}
+function lotteHistoryLoad(){ try{ return JSON.parse(localStorage.getItem(LOTTE_HISTORY_KEY)||'{}'); }catch(e){ return {}; } }
+function lotteHistorySave(d){
+  try{ localStorage.setItem(LOTTE_HISTORY_KEY, JSON.stringify(d)); }catch(e){ alert('저장 용량이 초과되었습니다.'); }
+  _sharedWrite(LOTTE_HISTORY_KEY,d);
 }
 function lotteCenterLoad(center){ try{ return JSON.parse(localStorage.getItem(LOTTE_CENTER_KEYS[center])||'null'); }catch(e){ return null; } }
 function lotteCenterSave(center,d){
@@ -7490,8 +7514,7 @@ function handleLotteOrderUpload(center,e){
     try{
       const rows=_lotteParseOrderHtml(ev.target.result);
       if(!rows.length){ alert('발주 항목을 찾을 수 없습니다. 파일 형식을 확인해주세요.'); return; }
-      const result=_lotteComputeCenterResult(rows);
-      lotteCenterSave(center,{ uploadedAt:new Date().toISOString(), fileName:file.name, rows, result });
+      _lotteSaveOrderResult(center,file.name,rows);
       _lotteRenderCenterPage(center);
     }catch(err){ alert('파일 처리 중 오류: '+err.message); }
     e.target.value='';
@@ -7499,11 +7522,73 @@ function handleLotteOrderUpload(center,e){
   reader.readAsText(file,'utf-8');
 }
 
+function _lotteDetectCenter(rows,fileName){
+  const text=((rows[0]&&rows[0].orderer)||'')+(fileName||'');
+  if(text.includes('오산')) return 'osan';
+  if(text.includes('김해')) return 'gimhae';
+  return null;
+}
+
+function _lotteSaveOrderResult(center,fileName,rows){
+  const result=_lotteComputeCenterResult(rows);
+  const record={ uploadedAt:new Date().toISOString(), fileName, rows, result };
+  lotteCenterSave(center,record);
+  const dateKey=(rows[0]&&rows[0].orderDate)||new Date().toISOString().slice(0,10);
+  const hist=lotteHistoryLoad();
+  if(!hist[dateKey]) hist[dateKey]={};
+  hist[dateKey][center]=record;
+  lotteHistorySave(hist);
+}
+
+function handleLotteOrderUploadMulti(e){
+  const files=[...e.target.files];
+  if(!files.length) return;
+  let pending=files.length;
+  const done=()=>{
+    pending--;
+    if(pending===0){
+      _lotteRenderCenterPage('osan');
+      _lotteRenderCenterPage('gimhae');
+    }
+  };
+  files.forEach(file=>{
+    const reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        const rows=_lotteParseOrderHtml(ev.target.result);
+        if(!rows.length){ alert(`${file.name}: 발주 항목을 찾을 수 없습니다. 파일 형식을 확인해주세요.`); return done(); }
+        const center=_lotteDetectCenter(rows,file.name);
+        if(!center){ alert(`${file.name}: 오산/김해 센터를 구분할 수 없습니다. 파일명이나 발주처 항목을 확인해주세요.`); return done(); }
+        _lotteSaveOrderResult(center,file.name,rows);
+      }catch(err){ alert(`${file.name} 처리 중 오류: `+err.message); }
+      done();
+    };
+    reader.readAsText(file,'utf-8');
+  });
+  e.target.value='';
+}
+
+function deleteLotteCenterOrder(center){
+  if(!confirm('업로드한 발주서를 삭제할까요? ERP 등록용 추출 결과도 함께 사라집니다.')) return;
+  lotteCenterSave(center,null);
+  _lotteRenderCenterPage(center);
+}
+
+function downloadLotteErpAll(){
+  const osan=lotteCenterLoad('osan');
+  const gimhae=lotteCenterLoad('gimhae');
+  const hasOsan=osan&&osan.result.erpRows.length;
+  const hasGimhae=gimhae&&gimhae.result.erpRows.length;
+  if(!hasOsan&&!hasGimhae){ alert('추출된 데이터가 없습니다.'); return; }
+  if(hasOsan) downloadLotteErp('osan');
+  if(hasGimhae) downloadLotteErp('gimhae');
+}
+
 function _lotteRenderCenterPage(center){
   const el=document.getElementById('lotte-result-'+center);
   if(!el) return;
   const data=lotteCenterLoad(center);
-  if(!data){ el.innerHTML=''; return; }
+  if(!data){ el.innerHTML='<div class="lotte-card" style="color:#8A94A6;font-size:12px;">업로드된 발주서가 없습니다. 위에서 발주서를 업로드하세요.</div>'; return; }
   const {result, uploadedAt, fileName}=data;
   const dt=new Date(uploadedAt);
   const dtStr=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
@@ -7519,7 +7604,10 @@ function _lotteRenderCenterPage(center){
   html+=`<div class="lotte-card">
     <div class="t" style="display:flex;align-items:center;justify-content:space-between;">
       <span>ERP 등록용 추출 결과</span>
-      <button onclick="downloadLotteErp('${center}')" style="height:30px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#4318FF;color:#fff;cursor:pointer;">📥 엑셀 다운로드</button>
+      <div style="display:flex;gap:8px;">
+        <button onclick="downloadLotteErp('${center}')" style="height:30px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#4318FF;color:#fff;cursor:pointer;">📥 엑셀 다운로드</button>
+        <button onclick="deleteLotteCenterOrder('${center}')" style="height:30px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:1.5px solid #FCA5A5;background:#fff;color:#DC2626;cursor:pointer;">🗑 삭제</button>
+      </div>
     </div>
     <div style="font-size:11px;color:#8A94A6;margin-bottom:8px;">${fileName} · ${dtStr} 업로드</div>
     <div style="overflow-x:auto;">
@@ -7530,6 +7618,128 @@ function _lotteRenderCenterPage(center){
     </div>
   </div>`;
   el.innerHTML=html;
+}
+
+function _lotteRenderDeliveryCharts(){
+  const el=document.getElementById('lotte-delivery-content');
+  if(!el) return;
+  const hist=lotteHistoryLoad();
+  const dates=Object.keys(hist).sort();
+  if(!dates.length){
+    el.innerHTML='<div class="lotte-card" style="color:#8A94A6;font-size:13px;">저장된 납품 데이터가 없습니다. "센터별 데이터추출"에서 발주서를 업로드하면 날짜별로 자동 기록됩니다.</div>';
+    return;
+  }
+
+  const cardStyle='background:#fff;border:1px solid #dde3ee;border-radius:10px;padding:14px;box-shadow:0 1px 4px rgba(44,62,80,.07);';
+  const titleStyle='font-size:11px;font-weight:700;color:#1B2559;margin-bottom:3px;';
+
+  const centerPoints={};
+  let html='<div class="lotte-centers-row">';
+  ['osan','gimhae'].forEach(center=>{
+    const label=center==='gimhae'?'김해센터':'오산센터';
+    const points=dates.map(d=>{
+      const rec=hist[d]&&hist[d][center];
+      if(!rec) return null;
+      const amt=rec.result.erpRows.reduce((s,r)=>s+(r.price||0)*(r.qty||0),0);
+      return {date:d, label:d.slice(5), amt, box:rec.result.totalBox, weight:rec.result.totalWeightKg};
+    }).filter(Boolean);
+    centerPoints[center]=points;
+    const tot=points.reduce((s,p)=>({amt:s.amt+p.amt, box:s.box+p.box, weight:s.weight+p.weight}), {amt:0,box:0,weight:0});
+
+    html+=`<div class="lotte-center-col"><div style="font-size:15px;font-weight:800;color:#1E2530;margin:4px 0 10px;">🏭 ${label}</div>
+      <div style="overflow-x:auto;border-radius:8px;border:1px solid #dde3ee;">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead><tr style="background:#2D1660;">
+          <th style="padding:7px 10px;text-align:center;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">날짜</th>
+          <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">단가금액</th>
+          <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">박스수</th>
+          <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;">무게(kg)</th>
+        </tr></thead><tbody>`;
+    if(!points.length){
+      html+='<tr><td colspan="4" style="padding:14px;text-align:center;color:#A0AEC0;">이 센터에 업로드된 데이터가 없습니다.</td></tr>';
+    } else {
+      points.forEach((p,i)=>{
+        const bg=i%2===0?'#fff':'#f7f9fc';
+        html+=`<tr style="background:${bg};border-bottom:1px solid #e8edf5;">
+          <td style="padding:6px 10px;text-align:center;font-weight:700;color:#1B2559;border-right:1px solid #e8edf5;white-space:nowrap;">${p.date}</td>
+          <td style="padding:6px 8px;text-align:right;color:#C62828;font-weight:600;background:#FFFDE7;border-right:1px solid #f0f3f8;">${p.amt.toLocaleString()}원</td>
+          <td style="padding:6px 8px;text-align:right;color:#333;font-weight:600;border-right:1px solid #f0f3f8;">${p.box.toLocaleString()}</td>
+          <td style="padding:6px 8px;text-align:right;color:#333;font-weight:600;">${p.weight.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
+        </tr>`;
+      });
+    }
+    html+=`<tr style="background:#e8edf8;border-top:2px solid #4F2FA8;">
+      <td style="padding:7px 10px;text-align:center;font-weight:700;color:#1B2559;border-right:1px solid #c5cfe8;">합계</td>
+      <td style="padding:7px 8px;text-align:right;font-weight:700;color:#C62828;background:#FFFDE7;border-right:1px solid #d0d8ea;">${tot.amt.toLocaleString()}원</td>
+      <td style="padding:7px 8px;text-align:right;font-weight:700;color:#1B2559;border-right:1px solid #d0d8ea;">${tot.box.toLocaleString()}</td>
+      <td style="padding:7px 8px;text-align:right;font-weight:700;color:#1B2559;">${tot.weight.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
+    </tr></tbody></table></div>
+    <div style="margin-top:12px;${cardStyle}">
+      <div style="${titleStyle}">① 박스수·무게·단가금액 그래프</div>
+      <canvas id="lotte-chart-${center}-13" style="width:100%;" height="190"></canvas>
+    </div>
+    </div>`;
+  });
+  html+='</div>';
+  el.innerHTML=html;
+
+  requestAnimationFrame(()=>{
+    ['osan','gimhae'].forEach(center=>{
+      _drawLotteCombinedChart(`lotte-chart-${center}-13`, centerPoints[center]);
+    });
+  });
+}
+
+// 박스수·무게·단가금액 — 막대(bar) + 추이선(line) 통합 차트 (annual-chart13과 동일한 시각 언어)
+// 단가금액은 단위가 워낙 커서(원) 만원 단위로 축소해 박스수·무게와 같은 축에 나란히 표시
+function _drawLotteCombinedChart(canvasId,points){
+  const r=_chartSetup(canvasId); if(!r) return;
+  const {ctx,W,H}=r;
+  const PAD={t:22,r:10,b:24,l:46};
+  if(!points.length){
+    ctx.fillStyle='#A0AEC0'; ctx.font='11px 맑은 고딕'; ctx.textAlign='center';
+    ctx.fillText('데이터 없음', W/2, H/2);
+    return;
+  }
+  const valB=points.map(p=>p.box), valW=points.map(p=>p.weight), valA=points.map(p=>p.amt/10000);
+  const fmtB=v=>Math.round(v).toLocaleString();
+  const fmtW=v=>v.toFixed(1);
+  const fmtA=v=>Math.round(v).toLocaleString()+'만';
+  const maxV=Math.max(...valB,...valW,...valA,1)*1.2;
+  const chartW=W-PAD.l-PAD.r, chartH=H-PAD.t-PAD.b;
+  ctx.font='9px 맑은 고딕'; ctx.fillStyle='#999'; ctx.textAlign='right';
+  for(let i=0;i<=4;i++){
+    const v=maxV*i/4, y=PAD.t+chartH*(1-i/4);
+    ctx.fillText(Math.round(v).toLocaleString(),PAD.l-6,y+3);
+    ctx.strokeStyle='#eeeeec'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(PAD.l,y); ctx.lineTo(W-PAD.r,y); ctx.stroke();
+  }
+  const slotW=chartW/points.length, gap=slotW*0.12, bw=(slotW-gap*2)/3;
+  points.forEach((p,i)=>{
+    const x=PAD.l+i*slotW+gap;
+    const hB=valB[i]/maxV*chartH, hW=valW[i]/maxV*chartH, hA=valA[i]/maxV*chartH;
+    ctx.fillStyle='rgba(68,114,196,0.75)'; ctx.fillRect(x,       PAD.t+chartH-hB, bw, hB);
+    ctx.fillStyle='rgba(237,125,49,0.75)'; ctx.fillRect(x+bw,    PAD.t+chartH-hW, bw, hW);
+    ctx.fillStyle='rgba(198,40,40,0.75)';  ctx.fillRect(x+bw*2,  PAD.t+chartH-hA, bw, hA);
+    ctx.fillStyle='#888'; ctx.font='8px 맑은 고딕'; ctx.textAlign='center';
+    ctx.fillText(p.label, x+bw*1.5, H-PAD.b+11);
+  });
+  const drawTrendLine=(vals,color,fmt)=>{
+    const pts=vals.map((v,i)=>({x:PAD.l+i*slotW+slotW/2,y:PAD.t+chartH*(1-v/maxV),v}));
+    ctx.strokeStyle=color; ctx.lineWidth=2; ctx.setLineDash([5,3]);
+    ctx.beginPath(); pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y)); ctx.stroke();
+    ctx.setLineDash([]);
+    pts.forEach(p=>{
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.stroke();
+      ctx.fillStyle='#333'; ctx.font='8px 맑은 고딕'; ctx.textAlign='center';
+      ctx.fillText(fmt(p.v), p.x, p.y-7);
+    });
+  };
+  drawTrendLine(valB,'#4472C4',fmtB);
+  drawTrendLine(valW,'#ED7D31',fmtW);
+  drawTrendLine(valA,'#C62828',fmtA);
+  _legend(ctx,12,[{color:'#4472C4',label:'박스수'},{color:'#ED7D31',label:'무게(kg)'},{color:'#C62828',label:'단가금액(만원)'}]);
 }
 
 function downloadLotteErp(center){
