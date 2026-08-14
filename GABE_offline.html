@@ -548,7 +548,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
               <th style="width:100px;text-align:right;position:sticky;top:0;z-index:10;cursor:pointer;background:#7048C8;color:#fff;" onclick="toggleOutSort('date')">입고예정일 <span id="sort-icon-date" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
               <th style="width:75px;text-align:right;position:sticky;top:0;z-index:10;cursor:pointer;background:#7048C8;color:#fff;" onclick="toggleOutSort('qty')">수량(합계) <span id="sort-icon-qty" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
               <th style="width:110px;text-align:right;cursor:pointer;user-select:none;position:sticky;top:0;z-index:10;background:#7048C8;color:#fff;" onclick="toggleOutSort('rem')">잔여수량<br><span style="font-weight:400;font-size:11px;">(PDA-발주)</span> <span id="sort-icon-rem" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
-              <th style="width:70px;text-align:right;position:sticky;top:0;z-index:10;background:#7048C8;color:#fff;">마진율</th>
+              <th style="width:80px;text-align:right;position:sticky;top:0;z-index:10;background:#7048C8;color:#fff;">마진율<button id="margin-filter-btn" onclick="toggleMarginFilter(event)" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#E8D8FF;padding:0;" title="마진율 17% 미만만 보기">▼</button></th>
               <th style="width:90px;text-align:center;position:sticky;top:0;z-index:10;background:#7048C8;color:#fff;">마케팅1<button id="mkt1-filter-btn" onclick="toggleMktFilter(event,'mkt1')" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#E8D8FF;padding:0;">▼</button></th>
               <th style="width:90px;text-align:center;position:sticky;top:0;z-index:10;background:#7048C8;color:#fff;">마케팅2<button id="mkt2-filter-btn" onclick="toggleMktFilter(event,'mkt2')" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#E8D8FF;padding:0;">▼</button></th>
             </tr>
@@ -1417,6 +1417,13 @@ window._mktFilter = { mkt1: false, mkt2: false };
 function toggleMktFilter(event, field) {
   if(event) event.stopPropagation();
   window._mktFilter[field] = !window._mktFilter[field];
+  renderOutgoingTable();
+}
+
+window._marginFilter = false;
+function toggleMarginFilter(event) {
+  if(event) event.stopPropagation();
+  window._marginFilter = !window._marginFilter;
   renderOutgoingTable();
 }
 
@@ -8568,7 +8575,16 @@ function renderOutgoingTable(){
       return (mf.mkt1 && has1) || (mf.mkt2 && has2);
     });
   }
+  // 마진율 미달(17% 미만) 필터 적용
+  if(window._marginFilter){
+    merged=merged.filter(r=>{
+      const pct=getMarginPct(r.skuId);
+      return pct!==null && pct<17;
+    });
+  }
   // 필터 버튼 상태 표시
+  const bm=document.getElementById('margin-filter-btn');
+  if(bm){ bm.style.color=window._marginFilter?'#e74c3c':'#888'; bm.style.fontWeight=window._marginFilter?'700':'400'; bm.textContent=window._marginFilter?'▲':'▼'; }
   const b1=document.getElementById('mkt1-filter-btn');
   const b2=document.getElementById('mkt2-filter-btn');
   if(b1){ b1.style.color=mf.mkt1?'#e74c3c':'#888'; b1.style.fontWeight=mf.mkt1?'700':'400'; b1.textContent=mf.mkt1?'▲':'▼'; }
