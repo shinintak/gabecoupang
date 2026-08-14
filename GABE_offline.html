@@ -11226,8 +11226,6 @@ document.getElementById('smt-fi-settle').addEventListener('change',function(e){
 </div>
 <div id="productlist-page" style="display:none;position:fixed;top:0;left:250px;right:0;bottom:0;z-index:150;overflow-y:auto;">
 
-<div id="pl_connErrorBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:10000;background:#c0392b;color:#fff;font-size:0.8rem;font-weight:600;padding:8px 16px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.25);"></div>
-
 <div class="pl-layout">
   <main class="pl-content-area">
     <section id="list-page" class="pl-page-tab active">
@@ -11521,17 +11519,6 @@ function pl_getSupabase() {
 }
 
 let pl_currentUser = null;
-
-function pl_showConnError(msg) {
-  const el = document.getElementById('pl_connErrorBanner');
-  if (!el) return;
-  el.textContent = '⚠ ' + msg;
-  el.style.display = 'block';
-}
-function pl_hideConnError() {
-  const el = document.getElementById('pl_connErrorBanner');
-  if (el) el.style.display = 'none';
-}
 
 function pl_canEdit(page) {
   return canEdit(page);
