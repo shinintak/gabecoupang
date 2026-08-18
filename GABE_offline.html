@@ -2696,9 +2696,10 @@ function parseAllInOne(buf, file){
   }
 
   // ── 5. 바코드 확인 시트: 발주서 D/E열 VLOOKUP 참조용 ──
-  barcodeSheetRaw=[];
+  // 시트가 이번 파일에 없으면 기존 skuBarcodeMap/barcodeAttachMap/specBoxQtyMap을 그대로 유지(초기화 안 함)
   const bcn=wb.SheetNames.find(n=>n.includes('바코드 확인')||n.includes('바코드확인'))||'';
   if(bcn){
+    barcodeSheetRaw=[];
     const wsBC=wb.Sheets[bcn];
     const rngBC=XLSX.utils.decode_range(wsBC['!ref']||'A1');
     for(let R=0;R<=rngBC.e.r;R++){
@@ -2709,32 +2710,32 @@ function parseAllInOne(buf, file){
       }
       barcodeSheetRaw.push(row);
     }
-  }
-  // 바코드 확인 시트: A열(SKU ID) 기준으로 C열(바코드)·D열(부착여부)·J열(Box내총수량) 맵 구축
-  skuBarcodeMap={};
-  barcodeAttachMap={};
-  specBoxQtyMap={};
-  barcodeSheetRaw.forEach((row,i)=>{
-    if(i===0) return; // 헤더 스킵
-    const sid=normId(row[0]);
-    const bc=String(row[2]||'').trim();
-    const flag=String(row[3]||'').trim().toUpperCase();
-    const boxQty=parseFloat(row[9])||0; // J열(index 9) = Box 내 총수량
-    if(sid){
-      if(bc) skuBarcodeMap[sid]=bc;
-      if(flag) barcodeAttachMap[sid]=flag;
-      if(boxQty){
-        specBoxQtyMap[sid]=boxQty;
-        const spec=skuErpMap[sid]||'';
-        if(spec){
-          specBoxQtyMap[spec]=boxQty;
-          // extractSetCode 단축코드도 키로 등록 (예: "(가베가족)IN95357 ..." → "IN95357")
-          const code=extractSetCode(spec);
-          if(code && !specBoxQtyMap[code]) specBoxQtyMap[code]=boxQty;
+    // 바코드 확인 시트: A열(SKU ID) 기준으로 C열(바코드)·D열(부착여부)·J열(Box내총수량) 맵 구축
+    skuBarcodeMap={};
+    barcodeAttachMap={};
+    specBoxQtyMap={};
+    barcodeSheetRaw.forEach((row,i)=>{
+      if(i===0) return; // 헤더 스킵
+      const sid=normId(row[0]);
+      const bc=String(row[2]||'').trim();
+      const flag=String(row[3]||'').trim().toUpperCase();
+      const boxQty=parseFloat(row[9])||0; // J열(index 9) = Box 내 총수량
+      if(sid){
+        if(bc) skuBarcodeMap[sid]=bc;
+        if(flag) barcodeAttachMap[sid]=flag;
+        if(boxQty){
+          specBoxQtyMap[sid]=boxQty;
+          const spec=skuErpMap[sid]||'';
+          if(spec){
+            specBoxQtyMap[spec]=boxQty;
+            // extractSetCode 단축코드도 키로 등록 (예: "(가베가족)IN95357 ..." → "IN95357")
+            const code=extractSetCode(spec);
+            if(code && !specBoxQtyMap[code]) specBoxQtyMap[code]=boxQty;
+          }
         }
       }
-    }
-  });
+    });
+  }
 
   // ── 6. 0.기본 시트: 발주 데이터 ──
   const bn=wb.SheetNames.find(n=>n.includes('기본'))||wb.SheetNames[0];
