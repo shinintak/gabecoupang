@@ -4401,6 +4401,7 @@ function handleReturnErrUpload(file){
     catch(err){ alert('엑셀 파일을 읽을 수 없습니다.\n'+err.message); return; }
     const store=returnErrLoad();
     let added=0, updated=0;
+    const idOccur=new Map(); // 같은 배치 내 동일 id(날짜+발주+SKU+오류유형+수량) 중복 시 덮어쓰기 방지
     const findCol=(hdr,...names)=>{
       for(const nm of names){
         const idx=hdr.findIndex(h=>String(h||'').replace(/\s/g,'').includes(nm.replace(/\s/g,'')));
@@ -4450,7 +4451,10 @@ function handleReturnErrUpload(file){
           erpRestored:_returnErrIsDone(row[col.erpRestored])?'O':'X',
         };
         rec.outAmt=rec.cost*rec.qty;
-        const id=[date,po,skuId,errType,qty].join('_');
+        const baseId=[date,po,skuId,errType,qty].join('_');
+        const occ=(idOccur.get(baseId)||0)+1;
+        idOccur.set(baseId,occ);
+        const id=occ>1?baseId+'_'+occ:baseId; // 동일 조건(날짜/발주/SKU/오류유형/수량) 행이 여러 건이면 순번을 붙여 별개로 저장
         if(store[id]) updated++; else added++;
         store[id]=rec;
       }
