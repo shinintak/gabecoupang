@@ -35,8 +35,28 @@ body{font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif
 .stat .sl{font-size:12px;color:#A0AEC0;margin-bottom:2px;}
 .stat .sv{font-size:16px;font-weight:800;color:#1B2559;}
 .tbl-scroll{overflow-x:auto;border:1px solid #E0E5FF;border-radius:10px;box-shadow:0 2px 10px rgba(27,37,89,0.07);}
+/* ── 권한관리: 계정 목록 + 토글 스위치 ── */
+.pm-acct{display:flex;align-items:center;gap:8px;padding:12px 16px;cursor:pointer;border-bottom:1px solid #F0F3FA;}
+.pm-acct:hover{background:#F0F3FA;}
+.pm-acct .pm-dot{width:8px;height:8px;border-radius:50%;background:#CBD5E0;flex-shrink:0;}
+.pm-acct .pm-info{flex:1;min-width:0;}
+.pm-acct .pm-email{font-size:12px;color:#2D3748;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pm-acct .pm-tag{font-size:9px;color:#E53E3E;font-weight:700;}
+.pm-acct.active{background:#EEF2FF;border-left:3px solid #2D1660;padding-left:13px;}
+.pm-acct.active .pm-email{color:#1B2559;}
+.pm-acct.active .pm-dot{background:#2D1660;}
+.pm-switch{position:relative;width:38px;height:22px;flex-shrink:0;display:inline-block;}
+.pm-switch input{opacity:0;width:0;height:0;}
+.pm-slider{position:absolute;inset:0;background:#E2E8F0;border-radius:22px;transition:.2s;cursor:pointer;}
+.pm-slider:before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.pm-switch input:checked + .pm-slider{background:#2D1660;}
+.pm-switch input:checked + .pm-slider:before{transform:translateX(16px);}
+.pm-switch input:disabled + .pm-slider{opacity:.55;cursor:default;}
+.pm-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#F9FAFC;border:1px solid #EDF2F7;border-radius:8px;margin-bottom:6px;}
+.pm-row .pm-label{font-size:12px;color:#2D3748;font-weight:600;}
+.pm-row .pm-type{font-size:10px;color:#A0AEC0;margin-left:6px;font-weight:400;}
 table{border-collapse:collapse;font-size:13px;white-space:nowrap;min-width:100%;width:100%;}
-thead tr{background:#4F2FA8;}
+thead tr{background:#2D1660;}
 th{padding:8px 11px;text-align:center;font-weight:700;color:#fff;border-bottom:none;cursor:pointer;user-select:none;white-space:nowrap;font-size:12px;}
 th:hover{color:#fff;background:rgba(255,255,255,0.09);}
 th.sorted-asc::after{content:' ▲';font-size:9px;}
@@ -104,7 +124,7 @@ td.col-qty{padding:6px 9px;}
 .lotte-stat .sl{font-size:11px;color:#8A94A6;font-weight:600;margin-bottom:3px;}
 .lotte-stat .sv{font-size:18px;color:#1E2530;font-weight:800;}
 .lotte-tbl{width:100%;border-collapse:collapse;font-size:12px;}
-.lotte-tbl th{background:#4318FF;color:#fff;padding:8px 10px;text-align:center;white-space:nowrap;}
+.lotte-tbl th{background:#2D1660;color:#fff;padding:8px 10px;text-align:center;white-space:nowrap;}
 .lotte-tbl td{padding:6px 10px;border-bottom:1px solid #EDF0FB;text-align:right;}
 .lotte-tbl td:nth-child(1){text-align:left;}
 .lotte-unmatched{background:#FFF6E5;border:1px solid #F5D98B;border-radius:10px;padding:10px 14px;font-size:11.5px;color:#8A5A00;margin-bottom:14px;line-height:1.7;}
@@ -543,11 +563,14 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #E0E5FF;">
       <div>
         <div style="font-size:15px;font-weight:800;color:#1B2559;">🔐 권한관리</div>
-        <div style="font-size:11px;color:#A0AEC0;margin-top:2px;">계정별 페이지 수정 권한을 설정합니다. 체크 = 수정 가능</div>
+        <div style="font-size:11px;color:#A0AEC0;margin-top:2px;">왼쪽에서 계정을 선택하면 오른쪽에 상세 권한이 표시됩니다. 켜짐 = 수정 가능</div>
       </div>
       <button onclick="closePermPanel()" style="width:30px;height:30px;border-radius:50%;border:none;background:#F4F6F9;cursor:pointer;font-size:14px;">✕</button>
     </div>
-    <div id="perm-panel-body" style="overflow-y:auto;padding:16px 20px;flex:1;"></div>
+    <div id="perm-panel-body" style="display:flex;flex:1;overflow:hidden;">
+      <div id="perm-acct-list" style="width:250px;border-right:1px solid #EDF2F7;overflow-y:auto;background:#FAFBFF;flex-shrink:0;"></div>
+      <div id="perm-detail-panel" style="flex:1;overflow-y:auto;padding:20px 24px;"></div>
+    </div>
     <div style="padding:12px 20px;border-top:1px solid #EDF2F7;text-align:right;">
       <span style="font-size:11px;color:#A0AEC0;">변경 즉시 저장됩니다 · 관리자는 모든 권한 자동 부여</span>
     </div>
@@ -582,7 +605,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
         <colgroup>
           <col style="width:12%;"><col style="width:20%;"><col style="width:33%;"><col style="width:15%;"><col style="width:20%;">
         </colgroup>
-        <thead><tr style="background:#1B2559;">
+        <thead><tr style="background:#2D1660;">
           <th style="padding:8px;text-align:left;font-size:12px;color:#fff;white-space:nowrap;border:1px solid #5A6FB0;">신청일자</th>
           <th style="padding:8px;text-align:left;font-size:12px;color:#fff;border:1px solid #5A6FB0;">제목</th>
           <th style="padding:8px;text-align:left;font-size:12px;color:#fff;border:1px solid #5A6FB0;">내용</th>
@@ -698,7 +721,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
     </div>
     <div style="padding:12px 20px;border-top:1px solid #EDF2F7;text-align:right;display:flex;gap:8px;justify-content:flex-end;">
       <button onclick="closeLotteProductModal()" style="height:34px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #E0E5FF;background:#fff;color:#4A5568;cursor:pointer;">취소</button>
-      <button onclick="saveLotteProduct()" style="height:34px;padding:0 18px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#4318FF;color:#fff;cursor:pointer;">저장</button>
+      <button onclick="saveLotteProduct()" style="height:34px;padding:0 18px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">저장</button>
     </div>
   </div>
 </div>
@@ -748,7 +771,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
       <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:8px;">
         <span style="font-size:12px;font-weight:700;color:#1B2559;">현재 데이터</span>
         <span id="session-cur-label" style="font-size:11px;color:#4A5568;background:#EDF2F7;border:1px solid #ccd;padding:1px 6px;border-radius:12px;"></span>
-        <button onclick="saveCurrentSession()" style="font-size:11px;padding:2px 8px;border:none;border-radius:6px;background:#4318FF;color:#fff;cursor:pointer;font-weight:600;">저장</button>
+        <button onclick="saveCurrentSession()" style="font-size:11px;padding:2px 8px;border:none;border-radius:6px;background:#2D1660;color:#fff;cursor:pointer;font-weight:600;">저장</button>
         <button id="session-cloud-sync-btn" onclick="syncAllSessionsToCloud()" style="font-size:11px;padding:2px 8px;border:none;border-radius:6px;background:#0891b2;color:#fff;cursor:pointer;font-weight:600;">☁ 클라우드 동기화</button>
         <button onclick="clearUnreliableCancelData()" style="font-size:11px;padding:2px 8px;border:none;border-radius:6px;background:#6B7280;color:#fff;cursor:pointer;font-weight:600;" title="일괄재계산으로 잘못 저장된 발주취소 데이터 초기화">🗑 발주취소 초기화</button>
         <span id="session-save-msg" style="font-size:11px;color:#059669;display:none;">✓ 저장됨</span>
@@ -764,7 +787,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
       <span id="month-popup-title" style="font-size:13px;font-weight:700;color:#1B2559;"></span>
       <div style="display:flex;align-items:center;gap:8px;">
-        <button onclick="saveMonthPopupAll()" style="height:32px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#7048C8;color:#fff;cursor:pointer;">💾 저장</button>
+        <button onclick="saveMonthPopupAll()" style="height:32px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">💾 저장</button>
         <span id="month-save-msg" style="display:none;font-size:12px;color:#059669;font-weight:600;">✓ 저장됨</span>
         <button onclick="closeMonthPopup()" style="width:30px;height:30px;border-radius:50%;border:none;background:#EDF2F7;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;">✕</button>
       </div>
@@ -801,7 +824,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
     <div style="padding:16px 18px;overflow-x:auto;">
       <table style="width:100%;border-collapse:collapse;font-size:11px;">
         <thead>
-          <tr style="background:#4F2FA8;color:#fff;">
+          <tr style="background:#2D1660;color:#fff;">
             <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:center;">시작날짜</th>
             <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:center;">종료날짜</th>
             <th style="padding:8px 10px;border:1px solid #E0E5FF;white-space:nowrap;text-align:center;">SKU ID</th>
@@ -827,7 +850,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
     <button class="back-btn" onclick="closeOutgoingPage()">← 돌아가기</button>
     <span style="font-size:14px;font-weight:800;color:#1B2559;">📦 출고리스트</span>
     <span style="font-size:12px;color:#A0AEC0;margin-left:8px;">영업팀 재고확인용</span>
-    <button onclick="saveOutgoingData()" style="margin-left:12px;height:34px;padding:0 18px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#4F2FA8;color:#fff;cursor:pointer;">💾 저장</button>
+    <button onclick="saveOutgoingData()" style="margin-left:12px;height:34px;padding:0 18px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #2D1660;background:#fff;color:#2D1660;cursor:pointer;">💾 저장</button>
     <button onclick="deleteOutgoingData()" style="height:34px;padding:0 18px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #e74c3c;background:#fff;color:#e74c3c;cursor:pointer;">🗑 삭제</button>
     <button id="outgoing-mkt-save-btn" onclick="saveMktToServer()" style="height:34px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #8e44ad;background:#fff;color:#8e44ad;cursor:pointer;" title="마케팅1·2 수정사항 서버에 저장">📤 마케팅 저장</button>
     <button onclick="openMktNegoPopup()" style="height:34px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #1565C0;background:#fff;color:#1565C0;cursor:pointer;" title="마케팅1,2팀 수량협의 재고 카운팅">📊 재고협의</button>
@@ -848,21 +871,21 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
         <table id="outgoing-tbl" style="font-size:11px;width:100%;table-layout:fixed;">
           <thead>
             <tr>
-              <th style="width:70px;text-align:center;position:sticky;top:0;z-index:10;cursor:pointer;background:#7048C8;color:#fff;" onclick="toggleOutSort('pos')">발주수 <span id="sort-icon-pos" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
-              <th style="width:100px;position:sticky;top:0;z-index:10;cursor:pointer;background:#7048C8;color:#fff;" onclick="toggleOutSort('skuId')">SKU ID <span id="sort-icon-skuId" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
-              <th style="width:460px;position:sticky;top:0;z-index:10;cursor:pointer;background:#7048C8;color:#fff;" onclick="toggleOutSort('skuName')">SKU 이름 <span id="sort-icon-skuName" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
-              <th style="width:100px;text-align:right;position:sticky;top:0;z-index:10;cursor:pointer;background:#7048C8;color:#fff;" onclick="toggleOutSort('date')">입고예정일 <span id="sort-icon-date" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
-              <th style="width:75px;text-align:right;position:sticky;top:0;z-index:10;cursor:pointer;background:#7048C8;color:#fff;" onclick="toggleOutSort('qty')">수량(합계) <span id="sort-icon-qty" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
-              <th style="width:110px;text-align:right;cursor:pointer;user-select:none;position:sticky;top:0;z-index:10;background:#7048C8;color:#fff;" onclick="toggleOutSort('rem')">잔여수량<br><span style="font-weight:400;font-size:11px;">(PDA-발주)</span> <span id="sort-icon-rem" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
-              <th style="width:80px;text-align:right;position:sticky;top:0;z-index:10;background:#7048C8;color:#fff;">마진율<button id="margin-filter-btn" onclick="toggleMarginFilter(event)" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#E8D8FF;padding:0;" title="마진율 17% 미만만 보기">▼</button></th>
-              <th style="width:90px;text-align:center;position:sticky;top:0;z-index:10;background:#7048C8;color:#fff;">마케팅1<button id="mkt1-filter-btn" onclick="toggleMktFilter(event,'mkt1')" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#E8D8FF;padding:0;">▼</button></th>
-              <th style="width:90px;text-align:center;position:sticky;top:0;z-index:10;background:#7048C8;color:#fff;">마케팅2<button id="mkt2-filter-btn" onclick="toggleMktFilter(event,'mkt2')" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#E8D8FF;padding:0;">▼</button></th>
+              <th style="width:70px;text-align:center;position:sticky;top:0;z-index:10;cursor:pointer;background:#2D1660;color:#fff;" onclick="toggleOutSort('pos')">발주수 <span id="sort-icon-pos" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
+              <th style="width:100px;position:sticky;top:0;z-index:10;cursor:pointer;background:#2D1660;color:#fff;" onclick="toggleOutSort('skuId')">SKU ID <span id="sort-icon-skuId" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
+              <th style="width:460px;position:sticky;top:0;z-index:10;cursor:pointer;background:#2D1660;color:#fff;" onclick="toggleOutSort('skuName')">SKU 이름 <span id="sort-icon-skuName" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
+              <th style="width:100px;text-align:right;position:sticky;top:0;z-index:10;cursor:pointer;background:#2D1660;color:#fff;" onclick="toggleOutSort('date')">입고예정일 <span id="sort-icon-date" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
+              <th style="width:75px;text-align:right;position:sticky;top:0;z-index:10;cursor:pointer;background:#2D1660;color:#fff;" onclick="toggleOutSort('qty')">수량(합계) <span id="sort-icon-qty" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
+              <th style="width:110px;text-align:right;cursor:pointer;user-select:none;position:sticky;top:0;z-index:10;background:#2D1660;color:#fff;" onclick="toggleOutSort('rem')">잔여수량<br><span style="font-weight:400;font-size:11px;">(PDA-발주)</span> <span id="sort-icon-rem" style="font-size:10px;color:#D4BCFF;">⇅</span></th>
+              <th style="width:80px;text-align:right;position:sticky;top:0;z-index:10;background:#2D1660;color:#fff;">마진율<button id="margin-filter-btn" onclick="toggleMarginFilter(event)" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#E8D8FF;padding:0;" title="마진율 17% 미만만 보기">▼</button></th>
+              <th style="width:90px;text-align:center;position:sticky;top:0;z-index:10;background:#2D1660;color:#fff;">마케팅1<button id="mkt1-filter-btn" onclick="toggleMktFilter(event,'mkt1')" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#E8D8FF;padding:0;">▼</button></th>
+              <th style="width:90px;text-align:center;position:sticky;top:0;z-index:10;background:#2D1660;color:#fff;">마케팅2<button id="mkt2-filter-btn" onclick="toggleMktFilter(event,'mkt2')" style="margin-left:4px;border:none;background:none;cursor:pointer;font-size:11px;color:#E8D8FF;padding:0;">▼</button></th>
             </tr>
             <tr>
-              <th style="position:sticky;top:38px;z-index:10;background:#7048C8;"></th>
-              <th style="padding:3px 6px;position:sticky;top:38px;z-index:10;background:#7048C8;"><input id="col-search-skuid" oninput="renderOutgoingTable()" placeholder="검색" style="width:100%;box-sizing:border-box;font-size:11px;padding:3px 6px;border:1px solid #E0E5FF;border-radius:4px;outline:none;font-weight:400;"></th>
-              <th style="padding:3px 6px;position:sticky;top:38px;z-index:10;background:#7048C8;"><input id="col-search-skuname" oninput="renderOutgoingTable()" placeholder="검색" style="width:100%;box-sizing:border-box;font-size:11px;padding:3px 6px;border:1px solid #E0E5FF;border-radius:4px;outline:none;font-weight:400;"></th>
-              <th style="position:sticky;top:38px;z-index:10;background:#7048C8;"></th><th style="position:sticky;top:38px;z-index:10;background:#7048C8;"></th><th style="position:sticky;top:38px;z-index:10;background:#7048C8;"></th><th style="position:sticky;top:38px;z-index:10;background:#7048C8;"></th><th style="position:sticky;top:38px;z-index:10;background:#7048C8;"></th><th style="position:sticky;top:38px;z-index:10;background:#7048C8;"></th>
+              <th style="position:sticky;top:38px;z-index:10;background:#2D1660;"></th>
+              <th style="padding:3px 6px;position:sticky;top:38px;z-index:10;background:#2D1660;"><input id="col-search-skuid" oninput="renderOutgoingTable()" placeholder="검색" style="width:100%;box-sizing:border-box;font-size:11px;padding:3px 6px;border:1px solid #E0E5FF;border-radius:4px;outline:none;font-weight:400;"></th>
+              <th style="padding:3px 6px;position:sticky;top:38px;z-index:10;background:#2D1660;"><input id="col-search-skuname" oninput="renderOutgoingTable()" placeholder="검색" style="width:100%;box-sizing:border-box;font-size:11px;padding:3px 6px;border:1px solid #E0E5FF;border-radius:4px;outline:none;font-weight:400;"></th>
+              <th style="position:sticky;top:38px;z-index:10;background:#2D1660;"></th><th style="position:sticky;top:38px;z-index:10;background:#2D1660;"></th><th style="position:sticky;top:38px;z-index:10;background:#2D1660;"></th><th style="position:sticky;top:38px;z-index:10;background:#2D1660;"></th><th style="position:sticky;top:38px;z-index:10;background:#2D1660;"></th><th style="position:sticky;top:38px;z-index:10;background:#2D1660;"></th>
             </tr>
           </thead>
           <tbody id="outgoing-tbody"></tbody>
@@ -914,7 +937,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
 
     <!-- 저장하기 버튼 -->
     <div id="smt-save-bar" style="display:none;margin-bottom:14px;align-items:center;gap:10px;">
-      <button onclick="smtMergeAndSave()" style="height:36px;padding:0 20px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#4F2FA8;color:#fff;cursor:pointer;">💾 저장하기</button>
+      <button onclick="smtMergeAndSave()" style="height:36px;padding:0 20px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">💾 저장하기</button>
       <span style="font-size:12px;color:#A0AEC0;">업로드 데이터를 기존 데이터에 누적 저장합니다</span>
       <span id="smt-save-msg" style="display:none;font-size:12px;color:#059669;font-weight:600;">✓ 저장 완료</span>
     </div>
@@ -1026,7 +1049,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <span style="font-size:13px;font-weight:700;color:#1B2559;">📈 판매데이터 정리 및 합계표</span>
           <div style="display:flex;gap:6px;align-items:center;">
-            <button id="sales-upload-btn" onclick="document.getElementById('sales-file-input').click()" style="font-size:11px;padding:5px 14px;border-radius:4px;border:none;background:#4F2FA8;color:#fff;cursor:pointer;font-weight:700;">엑셀 업데이트</button>
+            <button id="sales-upload-btn" onclick="document.getElementById('sales-file-input').click()" style="font-size:11px;padding:5px 14px;border-radius:4px;border:none;background:#2D1660;color:#fff;cursor:pointer;font-weight:700;">엑셀 업데이트</button>
             <button onclick="salesClearAll()" style="font-size:11px;padding:5px 10px;border-radius:4px;border:1px solid #E0E5FF;background:#fff;color:#A0AEC0;cursor:pointer;">초기화</button>
           </div>
         </div>
@@ -1041,7 +1064,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
           <span style="font-size:13px;font-weight:700;color:#1B2559;">🚚 회송·오류 현황 <span style="font-size:11px;font-weight:600;color:#A0AEC0;">(입고예정일 기준)</span></span>
           <div style="display:flex;gap:6px;align-items:center;">
-            <button id="return-err-upload-btn" onclick="document.getElementById('return-err-file-input').click()" style="font-size:11px;padding:5px 14px;border-radius:4px;border:none;background:#4F2FA8;color:#fff;cursor:pointer;font-weight:700;">엑셀 업로드</button>
+            <button id="return-err-upload-btn" onclick="document.getElementById('return-err-file-input').click()" style="font-size:11px;padding:5px 14px;border-radius:4px;border:none;background:#2D1660;color:#fff;cursor:pointer;font-weight:700;">엑셀 업로드</button>
           </div>
         </div>
         <input type="file" id="return-err-file-input" accept=".xls,.xlsx" style="display:none" onchange="handleReturnErrUpload(this.files[0]);this.value=''">
@@ -1085,7 +1108,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
       <div class="lotte-card">
         <div class="t" style="display:flex;align-items:center;justify-content:space-between;">
           <span>현재 상태</span>
-          <button onclick="openLotteProductModal()" style="height:30px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#4318FF;color:#fff;cursor:pointer;">+ 상품 추가</button>
+          <button onclick="openLotteProductModal()" style="height:30px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">+ 상품 추가</button>
         </div>
         <div id="lotte-base-summary" style="font-size:13px;color:#1E2530;font-weight:700;margin-bottom:10px;">저장된 기본데이터가 없습니다.</div>
         <input id="lotte-base-search" type="text" placeholder="바코드·SPEC·상품명 검색" oninput="_lotteRenderBaseList()" style="display:none;width:100%;box-sizing:border-box;height:34px;padding:0 12px;font-size:12px;border:1px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:10px;">
@@ -1097,7 +1120,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
       <div class="lotte-card">
         <div class="t" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
           <span>📥 발주서 업로드 (오산·김해 동시 등록)</span>
-          <button onclick="downloadLotteErpAll()" style="height:30px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#4318FF;color:#fff;cursor:pointer;">📥 엑셀 전체 다운로드</button>
+          <button onclick="downloadLotteErpAll()" style="height:30px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">📥 엑셀 전체 다운로드</button>
         </div>
         <div style="font-size:11.5px;color:#8A94A6;margin-bottom:10px;">롯데마트 시스템에서 다운로드한 입고예약 상세내역(.xls) 파일을 오산·김해 두 개를 한 번에 선택(Ctrl/Shift로 다중 선택)하면 자동으로 각 센터에 등록됩니다. 한 개만 선택해도 됩니다.</div>
         <label class="lotte-drop" for="lotte-file-combined">클릭하여 발주서 파일 선택 (여러 개 선택 가능)</label>
@@ -1193,19 +1216,6 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
   </div>
   </div>
 
-  <div id="sb-admin-menu" style="display:none;">
-    <div class="sb-divider"></div>
-    <div class="sb-card sb-card-admin">
-    <div class="sb-section">ADMIN</div>
-    <div class="sb-item" onclick="openPermPanel()">
-      <span class="sb-item-icon">⚙</span>권한관리
-    </div>
-    <div class="sb-item" data-page="updatereq" onclick="openUpdateReqPage()">
-      <span class="sb-item-icon">📝</span>업데이트 요청
-    </div>
-    </div>
-  </div>
-
   </div>
   <div id="sb-menu-lotte">
     <div class="sb-card sb-card-main">
@@ -1221,6 +1231,21 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
     </div>
     </div>
   </div>
+
+  <!-- ── ADMIN (공통 — 쿠팡/롯데마트 어느 브랜드에서도 표시) ── -->
+  <div id="sb-admin-menu" style="display:none;">
+    <div class="sb-divider"></div>
+    <div class="sb-card sb-card-admin">
+    <div class="sb-section">ADMIN</div>
+    <div class="sb-item" onclick="openPermPanel()">
+      <span class="sb-item-icon">⚙</span>권한관리
+    </div>
+    <div class="sb-item" data-page="updatereq" onclick="openUpdateReqPage()">
+      <span class="sb-item-icon">📝</span>업데이트 요청
+    </div>
+    </div>
+  </div>
+
   </div>
 
   <div class="sb-divider" style="margin:8px 0 4px;"></div>
@@ -1701,7 +1726,7 @@ function openMiChulgoSettings(event){
     <div style="${rowStyle}">조건2: 잔여수량 ≤ <input id="mc-c2rem" type="number" value="${c.c2Rem}" style="${inputStyle}"> 이고 발주수량 ≥ <input id="mc-c2qty" type="number" value="${c.c2Qty}" style="${inputStyle}"></div>
     <div style="text-align:right;margin-top:10px;display:flex;justify-content:flex-end;gap:6px;">
       <button onclick="_resetMiChulgoCriteria()" style="font-size:12px;padding:4px 12px;border:1px solid #E0E5FF;background:#fff;color:#4A5568;border-radius:5px;cursor:pointer;">기본값</button>
-      <button onclick="_saveMiChulgoCriteria()" style="font-size:12px;padding:4px 14px;border:none;background:#4F2FA8;color:#fff;border-radius:5px;cursor:pointer;font-weight:700;">저장</button>
+      <button onclick="_saveMiChulgoCriteria()" style="font-size:12px;padding:4px 14px;border:none;background:#2D1660;color:#fff;border-radius:5px;cursor:pointer;font-weight:700;">저장</button>
       <button onclick="document.getElementById('_michulgo-pop_').remove()" style="font-size:12px;padding:4px 14px;border:none;background:#EDF2F7;border-radius:5px;cursor:pointer;">닫기</button>
     </div>`;
   const rect=event.currentTarget.getBoundingClientRect();
@@ -1938,7 +1963,7 @@ async function _registerUser() {
 }
 
 // ── 권한 로드 ──
-const _ALL_PERM_KEYS = ['main_upload','main_extract','session_view','data_export','data_import','outgoing_mkt','delivery_view','delivery_sales','settlement_view','product_list_edit','data_upload','sales_upload'];
+const _ALL_PERM_KEYS = ['main_upload','main_extract','session_view','data_export','data_import','outgoing_mkt','delivery_view','delivery_sales','delivery_returnerr','settlement_view','product_list_edit','data_upload','sales_upload','lotte_upload','lotte_product_edit'];
 
 async function _loadPermissions() {
   const defaultPerms = () => Object.fromEntries(_ALL_PERM_KEYS.map(k => [k, false]));
@@ -2032,13 +2057,23 @@ const _PERM_GROUPS = [
     { key:'data_upload',       label:'CSVS리스트/쿠팡 상품공급상태 업로드', type:'사용/미사용' },
     { key:'sales_upload',      label:'매출 데이터 업로드/삭제', type:'사용/미사용' },
   ]},
+  { label:'🏬 롯데마트', perms:[
+    { key:'lotte_upload',       label:'데이터 업로드(기본데이터/센터별 발주)', type:'사용/미사용' },
+    { key:'lotte_product_edit', label:'상품 추가/수정/삭제', type:'수정/미수정' },
+  ]},
 ];
+
+let _permSelectedUserId = null;
+let _permUsersCache = [];
+let _permMapCache = {};
 
 async function _renderPermPanel() {
   const sb = _getSupabase();
-  const body = document.getElementById('perm-panel-body');
-  if (!sb || !body) return;
-  body.innerHTML = '<div style="color:#A0AEC0;font-size:12px;padding:20px;text-align:center;">불러오는 중...</div>';
+  const listEl = document.getElementById('perm-acct-list');
+  const detailEl = document.getElementById('perm-detail-panel');
+  if (!sb || !listEl || !detailEl) return;
+  listEl.innerHTML = '<div style="color:#A0AEC0;font-size:12px;padding:20px;text-align:center;">불러오는 중...</div>';
+  detailEl.innerHTML = '';
 
   const [{ data: users }, { data: perms }] = await Promise.all([
     sb.from('gabe_users').select('user_id, email, is_admin').order('created_at'),
@@ -2046,7 +2081,7 @@ async function _renderPermPanel() {
   ]);
 
   if (!users || users.length === 0) {
-    body.innerHTML = '<div style="color:#A0AEC0;font-size:12px;padding:20px;text-align:center;">등록된 사용자가 없습니다.</div>';
+    listEl.innerHTML = '<div style="color:#A0AEC0;font-size:12px;padding:20px;text-align:center;">등록된 사용자가 없습니다.</div>';
     return;
   }
 
@@ -2055,71 +2090,98 @@ async function _renderPermPanel() {
     if (!permMap[p.user_id]) permMap[p.user_id] = {};
     permMap[p.user_id][p.page] = p.can_edit;
   });
+  _permUsersCache = users;
+  _permMapCache = permMap;
 
-  // 모든 권한 키 수집
-  const allPerms = _PERM_GROUPS.flatMap(g => g.perms);
+  if (!_permSelectedUserId || !users.some(u => u.user_id === _permSelectedUserId)) {
+    _permSelectedUserId = users[0].user_id;
+  }
 
-  let html = `<div style="overflow-x:auto;">
-  <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:600px;">
-    <thead>
-      <tr style="background:#4F2FA8;">
-        <th style="padding:8px 12px;text-align:left;color:#fff;font-weight:700;white-space:nowrap;position:sticky;left:0;background:#4F2FA8;z-index:1;">계정</th>`;
+  _renderPermAcctList();
+  _renderPermDetail();
+}
 
-  // 그룹 헤더
-  _PERM_GROUPS.forEach(g => {
-    html += `<th colspan="${g.perms.length}" style="padding:6px 8px;text-align:center;color:#C3CBFF;font-weight:700;font-size:11px;border-left:2px solid rgba(255,255,255,0.15);">${g.label}</th>`;
-  });
-  html += `<th style="padding:8px;text-align:center;color:#FCA5A5;font-weight:700;border-left:2px solid rgba(255,255,255,0.15);">관리자</th></tr>
-
-      <tr style="background:#F4F6F9;">
-        <th style="padding:6px 12px;position:sticky;left:0;background:#F4F6F9;z-index:1;"></th>`;
-
-  // 권한 이름 헤더
-  _PERM_GROUPS.forEach((g, gi) => {
-    g.perms.forEach((p, pi) => {
-      html += `<th style="padding:6px 7px;text-align:center;font-size:10px;color:#4A5568;white-space:nowrap;${pi===0?'border-left:2px solid #C3CBFF;':''}">${p.label}<br><span style="color:#A0AEC0;font-weight:400;">${p.type}</span></th>`;
-    });
-  });
-  html += `<th style="padding:6px 7px;font-size:10px;color:#E53E3E;text-align:center;border-left:2px solid #C3CBFF;"></th></tr>
-    </thead><tbody>`;
-
-  users.forEach(u => {
+function _renderPermAcctList() {
+  const listEl = document.getElementById('perm-acct-list');
+  if (!listEl) return;
+  listEl.innerHTML = _permUsersCache.map(u => {
     const isSelf = u.user_id === _currentUser.id;
-    html += `<tr style="border-bottom:1px solid #EDF2F7;${isSelf?'background:#EEF2FF;':''}">
-      <td style="padding:7px 12px;color:#2D3748;font-size:12px;white-space:nowrap;position:sticky;left:0;background:${isSelf?'#EEF2FF':'#fff'};z-index:1;">
-        ${u.email}${isSelf?' <span style="font-size:10px;color:#4318FF;font-weight:700;">(나)</span>':''}
-        ${u.is_admin?'<span style="font-size:10px;color:#E53E3E;font-weight:700;margin-left:4px;">[관리자]</span>':''}
-      </td>`;
+    const active = u.user_id === _permSelectedUserId;
+    return `<div class="pm-acct${active?' active':''}" onclick="selectPermAcct('${u.user_id}')">
+      <div class="pm-dot"></div>
+      <div class="pm-info">
+        <div class="pm-email">${u.email}${isSelf?' <span style="color:#4318FF;font-weight:700;">(나)</span>':''}</div>
+        ${u.is_admin?'<span class="pm-tag">관리자</span>':''}
+      </div>
+    </div>`;
+  }).join('');
+}
 
-    _PERM_GROUPS.forEach((g, gi) => {
-      g.perms.forEach((p, pi) => {
-        const checked = u.is_admin || permMap[u.user_id]?.[p.key] || false;
-        html += `<td style="padding:7px;text-align:center;${pi===0?'border-left:2px solid #E0E5FF;':''}">
-          <input type="checkbox" ${checked?'checked':''} ${u.is_admin?'disabled title="관리자는 모든 권한 자동 보유"':''}
-            onchange="setPermission('${u.user_id}','${u.email}','${p.key}',this.checked)"
-            style="width:15px;height:15px;cursor:${u.is_admin?'default':'pointer'};">
-        </td>`;
-      });
+function selectPermAcct(userId) {
+  _permSelectedUserId = userId;
+  _renderPermAcctList();
+  _renderPermDetail();
+}
+
+function _renderPermDetail() {
+  const detailEl = document.getElementById('perm-detail-panel');
+  if (!detailEl) return;
+  const u = _permUsersCache.find(x => x.user_id === _permSelectedUserId);
+  if (!u) { detailEl.innerHTML = ''; return; }
+  const isSelf = u.user_id === _currentUser.id;
+
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #EDF2F7;flex-wrap:wrap;gap:10px;">
+    <div style="font-size:15px;font-weight:800;color:#1B2559;">${u.email}${u.is_admin?'<span style="font-size:10px;color:#E53E3E;font-weight:700;margin-left:6px;background:#FFF5F5;padding:2px 7px;border-radius:8px;">관리자</span>':''}</div>
+    <div style="display:flex;align-items:center;gap:14px;">
+      ${!u.is_admin?`<button onclick="grantAllPermissions('${u.user_id}','${u.email}')" style="font-size:11px;padding:6px 12px;border-radius:8px;border:1px solid #2D1660;background:#fff;color:#2D1660;cursor:pointer;font-weight:600;">전체 권한주기</button>`:''}
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#4A5568;font-weight:600;">
+        관리자 지정
+        <label class="pm-switch"><input type="checkbox" ${u.is_admin?'checked':''} ${isSelf?'disabled title="본인 관리자 권한 변경 불가"':''} onchange="setAdminStatus('${u.user_id}',this.checked,this)"><span class="pm-slider"></span></label>
+      </div>
+    </div>
+  </div>`;
+
+  _PERM_GROUPS.forEach(g => {
+    html += `<div style="margin-bottom:18px;">
+      <div style="font-size:12px;font-weight:700;color:#1B2559;margin-bottom:8px;">${g.label}</div>`;
+    g.perms.forEach(p => {
+      const checked = u.is_admin || _permMapCache[u.user_id]?.[p.key] || false;
+      html += `<div class="pm-row">
+        <span class="pm-label">${p.label} <span class="pm-type">(${p.type})</span></span>
+        <label class="pm-switch"><input type="checkbox" ${checked?'checked':''} ${u.is_admin?'disabled title="관리자는 모든 권한 자동 보유"':''} onchange="setPermission('${u.user_id}','${u.email}','${p.key}',this.checked)"><span class="pm-slider"></span></label>
+      </div>`;
     });
-
-    html += `<td style="padding:7px;text-align:center;border-left:2px solid #E0E5FF;">
-      <input type="checkbox" ${u.is_admin?'checked':''} ${isSelf?'disabled title="본인 관리자 권한 변경 불가"':''}
-        onchange="setAdminStatus('${u.user_id}',this.checked,this)"
-        style="width:15px;height:15px;cursor:${isSelf?'default':'pointer'};accent-color:#E53E3E;">
-    </td></tr>`;
+    html += `</div>`;
   });
 
-  html += '</tbody></table></div>';
-  body.innerHTML = html;
+  detailEl.innerHTML = html;
 }
 
 async function setPermission(userId, email, page, canEditVal) {
   const sb = _getSupabase();
   if (!sb) return;
+  if (!_permMapCache[userId]) _permMapCache[userId] = {};
+  _permMapCache[userId][page] = canEditVal;
   await sb.from('gabe_permissions').upsert(
     { user_id: userId, email: email, page: page, can_edit: canEditVal },
     { onConflict: 'user_id,page' }
   );
+}
+
+async function grantAllPermissions(userId, email) {
+  if (!confirm(email + ' 계정에 모든 권한을 부여할까요?')) return;
+  const sb = _getSupabase();
+  if (!sb) return;
+  const allKeys = _PERM_GROUPS.flatMap(g => g.perms.map(p => p.key));
+  await Promise.all(allKeys.map(key =>
+    sb.from('gabe_permissions').upsert(
+      { user_id: userId, email: email, page: key, can_edit: true },
+      { onConflict: 'user_id,page' }
+    )
+  ));
+  if (!_permMapCache[userId]) _permMapCache[userId] = {};
+  allKeys.forEach(key => { _permMapCache[userId][key] = true; });
+  _renderPermDetail();
 }
 
 async function setAdminStatus(userId, isAdminVal, checkbox) {
@@ -3460,9 +3522,9 @@ function renderSessionList(){
   const years=Object.keys(byYear).sort((a,b)=>a-b);
   if(ssSelYear && !byYear[ssSelYear]){ ssSelYear=''; ssSelMonth=''; }
 
-  const AY='font-size:12px;padding:5px 14px;border-radius:4px;cursor:pointer;font-weight:700;border:none;background:#4F2FA8;color:#fff;box-shadow:0 2px 8px rgba(26,48,96,0.28);letter-spacing:0.3px;';
+  const AY='font-size:12px;padding:5px 14px;border-radius:4px;cursor:pointer;font-weight:700;border:none;background:#2D1660;color:#fff;box-shadow:0 2px 8px rgba(26,48,96,0.28);letter-spacing:0.3px;';
   const IY='font-size:12px;padding:5px 14px;border-radius:4px;cursor:pointer;font-weight:600;border:2px solid #1B2559;background:#fff;color:#1B2559;';
-  const AM='font-size:12px;padding:4px 0;width:38px;text-align:center;border-radius:4px;cursor:pointer;font-weight:700;border:none;background:#4F2FA8;color:#fff;box-shadow:0 2px 6px rgba(26,48,96,0.22);';
+  const AM='font-size:12px;padding:4px 0;width:38px;text-align:center;border-radius:4px;cursor:pointer;font-weight:700;border:none;background:#2D1660;color:#fff;box-shadow:0 2px 6px rgba(26,48,96,0.22);';
   const IM='font-size:12px;padding:4px 0;width:38px;text-align:center;border-radius:4px;cursor:pointer;font-weight:600;border:1.5px solid #c3d4e8;background:#f3f7ff;color:#1B2559;';
 
   let html='';
@@ -3589,7 +3651,7 @@ function renderSessionList(){
       return qty>0?`${a}<br><span style="color:#A0AEC0;font-size:10px;">(${qty.toLocaleString('ko-KR')})</span>`:a;
     };
     html+=`<div style="margin-top:4px;border:1px solid #d0d8f0;border-radius:5px;overflow:hidden;font-size:11px;">
-      <div style="background:#4F2FA8;color:#fff;padding:3px 6px;font-weight:700;">${ssSelYear}년 ${parseInt(ssSelMonth)}월 합계</div>
+      <div style="background:#2D1660;color:#fff;padding:3px 6px;font-weight:700;">${ssSelYear}년 ${parseInt(ssSelMonth)}월 합계</div>
       <div style="display:flex;flex-wrap:wrap;">
         <div style="flex:1;min-width:60px;padding:4px 6px;text-align:center;background:#f4f6fb;">
           <div style="color:#4A5568;margin-bottom:2px;">발주금액</div>
@@ -3703,7 +3765,7 @@ function renderAnnualPanel(){
   years.forEach(y=>{
     const active=y===selYear;
     const arrow=active?(isExpanded?'▲':'▼'):'';
-    const aYS=active?'font-size:11px;padding:6px 18px;border-radius:6px;cursor:pointer;font-weight:700;border:none;background:#4F2FA8;color:#fff;box-shadow:0 2px 6px rgba(26,48,96,.25);':'font-size:11px;padding:6px 18px;border-radius:6px;cursor:pointer;font-weight:600;border:2px solid #1B2559;background:#fff;color:#1B2559;';
+    const aYS=active?'font-size:11px;padding:6px 18px;border-radius:6px;cursor:pointer;font-weight:700;border:none;background:#2D1660;color:#fff;box-shadow:0 2px 6px rgba(26,48,96,.25);':'font-size:11px;padding:6px 18px;border-radius:6px;cursor:pointer;font-weight:600;border:2px solid #1B2559;background:#fff;color:#1B2559;';
     html+=`<button onclick="annualSelYear('${y}')" style="${aYS}">${y}년 ${arrow}</button>`;
   });
   html+=`</div>`;
@@ -4103,7 +4165,7 @@ function renderReturnErrPanel(){
   if(!returnErrSelYear||!years.includes(returnErrSelYear)) returnErrSelYear=years[years.length-1];
   const mn=byYear[returnErrSelYear]||{};
 
-  const AY='font-size:11px;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:700;border:none;background:#4F2FA8;color:#fff;box-shadow:0 2px 6px rgba(26,48,96,.25);';
+  const AY='font-size:11px;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:700;border:none;background:#2D1660;color:#fff;box-shadow:0 2px 6px rgba(26,48,96,.25);';
   const IY='font-size:11px;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:600;border:2px solid #1B2559;background:#fff;color:#1B2559;';
   navEl.innerHTML='<div style="display:flex;gap:4px;flex-wrap:wrap;">'+
     years.map(y=>`<button onclick="returnErrSelYearSet('${y}')" style="${y===returnErrSelYear?AY:IY}">${y}년</button>`).join('')+
@@ -4314,7 +4376,7 @@ function _renderReturnErrPopupContent(year,monthLabel){
         <button onclick="addReturnErrRow()" style="font-size:11px;padding:6px 14px;border-radius:6px;border:1px solid #1B2559;background:#fff;color:#1B2559;cursor:pointer;font-weight:600;">+ 행 추가</button>
         <button onclick="consolidateReturnErrDeliveryFee()" style="font-size:11px;padding:6px 14px;border-radius:6px;border:1px solid #7B5FC0;background:#fff;color:#7B5FC0;cursor:pointer;font-weight:600;">📦 선택 행 택배비 통합</button>
       </div>
-      <button onclick="saveReturnErrPopup()" style="font-size:12px;padding:6px 18px;border-radius:6px;border:none;background:#7048C8;color:#fff;cursor:pointer;font-weight:700;">💾 저장</button>
+      <button onclick="saveReturnErrPopup()" style="font-size:12px;padding:6px 18px;border-radius:6px;border:none;background:#2D1660;color:#fff;cursor:pointer;font-weight:700;">💾 저장</button>
     </div>`;
   }
   document.getElementById('return-err-popup-content').innerHTML=html;
@@ -5833,7 +5895,7 @@ function renderSummaryTable(){
 
   function makeTable(items, hdrColor){
     let t=`<table style="border-collapse:collapse;font-size:11px;width:100%;">`;
-    t+=`<thead><tr style="background:${hdrColor||'#4F2FA8'};">`;
+    t+=`<thead><tr style="background:${hdrColor||'#2D1660'};">`;
     ['내용','금액','수량'].forEach(h=>{t+=`<th style="padding:5px 10px;border:1px solid #aaa;white-space:nowrap;color:#fff;font-weight:700;font-size:12px;">${h}</th>`;});
     t+='</tr></thead><tbody>';
     items.forEach(([label,amt,qty,bg])=>{
@@ -5862,7 +5924,7 @@ function renderSummaryTable(){
   // 왼쪽: 발주리스트 합계
   let leftHtml=`<div style="flex:1;min-width:0;">
     <p class="sec-label">합계</p><p class="sec-title">발주리스트 합계</p>
-    ${makeTable(sumItems,'#4F2FA8')}
+    ${makeTable(sumItems,'#2D1660')}
   </div>`;
 
   // 오른쪽: 발주취소 발주서 합계 (해당 데이터 있을 때만)
@@ -6399,7 +6461,7 @@ function _llMakeCenterTab(c){
   const cnt=_llPalletCount[safeC]||1;
   const cEsc=c.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   return `<div style="display:inline-flex;align-items:center;gap:4px;padding:2px 0;">
-    <button data-center="${cEsc}" onclick="llSelectCenter('${cEsc}')" style="font-size:13px;padding:6px 14px;border-radius:20px;border:1px solid ${active?'#7B2FBE':'#ccc'};background:${active?'#7B2FBE':'#fff'};color:${active?'#fff':'#555'};cursor:pointer;font-weight:${active?'700':'400'};">${c}</button>
+    <button data-center="${cEsc}" onclick="llSelectCenter('${cEsc}')" style="font-size:13px;padding:6px 14px;border-radius:20px;border:1px solid ${active?'#2D1660':'#ccc'};background:${active?'#2D1660':'#fff'};color:${active?'#fff':'#555'};cursor:pointer;font-weight:${active?'700':'400'};">${c}</button>
     <input type="number" min="1" value="${cnt}" oninput="llSetPalletCount('${safeC}',this.value)" style="width:40px;font-size:12px;text-align:center;border:1px solid #C0C8FF;border-radius:6px;padding:3px 4px;outline:none;" title="파렛트 수량">
     <span style="font-size:11px;color:#888;">Pallet</span>
   </div>`;
@@ -6421,9 +6483,9 @@ function llSelectCenter(c){
   if(tabsEl){
     tabsEl.querySelectorAll('button[data-center]').forEach(b=>{
       const sel=b.dataset.center===c;
-      b.style.background=sel?'#7B2FBE':'#fff';
+      b.style.background=sel?'#2D1660':'#fff';
       b.style.color=sel?'#fff':'#555';
-      b.style.borderColor=sel?'#7B2FBE':'#ccc';
+      b.style.borderColor=sel?'#2D1660':'#ccc';
       b.style.fontWeight=sel?'700':'400';
     });
   }
@@ -6497,7 +6559,7 @@ function renderLoadingListTable(){
                 <span style="font-size:11px;color:#bbb;padding:0 1px;user-select:none;">~</span>
                 <input id="llbe_${safeIdx}" type="number" min="1" value="${bd.boxEnd||''}" oninput="llSetBox('${keyEsc}',${si},'boxEnd',this.value)" placeholder="끝" style="width:46px;border:none;outline:none;text-align:center;padding:5px 4px;font-size:13px;background:transparent;">
               </div>
-              <button onclick="llAddBoxRow('${keyEsc}')" title="박스 행 추가" style="background:#7B2FBE;border:none;color:#fff;font-size:14px;font-weight:700;width:26px;height:28px;border-radius:6px;cursor:pointer;line-height:1;flex-shrink:0;">+</button>
+              <button onclick="llAddBoxRow('${keyEsc}')" title="박스 행 추가" style="background:#2D1660;border:none;color:#fff;font-size:14px;font-weight:700;width:26px;height:28px;border-radius:6px;cursor:pointer;line-height:1;flex-shrink:0;">+</button>
               ${entries.length>1?`<button onclick="llRemoveBoxRow('${keyEsc}',${si})" title="행 삭제" style="background:#e74c3c;border:none;color:#fff;font-size:13px;font-weight:700;width:26px;height:28px;border-radius:6px;cursor:pointer;line-height:1;flex-shrink:0;">−</button>`:''}
             </div>
           </td>
@@ -6537,7 +6599,7 @@ function renderLoadingListTable(){
       <div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;">
         <span style="font-size:12px;font-weight:700;color:#7B2FBE;white-space:nowrap;padding-top:3px;">📦 파렛트별 BOX 설정</span>
         <div style="display:flex;flex-direction:column;gap:4px;">${rangeInputs}</div>
-        <button onclick="llAutoAssignPallets('${cEscLL}')" style="background:#7B2FBE;border:none;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;align-self:flex-end;">자동 배정</button>
+        <button onclick="llAutoAssignPallets('${cEscLL}')" style="background:#2D1660;border:none;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;align-self:flex-end;">자동 배정</button>
       </div>
       <div style="margin-top:5px;font-size:11px;color:#A0AEC0;">연속: 시작~끝 범위 입력 / 개별: 박스번호를 쉼표로 구분 (예: 1,4,6 또는 1~3,7,10~12) · 둘 다 입력 가능</div>
     </div>`;
@@ -8006,6 +8068,7 @@ function _lotteFindBaseSheet(wb){
 function handleLotteBaseUpload(e){
   const file=e.target.files[0];
   if(!file) return;
+  if(!canEdit('lotte_upload')){ alert('롯데마트 데이터 업로드 권한이 없습니다.'); e.target.value=''; return; }
   const reader=new FileReader();
   reader.onload=function(ev){
     try{
@@ -8120,6 +8183,7 @@ function closeLotteProductModal(){
   document.getElementById('lotte-product-modal').style.display='none';
 }
 function saveLotteProduct(){
+  if(!canEdit('lotte_product_edit')){ alert('롯데마트 상품 수정 권한이 없습니다.'); return; }
   const orig=document.getElementById('lp-orig-barcode').value.trim();
   const barcode=document.getElementById('lp-barcode').value.trim().replace(/\s+/g,'');
   const spec=document.getElementById('lp-spec').value.trim();
@@ -8142,6 +8206,7 @@ function saveLotteProduct(){
   _lotteRenderBaseSummary();
 }
 function deleteLotteProduct(barcode){
+  if(!canEdit('lotte_product_edit')){ alert('롯데마트 상품 수정 권한이 없습니다.'); return; }
   if(!confirm(`'${barcode}' 상품을 삭제할까요?`)) return;
   const db=lotteBaseLoad();
   delete db[barcode];
@@ -8190,6 +8255,7 @@ function _lotteComputeCenterResult(rows){
 function handleLotteOrderUpload(center,e){
   const file=e.target.files[0];
   if(!file) return;
+  if(!canEdit('lotte_upload')){ alert('롯데마트 데이터 업로드 권한이 없습니다.'); e.target.value=''; return; }
   const reader=new FileReader();
   reader.onload=function(ev){
     try{
@@ -8224,6 +8290,7 @@ function _lotteSaveOrderResult(center,fileName,rows){
 function handleLotteOrderUploadMulti(e){
   const files=[...e.target.files];
   if(!files.length) return;
+  if(!canEdit('lotte_upload')){ alert('롯데마트 데이터 업로드 권한이 없습니다.'); e.target.value=''; return; }
   let pending=files.length;
   const done=()=>{
     pending--;
@@ -8250,6 +8317,7 @@ function handleLotteOrderUploadMulti(e){
 }
 
 function deleteLotteCenterOrder(center){
+  if(!canEdit('lotte_upload')){ alert('롯데마트 데이터 업로드 권한이 없습니다.'); return; }
   if(!confirm('업로드한 발주서를 삭제할까요? ERP 등록용 추출 결과도 함께 사라집니다.')) return;
   lotteCenterSave(center,null);
   _lotteRenderCenterPage(center);
@@ -8286,7 +8354,7 @@ function _lotteRenderCenterPage(center){
     <div class="t" style="display:flex;align-items:center;justify-content:space-between;">
       <span>ERP 등록용 추출 결과</span>
       <div style="display:flex;gap:8px;">
-        <button onclick="downloadLotteErp('${center}')" style="height:30px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#4318FF;color:#fff;cursor:pointer;">📥 엑셀 다운로드</button>
+        <button onclick="downloadLotteErp('${center}')" style="height:30px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">📥 엑셀 다운로드</button>
         <button onclick="deleteLotteCenterOrder('${center}')" style="height:30px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:1.5px solid #FCA5A5;background:#fff;color:#DC2626;cursor:pointer;">🗑 삭제</button>
       </div>
     </div>
@@ -8607,7 +8675,7 @@ function showMktEdit(event, date, skuId, field, currentVal) {
   btnRow.style.cssText = 'display:flex;gap:6px;margin-top:8px;justify-content:flex-end;';
   const btnSave = document.createElement('button');
   btnSave.textContent = '저장';
-  btnSave.style.cssText = 'font-size:12px;padding:3px 12px;border-radius:5px;border:none;background:#4F2FA8;color:#fff;cursor:pointer;';
+  btnSave.style.cssText = 'font-size:12px;padding:3px 12px;border-radius:5px;border:none;background:#2D1660;color:#fff;cursor:pointer;';
   btnSave.onclick = save;
   const btnClear = document.createElement('button');
   btnClear.textContent = '지우기';
@@ -8717,7 +8785,7 @@ function renderOutgoingTable(){
     const borderB=i<datesInGroup.length-1?'border-bottom:1px solid #EDE9FF;':'';
     return `<button onclick="outgoingSelMonth='${m}';renderOutgoingTable();"
       style="display:block;width:100%;text-align:left;font-size:12px;padding:7px 14px;border:none;${borderB}
-      background:${active?'#4F2FA8':'#fff'};color:${active?'#fff':'#333'};cursor:pointer;font-weight:${active?'700':'400'};
+      background:${active?'#2D1660':'#fff'};color:${active?'#fff':'#333'};cursor:pointer;font-weight:${active?'700':'400'};
       white-space:nowrap;">${label}</button>`;
   }).join('');
   // 월 버튼 — 각 버튼 아래에 드롭다운 부착
@@ -8726,16 +8794,16 @@ function renderOutgoingTable(){
     const active=mg===outgoingSelMonthGroup;
     const dropdown=active&&datesInGroup.length?
       `<div style="position:absolute;top:calc(100% + 6px);left:0;z-index:300;
-        background:#fff;border:1.5px solid #4F2FA8;border-radius:6px;overflow:hidden;
+        background:#fff;border:1.5px solid #2D1660;border-radius:6px;overflow:hidden;
         box-shadow:0 8px 24px rgba(79,47,168,.25);">
-        <div style="background:#4F2FA8;padding:5px 14px;font-size:11px;font-weight:700;color:#fff;letter-spacing:.5px;">${mo}월</div>
+        <div style="background:#2D1660;padding:5px 14px;font-size:11px;font-weight:700;color:#fff;letter-spacing:.5px;">${mo}월</div>
         ${dateCells}
       </div>`:'' ;
     return `<div style="position:relative;display:inline-block;">
       <button onclick="outgoingSelectMonthGroup('${mg}')"
         style="font-size:12px;padding:5px 20px;border-radius:4px;
-        border:2px solid ${active?'#4F2FA8':'#ddd'};
-        background:${active?'#4F2FA8':'#fff'};
+        border:2px solid ${active?'#2D1660':'#ddd'};
+        background:${active?'#2D1660':'#fff'};
         color:${active?'#fff':'#555'};cursor:pointer;font-weight:${active?'700':'400'};">
         ${mo}월 ${active?'▾':'▸'}
       </button>
@@ -8772,7 +8840,7 @@ function renderOutgoingTable(){
   const [sy,smo,sdd]=outgoingSelMonth.split('-');
   const selDateLabel=outgoingSelMonth?`${parseInt(smo)}월 ${parseInt(sdd)}일`:'';
   statsEl.innerHTML=
-    (selDateLabel?`<div class="stat" style="background:#4F2FA8;border-color:#4F2FA8;"><div class="sl" style="color:rgba(255,255,255,.7);">선택 날짜</div><div class="sv" style="color:#fff;">${selDateLabel}</div></div>`:'')+
+    (selDateLabel?`<div class="stat"><div class="sl">선택 날짜</div><div class="sv">${selDateLabel}</div></div>`:'')+
     `<div class="stat"><div class="sl">총 SKU 수</div><div class="sv">${merged.length.toLocaleString('ko-KR')}</div></div>`+
     `<div class="stat"><div class="sl">총 발주수량</div><div class="sv">${totalQty.toLocaleString('ko-KR')}</div></div>`+
     (totalAmt>0?`<div class="stat"><div class="sl">총 금액</div><div class="sv" style="color:#c0392b;">₩${totalAmt.toLocaleString('ko-KR')}</div></div>`:'');
@@ -9404,9 +9472,9 @@ function renderSalesPanel(){
   if(salesSelMonth&&!(byYear[salesSelYear]||{})[salesSelMonth]) salesSelMonth='';
   if(!salesSelMonth&&months.length) salesSelMonth=months[months.length-1];
 
-  const AY='font-size:12px;padding:6px 18px;border-radius:6px;cursor:pointer;font-weight:700;border:none;background:#4F2FA8;color:#fff;box-shadow:0 2px 6px rgba(26,48,96,.25);';
+  const AY='font-size:12px;padding:6px 18px;border-radius:6px;cursor:pointer;font-weight:700;border:none;background:#2D1660;color:#fff;box-shadow:0 2px 6px rgba(26,48,96,.25);';
   const IY='font-size:12px;padding:6px 18px;border-radius:6px;cursor:pointer;font-weight:600;border:2px solid #1B2559;background:#fff;color:#1B2559;';
-  const AM='font-size:12px;padding:5px 14px;border-radius:6px;cursor:pointer;font-weight:700;border:none;background:#4F2FA8;color:#fff;box-shadow:0 2px 5px rgba(26,48,96,.2);';
+  const AM='font-size:12px;padding:5px 14px;border-radius:6px;cursor:pointer;font-weight:700;border:none;background:#2D1660;color:#fff;box-shadow:0 2px 5px rgba(26,48,96,.2);';
   const IM='font-size:12px;padding:5px 14px;border-radius:6px;cursor:pointer;font-weight:600;border:1.5px solid #a0b4d0;background:#EEF2FF;color:#1B2559;';
 
   let nav='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px;">';
@@ -9830,7 +9898,7 @@ function showCancelDetail(event, title, dataStr){
     <button onclick="document.getElementById('_cancel_detail_pop_').remove()" style="border:none;background:#EDF2F7;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;">✕</button>
   </div>
   <table style="width:100%;border-collapse:collapse;font-size:11px;">
-    <thead><tr style="background:#4F2FA8;">
+    <thead><tr style="background:#2D1660;">
       <th style="padding:5px 8px;text-align:left;color:#fff;font-weight:700;">상품명</th>
       <th style="padding:5px 8px;text-align:right;color:#fff;font-weight:700;white-space:nowrap;">발주량</th>
       <th style="padding:5px 8px;text-align:right;color:#fff;font-weight:700;white-space:nowrap;">금액</th>
@@ -9873,7 +9941,7 @@ function _renderCancelTable(rows, title){
     <button onclick="document.getElementById('_cancel_detail_side_').style.display='none'" style="border:none;background:#e8edf5;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:10px;line-height:18px;">✕</button>
   </div>
   <table style="width:100%;border-collapse:collapse;font-size:10px;">
-    <thead><tr style="background:#4F2FA8;">
+    <thead><tr style="background:#2D1660;">
       <th style="${thS}text-align:center;">발주번호</th>
       <th style="${thS}text-align:center;">센터명</th>
       <th style="${thS}text-align:center;">SKU ID</th>
@@ -10172,8 +10240,8 @@ function _buildOrderListHTML(rec, onlyMissing=false){
   };
 
   const hdrs=['미출고사유','no','발주번호','발주유형','SKU ID','SKU 이름','SKU Barcode','물류센터','발주일','발주수량','매입가','총발주 매입금','출고매입가','마진율'];
-  const thS='padding:7px 10px;text-align:center;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;border-right:1px solid #5A40C0;background:#4F2FA8;';
-  const thR='padding:7px 10px;text-align:right;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;border-right:1px solid #5A40C0;background:#4F2FA8;';
+  const thS='padding:7px 10px;text-align:center;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;border-right:1px solid #5A40C0;background:#2D1660;';
+  const thR='padding:7px 10px;text-align:right;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;border-right:1px solid #5A40C0;background:#2D1660;';
   const hdrHtml=hdrs.map((h,i)=>`<th style="${[9,10,11,12].includes(i)?thR:thS}">${h}</th>`).join('');
 
   // onlyMissing 모드: 이유 있는 행(미납품)만 추출, 원래 인덱스 유지
@@ -10349,7 +10417,7 @@ function _renderMonthPopupContent(year, monthLabel){
   <div style="overflow-x:auto;border-radius:8px;border:1px solid #dde3ee;margin-bottom:16px;">
   <table style="width:100%;border-collapse:collapse;font-size:11px;">
     <thead>
-      <tr style="background:#4F2FA8;">
+      <tr style="background:#2D1660;">
         <th style="${thL}">납품일</th>
         <th style="${thS}">발주량</th>
         <th style="${thS}">발주매입가</th>
@@ -10426,7 +10494,7 @@ function _renderMonthPopupContent(year, monthLabel){
   let t2=`<div style="font-size:12px;font-weight:700;color:#1B2559;margin-bottom:6px;padding:5px 10px;background:#FFF9C4;border-radius:6px;display:inline-block;">2. 미납품 사유별 데이터</div>
   <div style="overflow-x:auto;border-radius:8px;border:1px solid #dde3ee;margin-bottom:16px;">
   <table style="width:100%;border-collapse:collapse;font-size:11px;">
-    <thead><tr style="background:#4F2FA8;">
+    <thead><tr style="background:#2D1660;">
       <th style="${thL}">납품일</th>`;
   CAT_LABELS.forEach((lb,ci)=>{
     t2+=`<th style="${thS}">${lb}</th>`;
@@ -10923,7 +10991,7 @@ function smtRenderPage(){
   if(!months.includes(smtSelectedMonth)) smtSelectedMonth='전체';
   document.getElementById('smt-month-tabs').innerHTML=months.map(m=>{
     const active=m===smtSelectedMonth;
-    return `<button onclick="smtSetMonth('${m}')" style="font-size:12px;padding:4px 12px;border-radius:100px;border:1.5px solid ${active?'#4F2FA8':'#ddd'};background:${active?'#4F2FA8':'#fff'};color:${active?'#fff':'#555'};cursor:pointer;font-weight:${active?700:400};">${m==='전체'?'전체':smtFmtYM(m)}</button>`;
+    return `<button onclick="smtSetMonth('${m}')" style="font-size:12px;padding:4px 12px;border-radius:100px;border:1.5px solid ${active?'#2D1660':'#ddd'};background:${active?'#2D1660':'#fff'};color:${active?'#fff':'#555'};cursor:pointer;font-weight:${active?700:400};">${m==='전체'?'전체':smtFmtYM(m)}</button>`;
   }).join('');
   let tExp=0,tSet=0,nNoInv=0;
   Object.keys(orders).forEach(po=>{
@@ -11210,7 +11278,7 @@ document.getElementById('smt-fi-settle').addEventListener('change',function(e){
   <div style="padding:12px 24px;border-top:1px solid #E0E5FF;flex-shrink:0;display:flex;gap:10px;justify-content:flex-end;background:#F8F9FF;border-radius:0 0 16px 16px;">
     <button onclick="closeLoadingListModal()" style="padding:9px 20px;border:1px solid #ccc;background:#fff;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600;color:#555;">닫기</button>
     <button id="ll-save-btn" onclick="llSaveData()" style="padding:9px 20px;background:#2D3748;border:none;border-radius:8px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;">저장</button>
-    <button onclick="downloadLoadingList()" style="padding:9px 24px;background:#7B2FBE;border:none;border-radius:8px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;">적재리스트 생성 (.xlsx)</button>
+    <button onclick="downloadLoadingList()" style="padding:9px 24px;background:#2D1660;border:none;border-radius:8px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;">적재리스트 생성 (.xlsx)</button>
   </div>
 </div>
 <div id="productlist-page" style="display:none;position:fixed;top:0;left:250px;right:0;bottom:0;z-index:150;overflow-y:auto;">
