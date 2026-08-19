@@ -577,6 +577,27 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
   </div>
 </div>
 
+<div id="pm-profile-modal" style="display:none;position:fixed;inset:0;z-index:3400;background:rgba(27,37,89,.5);align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;width:400px;max-width:92vw;box-shadow:0 16px 48px rgba(27,37,89,.22);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #E0E5FF;">
+      <div style="font-size:14px;font-weight:800;color:#1B2559;">이름·직책 설정</div>
+      <button onclick="closeUserProfileEdit()" style="width:26px;height:26px;border-radius:50%;border:none;background:#F4F6F9;cursor:pointer;font-size:13px;">✕</button>
+    </div>
+    <div style="padding:18px 20px;">
+      <input type="hidden" id="pm-profile-uid">
+      <div id="pm-profile-email" style="font-size:11px;color:#A0AEC0;margin-bottom:14px;"></div>
+      <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">이름</label>
+      <input id="pm-profile-name" type="text" placeholder="예: 최민정" style="width:100%;box-sizing:border-box;height:34px;padding:0 10px;font-size:12px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:12px;">
+      <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">직책</label>
+      <input id="pm-profile-position" type="text" placeholder="예: 마케팅팀 매니저" style="width:100%;box-sizing:border-box;height:34px;padding:0 10px;font-size:12px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;">
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #EDF2F7;display:flex;justify-content:flex-end;gap:8px;">
+      <button onclick="closeUserProfileEdit()" style="padding:8px 16px;border-radius:8px;border:1px solid #E0E5FF;background:#fff;color:#4A5568;font-size:12px;font-weight:600;cursor:pointer;">취소</button>
+      <button onclick="saveUserProfile()" style="padding:8px 18px;border-radius:8px;border:none;background:#1B2559;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">저장</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── 업데이트 요청 페이지 ── -->
 <div id="updatereq-page">
   <div class="delivery-header">
@@ -1494,6 +1515,7 @@ const _SHARED_KEYS = [
   'gabe_basedata_margin_v1', // 기초데이터: 마진율
   'gabe_michulgo_criteria_v1', // 출고리스트: 미출고 기준값
   'gabe_update_log_v1',      // 업데이트 요청: 업데이트 내역
+  'gabe_user_profiles_v1',   // 권한관리: 계정별 이름/직책
 ];
 let _serverConnected = false;
 
@@ -2031,6 +2053,38 @@ function closePermPanel() {
   if (modal) modal.style.display = 'none';
 }
 
+// ── 계정별 이름/직책 ──
+const USER_PROFILE_LS_KEY='gabe_user_profiles_v1';
+function userProfileLoad(){ try{ return JSON.parse(localStorage.getItem(USER_PROFILE_LS_KEY)||'{}'); }catch(e){ return {}; } }
+function userProfileSave(d){ try{ localStorage.setItem(USER_PROFILE_LS_KEY,JSON.stringify(d)); }catch(e){} _sharedWrite(USER_PROFILE_LS_KEY,d); }
+// 표시용 이름 — 프로필에 이름을 등록했으면 이름, 아니면 이메일 앞부분
+function userDisplayName(userId, email){
+  const p=userProfileLoad()[userId];
+  return (p&&p.name) ? p.name : (email||'').split('@')[0];
+}
+
+function openUserProfileEdit(userId, email){
+  const p=userProfileLoad()[userId]||{};
+  document.getElementById('pm-profile-uid').value=userId;
+  document.getElementById('pm-profile-email').textContent=email;
+  document.getElementById('pm-profile-name').value=p.name||'';
+  document.getElementById('pm-profile-position').value=p.position||'';
+  document.getElementById('pm-profile-modal').style.display='flex';
+}
+function closeUserProfileEdit(){ document.getElementById('pm-profile-modal').style.display='none'; }
+function saveUserProfile(){
+  const userId=document.getElementById('pm-profile-uid').value;
+  const name=document.getElementById('pm-profile-name').value.trim();
+  const position=document.getElementById('pm-profile-position').value.trim();
+  const profiles=userProfileLoad();
+  if(!name&&!position) delete profiles[userId];
+  else profiles[userId]={name,position};
+  userProfileSave(profiles);
+  closeUserProfileEdit();
+  _renderPermAcctList();
+  _renderPermDetail();
+}
+
 const _PERM_GROUPS = [
   { label:'📋 발주리스트', perms:[
     { key:'main_upload',  label:'파일 등록',  type:'사용/미사용' },
@@ -2104,15 +2158,22 @@ async function _renderPermPanel() {
 function _renderPermAcctList() {
   const listEl = document.getElementById('perm-acct-list');
   if (!listEl) return;
+  const profiles = userProfileLoad();
   listEl.innerHTML = _permUsersCache.map(u => {
     const isSelf = u.user_id === _currentUser.id;
     const active = u.user_id === _permSelectedUserId;
+    const p = profiles[u.user_id];
+    const hasProfile = p && (p.name || p.position);
+    const nameLine = hasProfile
+      ? `<div class="pm-email">${p.name||u.email}${isSelf?' <span style="color:#4318FF;font-weight:700;">(나)</span>':''}</div><div style="font-size:10px;color:#A0AEC0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${[p.position,u.email].filter(Boolean).join(' · ')}</div>`
+      : `<div class="pm-email">${u.email}${isSelf?' <span style="color:#4318FF;font-weight:700;">(나)</span>':''}</div>`;
     return `<div class="pm-acct${active?' active':''}" onclick="selectPermAcct('${u.user_id}')">
       <div class="pm-dot"></div>
       <div class="pm-info">
-        <div class="pm-email">${u.email}${isSelf?' <span style="color:#4318FF;font-weight:700;">(나)</span>':''}</div>
+        ${nameLine}
         ${u.is_admin?'<span class="pm-tag">관리자</span>':''}
       </div>
+      <button onclick="event.stopPropagation();openUserProfileEdit('${u.user_id}','${u.email}')" title="이름·직책 설정" style="border:none;background:none;cursor:pointer;font-size:12px;color:#A0AEC0;padding:2px 4px;flex-shrink:0;">✎</button>
     </div>`;
   }).join('');
 }
@@ -2129,9 +2190,13 @@ function _renderPermDetail() {
   const u = _permUsersCache.find(x => x.user_id === _permSelectedUserId);
   if (!u) { detailEl.innerHTML = ''; return; }
   const isSelf = u.user_id === _currentUser.id;
+  const p = userProfileLoad()[u.user_id];
+  const nameHtml = (p && (p.name||p.position))
+    ? `${p.name||u.email}${p.position?` <span style="font-size:12px;color:#718096;font-weight:600;">· ${p.position}</span>`:''}<div style="font-size:11px;color:#A0AEC0;font-weight:400;margin-top:2px;">${u.email} <a onclick="openUserProfileEdit('${u.user_id}','${u.email}')" style="color:#4318FF;cursor:pointer;text-decoration:underline;font-weight:600;">수정</a></div>`
+    : `${u.email}<div style="font-size:11px;color:#A0AEC0;font-weight:400;margin-top:2px;"><a onclick="openUserProfileEdit('${u.user_id}','${u.email}')" style="color:#4318FF;cursor:pointer;text-decoration:underline;font-weight:600;">✎ 이름·직책 설정</a></div>`;
 
   let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #EDF2F7;flex-wrap:wrap;gap:10px;">
-    <div style="font-size:15px;font-weight:800;color:#1B2559;">${u.email}${u.is_admin?'<span style="font-size:10px;color:#E53E3E;font-weight:700;margin-left:6px;background:#FFF5F5;padding:2px 7px;border-radius:8px;">관리자</span>':''}</div>
+    <div style="font-size:15px;font-weight:800;color:#1B2559;">${nameHtml}${u.is_admin?'<span style="font-size:10px;color:#E53E3E;font-weight:700;margin-left:6px;background:#FFF5F5;padding:2px 7px;border-radius:8px;">관리자</span>':''}</div>
     <div style="display:flex;align-items:center;gap:14px;">
       ${!u.is_admin?`<button onclick="grantAllPermissions('${u.user_id}','${u.email}')" style="font-size:11px;padding:6px 12px;border-radius:8px;border:1px solid #2D1660;background:#fff;color:#2D1660;cursor:pointer;font-weight:600;">전체 권한주기</button>`:''}
       <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#4A5568;font-weight:600;">
@@ -2221,6 +2286,7 @@ const _DATA_KEYS = [
   'gabe_basedata_margin_v1', // 기초데이터: 마진율
   'gabe_michulgo_criteria_v1', // 출고리스트: 미출고 기준값
   'gabe_update_log_v1',      // 업데이트 요청: 업데이트 내역
+  'gabe_user_profiles_v1',   // 권한관리: 계정별 이름/직책
 ];
 
 function toggleDataMgmtMenu(event){
@@ -4698,7 +4764,7 @@ async function submitUpdateReq(){
   const bodyEl=document.getElementById('ur-req-body');
   const body=bodyEl.innerHTML.trim();
   if(!title){ alert('제목을 입력해주세요.'); document.getElementById('ur-req-title').focus(); return; }
-  const author=(_currentUser&&_currentUser.email)?_currentUser.email.split('@')[0]:'익명';
+  const author=_currentUser?userDisplayName(_currentUser.id,_currentUser.email):'익명';
   const entry={title,body,author,created_at:new Date().toISOString(),status:'접수'};
   try{
     const sb=_getSupabase();
