@@ -2451,6 +2451,18 @@ let skuTotalQtyMap={}; // SKU ID → 전체 발주수량 합산
 let printSkuSet=new Set(); // 출력상품 SKU ID 집합
 let setComponentMap={}; // 세트 SPEC(모) → [구성품 SPEC, ...]
 let setComponentQtyMap={}; // 세트 SPEC(모) → [{spec, qty}, ...] (픽킹용, 수량 포함)
+
+// 세트구성 재업로드 반복으로 같은 구성품이 중복 누적된 경우 정리 (parentKey당 childSpec 1개만 유지)
+function _dedupeSetComponentMaps(){
+  Object.keys(setComponentQtyMap).forEach(k=>{
+    const seen=new Set(), out=[];
+    (setComponentQtyMap[k]||[]).forEach(e=>{ if(e&&!seen.has(e.spec)){ seen.add(e.spec); out.push(e); } });
+    setComponentQtyMap[k]=out;
+  });
+  Object.keys(setComponentMap).forEach(k=>{
+    setComponentMap[k]=[...new Set(setComponentMap[k]||[])];
+  });
+}
 let skuIdSetComponents={}; // SKU ID → 세트구성품 (사전 계산)
 let barcodeSheetRaw=[]; // 5.바코드 확인 시트 원본 데이터 (발주서 복사용)
 let skuBarcodeMap={};   // SKU ID → 바코드 (바코드 확인 시트 A→C 매핑)
@@ -2501,6 +2513,7 @@ function applyBaseDataToMaps(){
     Object.assign(skuBarcodeMap, ref.skuBarcodeMap||{});
     Object.assign(barcodeAttachMap, ref.barcodeAttachMap||{});
     Object.assign(specBoxQtyMap, ref.specBoxQtyMap||{});
+    _dedupeSetComponentMaps();
   }
   const mg=basedataMarginLoad();
   if(mg){
@@ -2859,6 +2872,7 @@ function parseAllInOne(buf, file){
       if(!parentSpec||!childSpec) continue;
       _addComp(parentSpec, parentCode, childSpec, childQty);
     }
+    _dedupeSetComponentMaps();
   }
 
   // ── 5. 바코드 확인 시트: 발주서 D/E열 VLOOKUP 참조용 ──
@@ -3142,7 +3156,7 @@ async function rebuildAllCancelData(btn){
   const store=ssLoad();
   let updated=0;
   const _RN={'마진율 미달':'마진율미달','불량미납':'불량으로미납처리'};
-  const _isEx=c=>c==='KS0005'||extractSetCode(c)==='KS0005'||c.includes('캔디통')||c.includes('캔디동')||c==='108301'||c.includes('쌓기나무 미니북')||c==='108306'||c==='116905'||c==='116066'||c==='KS3220-1'||extractSetCode(c)==='KS3220-1'||c==='KS3220-2'||extractSetCode(c)==='KS3220-2';
+  const _isEx=c=>c==='KS0005'||extractSetCode(c)==='KS0005'||c.includes('캔디통')||c.includes('캔디동')||c==='108301'||c.includes('쌓기나무 미니북')||c==='108306'||c==='116905'||c==='116066'||c==='KS3220-1'||extractSetCode(c)==='KS3220-1'||c==='KS3220-2'||extractSetCode(c)==='KS3220-2'||c==='108305'||c.includes('종이케이스')||c.includes('소마케이스')||c.includes('쌓기케이스')||c==='108365'||c==='108369'||c.includes('플라스틱케이스');
 
   Object.entries(store).forEach(([,rec])=>{
     if(!rec.withNo||!rec.withNo.length) return;
@@ -5046,7 +5060,8 @@ function getStockStatus(skuId){
       c==='KS3220-1'||extractSetCode(c)==='KS3220-1'|| // 시계워크지1 (LER3222 세트)
       c==='KS3220-2'||extractSetCode(c)==='KS3220-2'|| // 시계워크지2 (LER3222 세트)
       c==='108305'||c.includes('종이케이스')||c.includes('소마케이스')||c.includes('쌓기케이스')|| // 종이케이스/소마케이스/쌓기케이스
-      c==='108365'; // 1.5L 캔디통/쌓기나무캔디통
+      c==='108365'|| // 1.5L 캔디통/쌓기나무캔디통
+      c==='108369'||c.includes('플라스틱케이스'); // 500g플라스틱케이스 (KS7115A 세트)
     // 면제 구성품 포함 세트 → EPR 미등록 구성품도 OK 처리
     const hasExempt=components.some(isExempt);
     const hasShortage=components.some(childSpec=>{
@@ -7903,6 +7918,8 @@ document.getElementById('basedata-ref-fi').addEventListener('change',function(e)
       // 2. 세트구성 시트: SPEC(모) → 구성품 SPEC (제목행이 섞여있을 수 있어 헤더행을 직접 탐색)
       const setn=wb.SheetNames.find(n=>n.includes('세트구성')||n.includes('세트 구성')||n.includes('구성품')||n.includes('구성'))||'';
       if(setn){
+        setComponentMap={};
+        setComponentQtyMap={};
         const ws4=wb.Sheets[setn];
         const rng4=XLSX.utils.decode_range(ws4['!ref']||'A1');
         const hr=_findHeaderRow(ws4,rng4,'SPEC',3);
@@ -7951,6 +7968,7 @@ document.getElementById('basedata-ref-fi').addEventListener('change',function(e)
           if(!parentSpec||!childSpec) continue;
           _addComp(parentSpec, parentCode, childSpec, childQty);
         }
+        _dedupeSetComponentMaps();
       }
 
       // 3. 바코드 확인 시트: A=SKU ID, C=바코드, D=부착여부, J=Box내총수량
@@ -10144,7 +10162,8 @@ function downloadOrderListPopupXLSX(){
     c==='108301'||c.includes('쌓기나무 미니북')||c==='108306'||c==='116905'||
     c==='116066'||c==='KS3220-1'||c==='KS3220-2'||
     c==='108305'||c.includes('종이케이스')||c.includes('소마케이스')||c.includes('쌓기케이스')||
-    c==='108365';
+    c==='108365'||
+    c==='108369'||c.includes('플라스틱케이스');
   const _getEpr=s=>{ const v=eprMap[normId(s)]??eprMap[s]; return (v===undefined||v===null)?null:v; };
   const _getStatus=(id,qty)=>{
     const nid=normId(id);
@@ -10260,7 +10279,8 @@ function _buildOrderListHTML(rec, onlyMissing=false){
     c==='108301'||c.includes('쌓기나무 미니북')||c==='108306'||c==='116905'||
     c==='116066'||c==='KS3220-1'||c==='KS3220-2'||
     c==='108305'||c.includes('종이케이스')||c.includes('소마케이스')||c.includes('쌓기케이스')||
-    c==='108365';
+    c==='108365'||
+    c==='108369'||c.includes('플라스틱케이스');
 
   const _getEpr=s=>{
     const v=eprMap[normId(s)]??eprMap[s];
@@ -10701,7 +10721,7 @@ function _renderMonthPopupContent(year, monthLabel){
       const sp=skuErpM[id]||'';
       const comps=setComps[id];
       // getStockStatus와 동일: 면제 구성품(재고0이어도 부족 처리 안 함)
-      const _isExempt=c=>c==='KS0005'||extractSetCode(c)==='KS0005'||c.includes('캔디통')||c.includes('캔디동')||c==='108301'||c.includes('쌓기나무 미니북')||c==='108306'||c==='116905'||c==='116066'||c==='KS3220-1'||extractSetCode(c)==='KS3220-1'||c==='KS3220-2'||extractSetCode(c)==='KS3220-2'||c==='108305'||c.includes('종이케이스')||c.includes('소마케이스')||c.includes('쌓기케이스')||c==='108365';
+      const _isExempt=c=>c==='KS0005'||extractSetCode(c)==='KS0005'||c.includes('캔디통')||c.includes('캔디동')||c==='108301'||c.includes('쌓기나무 미니북')||c==='108306'||c==='116905'||c==='116066'||c==='KS3220-1'||extractSetCode(c)==='KS3220-1'||c==='KS3220-2'||extractSetCode(c)==='KS3220-2'||c==='108305'||c.includes('종이케이스')||c.includes('소마케이스')||c.includes('쌓기케이스')||c==='108365'||c==='108369'||c.includes('플라스틱케이스');
       const _checkComps=(cList,tq)=>{const hasEx=cList.some(_isExempt);return cList.some(cs=>{if(_isExempt(cs))return false;const p=eprMap[normId(cs)];if(p===null)return!hasEx;return p<=0||p<tq;});};
       // getStockStatus와 동일: EPR_FIRST_SKUS/SPECS는 EPR 직접재고 우선 확인
       if(EPR_FIRST_SKUS.has(id)||EPR_FIRST_SPECS.has(sp)){
