@@ -8177,7 +8177,7 @@ function handleLotteBaseUpload(e){
           priceVat:parseFloat(r[2])||0,
           displayName:String(r[3]||'').trim(),
           weightG:_lotteParseWeight(r[4]),
-          priceNoVat:parseFloat(r[5])||0,
+          priceNoVat:Math.round(parseFloat(r[5])||0),
           vendorCode:String(r[6]||'').trim(),
           packQty:parseFloat(r[7])||0
         };
@@ -8238,7 +8238,7 @@ function _lotteRenderBaseList(){
       <td>${(p.priceVat||0).toLocaleString()}</td>
       <td style="text-align:left;">${esc(p.displayName)}</td>
       <td>${(p.weightG||0).toLocaleString()}g</td>
-      <td>${(p.priceNoVat||0).toLocaleString()}</td>
+      <td>${Math.round(p.priceNoVat||0).toLocaleString()}</td>
       <td style="text-align:left;">${esc(p.vendorCode)}</td>
       <td>${(p.packQty||0).toLocaleString()}</td>
       <td style="white-space:nowrap;">
@@ -8265,7 +8265,7 @@ function openLotteProductModal(barcode){
   document.getElementById('lp-weight').value=p&&p.weightG?p.weightG:'';
   document.getElementById('lp-pack').value=p&&p.packQty?p.packQty:'';
   document.getElementById('lp-price-vat').value=p&&p.priceVat?p.priceVat:'';
-  document.getElementById('lp-price-novat').value=p&&p.priceNoVat?p.priceNoVat:'';
+  document.getElementById('lp-price-novat').value=p&&p.priceNoVat?Math.round(p.priceNoVat):'';
   document.getElementById('lp-vendor').value=p?p.vendorCode||'':'';
   modal.style.display='flex';
 }
@@ -8287,7 +8287,7 @@ function saveLotteProduct(){
     priceVat:parseFloat(document.getElementById('lp-price-vat').value)||0,
     displayName:document.getElementById('lp-name').value.trim(),
     weightG:parseFloat(document.getElementById('lp-weight').value)||0,
-    priceNoVat:parseFloat(document.getElementById('lp-price-novat').value)||0,
+    priceNoVat:Math.round(parseFloat(document.getElementById('lp-price-novat').value)||0),
     vendorCode:document.getElementById('lp-vendor').value.trim(),
     packQty:parseFloat(document.getElementById('lp-pack').value)||0
   };
