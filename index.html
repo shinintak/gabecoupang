@@ -3514,6 +3514,7 @@ function loadSession(dateKey){
     withNo.forEach(r=>{ const p=String(r[1]||'').trim(); if(p&&!poDeliveryMap[p]) poDeliveryMap[p]=dateKey; });
   }
   setComponentMap  = rec.setComponentMap||{};
+  _dedupeSetComponentMaps(); // 과거 저장된 세션에 구버전 버그로 중복 누적된 구성품 정리
   milkRunCenterOverrides = rec.milkRunCenterOverrides||{};
   // 재빌드: skuTotalQtyMap (withNo 기반)
   skuTotalQtyMap={};
