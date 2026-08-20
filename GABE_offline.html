@@ -8451,8 +8451,9 @@ function _lotteRenderCenterPage(center){
     <div style="font-size:11px;color:#8A94A6;margin-bottom:8px;">${fileName} · ${dtStr} 업로드</div>
     <div style="overflow-x:auto;">
       <table class="lotte-tbl">
-        <thead><tr><th>SPEC</th><th>수량</th><th>단가</th><th>매출구분</th></tr></thead>
-        <tbody>${result.erpRows.map(r=>`<tr><td>${r.SPEC}</td><td>${r.qty.toLocaleString()}</td><td>${r.price.toLocaleString()}</td><td>${r.saleType}</td></tr>`).join('')}</tbody>
+        <thead><tr><th>SPEC</th><th>수량</th><th>단가</th><th>금액</th><th>매출구분</th></tr></thead>
+        <tbody>${result.erpRows.map(r=>`<tr><td>${r.SPEC}</td><td>${r.qty.toLocaleString()}</td><td>${r.price.toLocaleString()}</td><td>${(r.qty*r.price).toLocaleString()}</td><td>${r.saleType}</td></tr>`).join('')}</tbody>
+        <tfoot><tr style="font-weight:700;background:#f7f9fc;border-top:2px solid #4F2FA8;"><td>합계</td><td>${result.erpRows.reduce((s,r)=>s+r.qty,0).toLocaleString()}</td><td></td><td>${result.erpRows.reduce((s,r)=>s+r.qty*r.price,0).toLocaleString()}</td><td></td></tr></tfoot>
       </table>
     </div>
   </div>`;
@@ -8490,7 +8491,7 @@ function _lotteRenderDeliveryCharts(){
       <table style="width:100%;border-collapse:collapse;font-size:11px;">
         <thead><tr style="background:#2D1660;">
           <th style="padding:7px 10px;text-align:center;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">날짜</th>
-          <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">단가금액</th>
+          <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">납품금액</th>
           <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">박스수</th>
           <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;">무게(kg)</th>
         </tr></thead><tbody>`;
@@ -8514,24 +8515,159 @@ function _lotteRenderDeliveryCharts(){
       <td style="padding:7px 8px;text-align:right;font-weight:700;color:#1B2559;">${tot.weight.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
     </tr></tbody></table></div>
     <div style="margin-top:12px;${cardStyle}">
-      <div style="${titleStyle}">① 박스수·무게·단가금액 그래프</div>
+      <div style="${titleStyle}">① 납품금액 그래프</div>
+      <canvas id="lotte-chart-${center}-amt" style="width:100%;" height="190"></canvas>
+    </div>
+    <div style="margin-top:12px;${cardStyle}">
+      <div style="${titleStyle}">② 박스수·무게 그래프</div>
       <canvas id="lotte-chart-${center}-13" style="width:100%;" height="190"></canvas>
     </div>
     </div>`;
   });
   html+='</div>';
+
+  // ③ 오산+김해 합계
+  const totalMap={};
+  dates.forEach(d=>{
+    const o=centerPoints.osan.find(p=>p.date===d);
+    const g=centerPoints.gimhae.find(p=>p.date===d);
+    if(!o&&!g) return;
+    totalMap[d]={date:d, label:d.slice(5),
+      amt:(o?o.amt:0)+(g?g.amt:0),
+      box:(o?o.box:0)+(g?g.box:0),
+      weight:(o?o.weight:0)+(g?g.weight:0)};
+  });
+  const totalPoints=dates.map(d=>totalMap[d]).filter(Boolean);
+  const grandTot=totalPoints.reduce((s,p)=>({amt:s.amt+p.amt, box:s.box+p.box, weight:s.weight+p.weight}), {amt:0,box:0,weight:0});
+
+  html+=`<div style="margin-top:18px;"><div style="font-size:15px;font-weight:800;color:#1E2530;margin:4px 0 10px;">🏬 오산+김해 합계</div>
+    <div style="overflow-x:auto;border-radius:8px;border:1px solid #dde3ee;">
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead><tr style="background:#2D1660;">
+        <th style="padding:7px 10px;text-align:center;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">날짜</th>
+        <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">납품금액</th>
+        <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">박스수</th>
+        <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;">무게(kg)</th>
+      </tr></thead><tbody>`;
+  if(!totalPoints.length){
+    html+='<tr><td colspan="4" style="padding:14px;text-align:center;color:#A0AEC0;">데이터가 없습니다.</td></tr>';
+  } else {
+    totalPoints.forEach((p,i)=>{
+      const bg=i%2===0?'#fff':'#f7f9fc';
+      html+=`<tr style="background:${bg};border-bottom:1px solid #e8edf5;">
+        <td style="padding:6px 10px;text-align:center;font-weight:700;color:#1B2559;border-right:1px solid #e8edf5;white-space:nowrap;">${p.date}</td>
+        <td style="padding:6px 8px;text-align:right;color:#C62828;font-weight:600;background:#FFFDE7;border-right:1px solid #f0f3f8;">${p.amt.toLocaleString()}원</td>
+        <td style="padding:6px 8px;text-align:right;color:#333;font-weight:600;border-right:1px solid #f0f3f8;">${p.box.toLocaleString()}</td>
+        <td style="padding:6px 8px;text-align:right;color:#333;font-weight:600;">${p.weight.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
+      </tr>`;
+    });
+  }
+  html+=`<tr style="background:#e8edf8;border-top:2px solid #4F2FA8;">
+    <td style="padding:7px 10px;text-align:center;font-weight:700;color:#1B2559;border-right:1px solid #c5cfe8;">합계</td>
+    <td style="padding:7px 8px;text-align:right;font-weight:700;color:#C62828;background:#FFFDE7;border-right:1px solid #d0d8ea;">${grandTot.amt.toLocaleString()}원</td>
+    <td style="padding:7px 8px;text-align:right;font-weight:700;color:#1B2559;border-right:1px solid #d0d8ea;">${grandTot.box.toLocaleString()}</td>
+    <td style="padding:7px 8px;text-align:right;font-weight:700;color:#1B2559;">${grandTot.weight.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
+  </tr></tbody></table></div>
+  <div style="margin-top:12px;${cardStyle}">
+    <div style="${titleStyle}">③ 오산+김해 합계 그래프</div>
+    <canvas id="lotte-chart-total-13" style="width:100%;" height="190"></canvas>
+  </div>
+  </div>`;
+
   el.innerHTML=html;
 
   requestAnimationFrame(()=>{
     ['osan','gimhae'].forEach(center=>{
+      _drawLotteAmountChart(`lotte-chart-${center}-amt`, centerPoints[center]);
       _drawLotteCombinedChart(`lotte-chart-${center}-13`, centerPoints[center]);
     });
+    _drawLotteTotalChart('lotte-chart-total-13', totalPoints);
   });
 }
 
-// 박스수·무게·단가금액 — 막대(bar) + 추이선(line) 통합 차트 (annual-chart13과 동일한 시각 언어)
-// 단가금액은 단위가 워낙 커서(원) 만원 단위로 축소해 박스수·무게와 같은 축에 나란히 표시
+// 납품금액 단독 차트 — 막대 + 값 라벨
+function _drawLotteAmountChart(canvasId,points){
+  const r=_chartSetup(canvasId); if(!r) return;
+  const {ctx,W,H}=r;
+  const PAD={t:22,r:10,b:24,l:60};
+  if(!points.length){
+    ctx.fillStyle='#A0AEC0'; ctx.font='11px 맑은 고딕'; ctx.textAlign='center';
+    ctx.fillText('데이터 없음', W/2, H/2);
+    return;
+  }
+  const vals=points.map(p=>p.amt);
+  const maxV=Math.max(...vals,1)*1.2;
+  const chartW=W-PAD.l-PAD.r, chartH=H-PAD.t-PAD.b;
+  ctx.font='9px 맑은 고딕'; ctx.fillStyle='#999'; ctx.textAlign='right';
+  for(let i=0;i<=4;i++){
+    const v=maxV*i/4, y=PAD.t+chartH*(1-i/4);
+    ctx.fillText(Math.round(v).toLocaleString(),PAD.l-6,y+3);
+    ctx.strokeStyle='#eeeeec'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(PAD.l,y); ctx.lineTo(W-PAD.r,y); ctx.stroke();
+  }
+  const slotW=chartW/points.length, gap=slotW*0.25, bw=slotW-gap*2;
+  points.forEach((p,i)=>{
+    const x=PAD.l+i*slotW+gap;
+    const h=vals[i]/maxV*chartH;
+    ctx.fillStyle='rgba(198,40,40,0.75)'; ctx.fillRect(x, PAD.t+chartH-h, bw, h);
+    ctx.fillStyle='#C62828'; ctx.font='8px 맑은 고딕'; ctx.textAlign='center';
+    ctx.fillText(Math.round(vals[i]).toLocaleString()+'원', x+bw/2, PAD.t+chartH-h-6);
+    ctx.fillStyle='#888';
+    ctx.fillText(p.label, x+bw/2, H-PAD.b+11);
+  });
+  _legend(ctx,12,[{color:'#C62828',label:'납품금액(원)'}]);
+}
+
+// 박스수·무게 — 막대(bar) + 추이선(line) 통합 차트 (annual-chart13과 동일한 시각 언어)
 function _drawLotteCombinedChart(canvasId,points){
+  const r=_chartSetup(canvasId); if(!r) return;
+  const {ctx,W,H}=r;
+  const PAD={t:22,r:10,b:24,l:46};
+  if(!points.length){
+    ctx.fillStyle='#A0AEC0'; ctx.font='11px 맑은 고딕'; ctx.textAlign='center';
+    ctx.fillText('데이터 없음', W/2, H/2);
+    return;
+  }
+  const valB=points.map(p=>p.box), valW=points.map(p=>p.weight);
+  const fmtB=v=>Math.round(v).toLocaleString();
+  const fmtW=v=>v.toFixed(1);
+  const maxV=Math.max(...valB,...valW,1)*1.2;
+  const chartW=W-PAD.l-PAD.r, chartH=H-PAD.t-PAD.b;
+  ctx.font='9px 맑은 고딕'; ctx.fillStyle='#999'; ctx.textAlign='right';
+  for(let i=0;i<=4;i++){
+    const v=maxV*i/4, y=PAD.t+chartH*(1-i/4);
+    ctx.fillText(Math.round(v).toLocaleString(),PAD.l-6,y+3);
+    ctx.strokeStyle='#eeeeec'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(PAD.l,y); ctx.lineTo(W-PAD.r,y); ctx.stroke();
+  }
+  const slotW=chartW/points.length, gap=slotW*0.12, bw=(slotW-gap*2)/2;
+  points.forEach((p,i)=>{
+    const x=PAD.l+i*slotW+gap;
+    const hB=valB[i]/maxV*chartH, hW=valW[i]/maxV*chartH;
+    ctx.fillStyle='rgba(68,114,196,0.75)'; ctx.fillRect(x,       PAD.t+chartH-hB, bw, hB);
+    ctx.fillStyle='rgba(237,125,49,0.75)'; ctx.fillRect(x+bw,    PAD.t+chartH-hW, bw, hW);
+    ctx.fillStyle='#888'; ctx.font='8px 맑은 고딕'; ctx.textAlign='center';
+    ctx.fillText(p.label, x+bw, H-PAD.b+11);
+  });
+  const drawTrendLine=(vals,color,fmt)=>{
+    const pts=vals.map((v,i)=>({x:PAD.l+i*slotW+slotW/2,y:PAD.t+chartH*(1-v/maxV),v}));
+    ctx.strokeStyle=color; ctx.lineWidth=2; ctx.setLineDash([5,3]);
+    ctx.beginPath(); pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y)); ctx.stroke();
+    ctx.setLineDash([]);
+    pts.forEach(p=>{
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.stroke();
+      ctx.fillStyle='#333'; ctx.font='8px 맑은 고딕'; ctx.textAlign='center';
+      ctx.fillText(fmt(p.v), p.x, p.y-7);
+    });
+  };
+  drawTrendLine(valB,'#4472C4',fmtB);
+  drawTrendLine(valW,'#ED7D31',fmtW);
+  _legend(ctx,12,[{color:'#4472C4',label:'박스수'},{color:'#ED7D31',label:'무게(kg)'}]);
+}
+
+// 오산+김해 합계 — 박스수·무게·납품금액 통합 차트
+function _drawLotteTotalChart(canvasId,points){
   const r=_chartSetup(canvasId); if(!r) return;
   const {ctx,W,H}=r;
   const PAD={t:22,r:10,b:24,l:46};
@@ -8578,7 +8714,7 @@ function _drawLotteCombinedChart(canvasId,points){
   drawTrendLine(valB,'#4472C4',fmtB);
   drawTrendLine(valW,'#ED7D31',fmtW);
   drawTrendLine(valA,'#C62828',fmtA);
-  _legend(ctx,12,[{color:'#4472C4',label:'박스수'},{color:'#ED7D31',label:'무게(kg)'},{color:'#C62828',label:'단가금액(만원)'}]);
+  _legend(ctx,12,[{color:'#4472C4',label:'박스수'},{color:'#ED7D31',label:'무게(kg)'},{color:'#C62828',label:'납품금액(만원)'}]);
 }
 
 function downloadLotteErp(center){
