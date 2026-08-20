@@ -1824,6 +1824,7 @@ function _updateErpStatus(loaded) {
 // ── ERP 데이터 공유폴더 저장/로드 (잔여수량·세트 공유용) ──
 async function _saveErpDataToServer() {
   if (!_serverConnected) return;
+  _dedupeSetComponentMaps(); // 저장 전 정리 — 중복된 상태가 클라우드에 다시 박히지 않도록
   const snapshot = {
     eprQtyMap:         Object.assign({}, eprQtyMap),
     skuErpMap:         Object.assign({}, skuErpMap),
@@ -1845,6 +1846,7 @@ async function _loadErpDataFromServer() {
   Object.assign(skuNameMap,         data.skuNameMap         || {});
   Object.assign(skuIdSetComponents, data.skuIdSetComponents || {});
   Object.assign(setComponentMap,    data.setComponentMap    || {});
+  _dedupeSetComponentMaps(); // 예전 버그로 클라우드에 중복 저장된 세트구성 정리
   return true;
 }
 
@@ -2461,6 +2463,9 @@ function _dedupeSetComponentMaps(){
   });
   Object.keys(setComponentMap).forEach(k=>{
     setComponentMap[k]=[...new Set(setComponentMap[k]||[])];
+  });
+  Object.keys(skuIdSetComponents).forEach(k=>{
+    skuIdSetComponents[k]=[...new Set(skuIdSetComponents[k]||[])];
   });
 }
 let skuIdSetComponents={}; // SKU ID → 세트구성품 (사전 계산)
