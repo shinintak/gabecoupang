@@ -6420,6 +6420,7 @@ let _llPalletNo={};
 let _llPalletCount={};  // safeKey → 센터별 총 파렛트 수량
 let _llItemPallet={};   // 'center/idx/si' → BOX 행별 팔렛 번호 (이전 'center/idx' 키도 폴백으로 지원)
 let _llPalletRanges={}; // safeKey → [{pallet:1,boxStart:1,boxEnd:15},{pallet:2,...}]
+let _llSortStack=[]; // 밀크런 적재리스트 팝업 정렬 스택: [{col,dir},...] — 마지막이 최우선 기준
 
 function getMilkRunSKUs(center){
   const map=new Map(); // Map 사용 → withNo 정렬 순서(발주번호→SKU ID) 유지
@@ -6579,12 +6580,73 @@ function llSelectCenter(c){
   renderLoadingListTable();
 }
 
+function _llGetColValue(item,key,colIdx){
+  if(colIdx===0) return String(item.skuId||'');
+  if(colIdx===1) return String(item.skuName||'');
+  if(colIdx===2) return item.qty||0;
+  if(colIdx===6){
+    const entries=_llBoxData[key]||[];
+    let tot=0;
+    entries.forEach(bd=>{
+      if(!bd||!bd.qtyPerBox||!bd.boxStart) return;
+      const start=parseInt(bd.boxStart)||0;
+      const end=bd.boxEnd?parseInt(bd.boxEnd)||start:start;
+      const n=end>=start?end-start+1:1;
+      tot+=n*bd.qtyPerBox;
+    });
+    return tot;
+  }
+  return '';
+}
+
+function llSortCol(colIdx){
+  const existIdx=_llSortStack.findIndex(s=>s.col===colIdx);
+  if(existIdx>=0){
+    const entry=_llSortStack.splice(existIdx,1)[0];
+    entry.dir*=-1;
+    _llSortStack.push(entry); // 방향 토글 후 최우선 기준으로 이동
+  } else {
+    _llSortStack.push({col:colIdx,dir:1});
+  }
+  renderLoadingListTable();
+}
+
+function llResetSort(){
+  _llSortStack=[];
+  renderLoadingListTable();
+}
+
+function _llSortTh(colIdx,label){
+  const stackIdx=_llSortStack.findIndex(s=>s.col===colIdx);
+  const isSorted=stackIdx>=0;
+  const icon=isSorted?(_llSortStack[stackIdx].dir===1?'↑':'↓'):'↕';
+  const iconColor=isSorted?'#FF4444':'#B0B8D0';
+  const posLabel=_llSortStack.length>1&&isSorted?'<sup style="font-size:9px;color:#FF4444;font-weight:900;margin-left:1px;">'+(stackIdx+1)+'</sup>':'';
+  return '<span onclick="llSortCol('+colIdx+')" style="cursor:pointer;user-select:none;" title="클릭하여 정렬 (누적 정렬 지원)">'+label+'<span style="color:'+iconColor+';font-size:11px;font-weight:900;margin-left:3px;">'+icon+'</span>'+posLabel+'</span>';
+}
+
 function renderLoadingListTable(){
   const area=document.getElementById('ll-table-area');
   if(!area) return;
   const c=_llSelCenter;
   const items=_llItems[c]||[];
   if(!items.length){ area.innerHTML='<p style="color:#aaa;font-size:13px;margin:8px 0;">출고 가능 항목 없음</p>'; return; }
+
+  let order=items.map((_,i)=>i);
+  if(_llSortStack.length>0){
+    order.sort((a,b)=>{
+      for(let k=_llSortStack.length-1;k>=0;k--){
+        const {col,dir}=_llSortStack[k];
+        const va=_llGetColValue(items[a],c+'/'+a,col);
+        const vb=_llGetColValue(items[b],c+'/'+b,col);
+        let cmp;
+        if(typeof va==='number'&&typeof vb==='number') cmp=va-vb;
+        else cmp=String(va).localeCompare(String(vb),'ko');
+        if(cmp!==0) return cmp*dir;
+      }
+      return 0;
+    });
+  }
 
   const safeC=c.replace(/[^a-z0-9]/gi,'_');
   const palCount=_llPalletCount[safeC]||1;
@@ -6607,7 +6669,8 @@ function renderLoadingListTable(){
   });
 
   let html='';
-  items.forEach((item,idx)=>{
+  order.forEach(idx=>{
+    const item=items[idx];
     const key=c+'/'+idx;
     if(!_llBoxData[key]||!Array.isArray(_llBoxData[key])) _llBoxData[key]=[{}];
     const entries=_llBoxData[key];
@@ -6698,13 +6761,13 @@ function renderLoadingListTable(){
   area.innerHTML=palSection+`
   <table style="font-size:13px;width:100%;border-collapse:collapse;min-width:600px;">
     <thead><tr style="background:#F4F7FE;border-bottom:2px solid #7B2FBE;">
-      <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#1B2559;">SKU No</th>
-      <th style="padding:8px 10px;text-align:left;color:#1B2559;">SKU 이름</th>
-      <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#1B2559;">발주수량</th>
+      <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#1B2559;">${_llSortTh(0,'SKU No')}</th>
+      <th style="padding:8px 10px;text-align:left;color:#1B2559;">${_llSortTh(1,'SKU 이름')}</th>
+      <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#1B2559;">${_llSortTh(2,'발주수량')}</th>
       <th style="padding:8px 6px;text-align:center;white-space:nowrap;color:#7B2FBE;">Pallet</th>
       <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#1B2559;">BOX</th>
       <th style="padding:8px 10px;text-align:center;white-space:nowrap;color:#1B2559;">1박스 수량</th>
-      <th style="padding:8px 10px;text-align:right;white-space:nowrap;color:#E74C3C;">합계</th>
+      <th style="padding:8px 10px;text-align:right;white-space:nowrap;color:#E74C3C;">${_llSortTh(6,'합계')}</th>
     </tr></thead>
     <tbody>${html}</tbody>
     <tfoot><tr style="background:#EDE9FF;border-top:2px solid #7B2FBE;">
@@ -11495,8 +11558,9 @@ document.getElementById('smt-fi-settle').addEventListener('change',function(e){
     <button onclick="closeLoadingListModal()" style="margin-left:auto;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:18px;width:32px;height:32px;border-radius:8px;cursor:pointer;line-height:1;flex-shrink:0;">✕</button>
   </div>
   <!-- 센터 탭 -->
-  <div style="padding:12px 24px 0;flex-shrink:0;border-bottom:1px solid #E0E5FF;background:#F8F9FF;">
-    <div id="ll-center-tabs" style="display:flex;gap:8px;flex-wrap:wrap;padding-bottom:12px;"></div>
+  <div style="padding:12px 24px 0;flex-shrink:0;border-bottom:1px solid #E0E5FF;background:#F8F9FF;display:flex;align-items:flex-start;gap:10px;">
+    <div id="ll-center-tabs" style="display:flex;gap:8px;flex-wrap:wrap;padding-bottom:12px;flex:1;"></div>
+    <button onclick="llResetSort()" style="margin-bottom:12px;padding:6px 14px;border:1px solid #C0C8FF;background:#fff;border-radius:8px;font-size:12px;font-weight:700;color:#4318FF;cursor:pointer;white-space:nowrap;flex-shrink:0;">↕ 정렬 초기화</button>
   </div>
   <!-- 테이블 영역 -->
   <div style="flex:1;overflow-y:auto;overflow-x:auto;padding:16px 24px;">
