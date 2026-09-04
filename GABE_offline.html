@@ -758,10 +758,20 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
     </div>
     <div style="padding:14px 20px 4px;">
       <button onclick="runPickingCenterExtract('all')" style="width:100%;height:36px;border-radius:8px;border:none;background:#2D1660;color:#fff;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:10px;">📦 전체 센터 추출</button>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#4A5568;font-weight:600;padding-bottom:8px;border-bottom:1px solid #EDF2F7;margin-bottom:4px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#4A5568;font-weight:600;padding-bottom:8px;">
         <input type="checkbox" id="pcm-select-all" onchange="togglePickingCenterAll(this.checked)">
         전체 선택
       </label>
+      <div style="display:flex;gap:14px;padding-bottom:8px;border-bottom:1px solid #EDF2F7;margin-bottom:4px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#185FA5;font-weight:600;">
+          <input type="checkbox" id="pcm-select-milk" onchange="togglePickingCenterGroup(this.checked,true)">
+          밀크런만 선택
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#4A5568;font-weight:600;">
+          <input type="checkbox" id="pcm-select-nonmilk" onchange="togglePickingCenterGroup(this.checked,false)">
+          밀크런 제외 선택
+        </label>
+      </div>
     </div>
     <div id="pcm-center-list" style="padding:0 20px;overflow-y:auto;flex:1;min-height:80px;"></div>
     <div style="padding:12px 20px;border-top:1px solid #EDF2F7;text-align:right;display:flex;gap:8px;justify-content:flex-end;">
@@ -7657,13 +7667,15 @@ function openPickingCenterModal(){
     const isMilk=milkRunCenterSet.has(center);
     const milkBadge=isMilk?'<span style="color:#185FA5;font-size:10px;font-weight:700;background:#E8F1FC;border-radius:4px;padding:1px 5px;">밀크런</span>':'';
     return `<label style="display:flex;align-items:center;gap:8px;padding:7px 2px;font-size:13px;color:#1B2559;border-bottom:1px solid #F4F6F9;">
-      <input type="checkbox" class="pcm-center-cb" value="${center.replace(/"/g,'&quot;')}" id="${safeId}">
+      <input type="checkbox" class="pcm-center-cb" value="${center.replace(/"/g,'&quot;')}" id="${safeId}" data-milk="${isMilk?'1':'0'}">
       <span style="flex:1;display:flex;align-items:center;gap:6px;">${center||'미지정'}${milkBadge}</span>
       <span style="color:#4A5568;font-size:11px;">${amt.toLocaleString('ko-KR')}원</span>
       <span style="color:#A0AEC0;font-size:11px;min-width:32px;text-align:right;">${cnt}건</span>
     </label>`;
   }).join('');
   document.getElementById('pcm-select-all').checked=false;
+  document.getElementById('pcm-select-milk').checked=false;
+  document.getElementById('pcm-select-nonmilk').checked=false;
 
   document.getElementById('picking-center-modal').style.display='flex';
 }
@@ -7674,6 +7686,14 @@ function closePickingCenterModal(){
 
 function togglePickingCenterAll(checked){
   document.querySelectorAll('.pcm-center-cb').forEach(cb=>{ cb.checked=checked; });
+  document.getElementById('pcm-select-milk').checked=false;
+  document.getElementById('pcm-select-nonmilk').checked=false;
+}
+
+// isMilk=true → 밀크런 센터만 선택/해제, false → 밀크런 제외(택배) 센터만 선택/해제
+function togglePickingCenterGroup(checked, isMilk){
+  document.querySelectorAll('.pcm-center-cb[data-milk="'+(isMilk?'1':'0')+'"]').forEach(cb=>{ cb.checked=checked; });
+  document.getElementById('pcm-select-all').checked=false;
 }
 
 // mode: 'all' (팝업 내 전체 센터 추출 버튼) | 'selected' (체크한 센터만)
