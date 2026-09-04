@@ -1351,6 +1351,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
         <p style="font-size:14px;color:#A0AEC0;margin-bottom:.75rem;">정상 출고 가능 항목만 추출 · 재고부족·마진율미달·단종·확인필요 제외</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">
           <button class="run-btn" onclick="downloadPickingList()">피킹리스트(erp용)</button>
+          <button class="run-btn" onclick="downloadPickingListByCenter()">피킹리스트(센터별)</button>
           <button class="run-btn" onclick="downloadPickingImageFromFile()">피킹리스트(인쇄용)</button>
           <button class="run-btn" onclick="downloadOrderSheet()">발주서</button>
           <button class="run-btn" onclick="downloadBarcodeXLSX()">쿠팡바코드</button>
@@ -7532,28 +7533,9 @@ async function _renderPickingImages(items, fileName){
   alert(totalPg+'페이지 PDF 다운로드 완료');
 }
 
-function downloadPickingList(){
-  if(!canEdit('main_extract')){ alert('파일 추출 권한이 없습니다.'); return; }
-  if(!withNo.length){ alert('먼저 파일을 업로드해주세요.'); return; }
-  const S=typeof XLSXStyle!=='undefined'?XLSXStyle:XLSX;
-
-  // 오늘 날짜
-  const now=new Date();
-  const todayStr=now.getFullYear()+'.'+String(now.getMonth()+1).padStart(2,'0')+'.'+String(now.getDate()).padStart(2,'0')+'.';
-
-  // 고정값 (2.쿠팡 수주등록 양식 기준)
-  const FIX_A=10000, FIX_B=30000, FIX_D=1000362;
-
-  const ws={};
-  function cl(i){ return i<26?String.fromCharCode(65+i):'A'+String.fromCharCode(65+i-26); }
-  function cn(v){ return {v:v,t:'n'}; }
-  function cs(v){ return {v:v??'',t:'s'}; }
-
-  // 헤더
-  ['고객사코드','납품일','작성일자','납품처코드','납품일','물류센터','납품처주문번호','SPEC','수량','단가']
-    .forEach((h,c)=>{ ws[cl(c)+'1']=cs(h); });
-
-  let R=2, cnt=0;
+// 피킹리스트(ERP용) 대상 행 추출 — 미출고 항목 제외
+function buildPickingRows(){
+  const rows=[];
   withNo.forEach((row,i)=>{
     const skuId=normId(row[3]);
     const pct=getMarginPct(skuId);
@@ -7572,30 +7554,86 @@ function downloadPickingList(){
     const spec=skuErpMap[skuId]||'';
     const delivery=formatDateSimple(poDeliveryMap[ponum]||'');
     const ponumN=parseFloat(ponum);
+    rows.push({ponum,ponumN,center,qty,price,spec,delivery});
+  });
+  return rows;
+}
 
+// 피킹리스트(ERP용) 시트 데이터 작성 (2.쿠팡 수주등록 양식 기준)
+function writePickingSheet(S, rows){
+  const now=new Date();
+  const todayStr=now.getFullYear()+'.'+String(now.getMonth()+1).padStart(2,'0')+'.'+String(now.getDate()).padStart(2,'0')+'.';
+  const FIX_A=10000, FIX_B=30000, FIX_D=1000362;
+
+  const ws={};
+  function cl(i){ return i<26?String.fromCharCode(65+i):'A'+String.fromCharCode(65+i-26); }
+  function cn(v){ return {v:v,t:'n'}; }
+  function cs(v){ return {v:v??'',t:'s'}; }
+
+  ['고객사코드','납품일','작성일자','납품처코드','납품일','물류센터','납품처주문번호','SPEC','수량','단가']
+    .forEach((h,c)=>{ ws[cl(c)+'1']=cs(h); });
+
+  let R=2;
+  rows.forEach(r=>{
     ws[cl(0)+R]=cn(FIX_A);
     ws[cl(1)+R]=cn(FIX_B);
     ws[cl(2)+R]=cs(todayStr);
     ws[cl(3)+R]=cn(FIX_D);
-    ws[cl(4)+R]=cs(delivery);
-    ws[cl(5)+R]=cs(center);
-    ws[cl(6)+R]=!isNaN(ponumN)?cn(ponumN):cs(ponum);
-    ws[cl(7)+R]=cs(spec);
-    ws[cl(8)+R]=cn(qty);
-    ws[cl(9)+R]=cn(price);
-    R++; cnt++;
+    ws[cl(4)+R]=cs(r.delivery);
+    ws[cl(5)+R]=cs(r.center);
+    ws[cl(6)+R]=!isNaN(r.ponumN)?cn(r.ponumN):cs(r.ponum);
+    ws[cl(7)+R]=cs(r.spec);
+    ws[cl(8)+R]=cn(r.qty);
+    ws[cl(9)+R]=cn(r.price);
+    R++;
   });
-
-  if(cnt===0){ alert('출고 가능한 항목이 없습니다.'); return; }
 
   ws['!ref']='A1:'+cl(9)+R;
   ws['!cols']=[{wch:12},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12},{wch:16},{wch:12},{wch:8},{wch:10}];
+  return ws;
+}
 
+function downloadPickingList(){
+  if(!canEdit('main_extract')){ alert('파일 추출 권한이 없습니다.'); return; }
+  if(!withNo.length){ alert('먼저 파일을 업로드해주세요.'); return; }
+  const S=typeof XLSXStyle!=='undefined'?XLSXStyle:XLSX;
+
+  const rows=buildPickingRows();
+  if(!rows.length){ alert('출고 가능한 항목이 없습니다.'); return; }
+
+  const ws=writePickingSheet(S, rows);
   const wb2=S.utils.book_new();
   S.utils.book_append_sheet(wb2,ws,'수주등록');
   const _dk1=getSessionDateKey();
   const _ds1=_dk1?_dk1.replace(/-/g,''):(()=>{const _n=new Date();return _n.getFullYear()+String(_n.getMonth()+1).padStart(2,'0')+String(_n.getDate()).padStart(2,'0');})();
   S.writeFile(wb2,'쿠팡_수주등록_'+_ds1+'.xlsx');
+}
+
+// 센터별로 파일을 나눠서 각각 다운로드 (ERP 센터별 개별 업로드용)
+function downloadPickingListByCenter(){
+  if(!canEdit('main_extract')){ alert('파일 추출 권한이 없습니다.'); return; }
+  if(!withNo.length){ alert('먼저 파일을 업로드해주세요.'); return; }
+  const S=typeof XLSXStyle!=='undefined'?XLSXStyle:XLSX;
+
+  const rows=buildPickingRows();
+  if(!rows.length){ alert('출고 가능한 항목이 없습니다.'); return; }
+
+  const centerGroups={};
+  rows.forEach(r=>{ if(!centerGroups[r.center]) centerGroups[r.center]=[]; centerGroups[r.center].push(r); });
+  const centers=Object.keys(centerGroups).sort(cmpCenterName);
+
+  const _dk1=getSessionDateKey();
+  const _ds1=_dk1?_dk1.replace(/-/g,''):(()=>{const _n=new Date();return _n.getFullYear()+String(_n.getMonth()+1).padStart(2,'0')+String(_n.getDate()).padStart(2,'0');})();
+
+  centers.forEach((center,idx)=>{
+    setTimeout(()=>{
+      const ws=writePickingSheet(S, centerGroups[center]);
+      const wb2=S.utils.book_new();
+      S.utils.book_append_sheet(wb2,ws,'수주등록');
+      const safeCenter=center.replace(/[\\/:*?"<>|]/g,'_')||'미지정';
+      S.writeFile(wb2,'쿠팡_수주등록_'+safeCenter+'_'+_ds1+'.xlsx');
+    }, idx*300);
+  });
 }
 
 
