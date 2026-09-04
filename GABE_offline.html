@@ -748,6 +748,30 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
 </div>
 
 <!-- ══════════════════════════════════════
+     피킹리스트 센터별 추출 - 센터 선택 팝업
+══════════════════════════════════════ -->
+<div id="picking-center-modal" style="display:none;position:fixed;inset:0;z-index:3200;background:rgba(27,37,89,.5);align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;width:420px;max-width:94vw;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(27,37,89,0.22);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #E0E5FF;">
+      <div style="font-size:15px;font-weight:800;color:#1B2559;">피킹리스트 센터별 추출</div>
+      <button onclick="closePickingCenterModal()" style="width:28px;height:28px;border-radius:50%;border:none;background:#F4F6F9;cursor:pointer;font-size:13px;">✕</button>
+    </div>
+    <div style="padding:14px 20px 4px;">
+      <button onclick="runPickingCenterExtract('all')" style="width:100%;height:36px;border-radius:8px;border:none;background:#2D1660;color:#fff;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:10px;">📦 전체 센터 추출</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#4A5568;font-weight:600;padding-bottom:8px;border-bottom:1px solid #EDF2F7;margin-bottom:4px;">
+        <input type="checkbox" id="pcm-select-all" onchange="togglePickingCenterAll(this.checked)">
+        전체 선택
+      </label>
+    </div>
+    <div id="pcm-center-list" style="padding:0 20px;overflow-y:auto;flex:1;min-height:80px;"></div>
+    <div style="padding:12px 20px;border-top:1px solid #EDF2F7;text-align:right;display:flex;gap:8px;justify-content:flex-end;">
+      <button onclick="closePickingCenterModal()" style="height:34px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #E0E5FF;background:#fff;color:#4A5568;cursor:pointer;">취소</button>
+      <button onclick="runPickingCenterExtract('selected')" style="height:34px;padding:0 18px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#4318FF;color:#fff;cursor:pointer;">선택 센터 추출</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
      로그인 화면 (Supabase 인증)
 ══════════════════════════════════════ -->
 <div id="login-screen" style="display:flex;position:fixed;inset:0;z-index:9999;background:#F4F6F9;align-items:center;justify-content:center;">
@@ -1351,7 +1375,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
         <p style="font-size:14px;color:#A0AEC0;margin-bottom:.75rem;">정상 출고 가능 항목만 추출 · 재고부족·마진율미달·단종·확인필요 제외</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">
           <button class="run-btn" onclick="downloadPickingList()">피킹리스트(erp용)</button>
-          <button class="run-btn" onclick="downloadPickingListByCenter()">피킹리스트(센터별)</button>
+          <button class="run-btn" onclick="openPickingCenterModal()">피킹리스트(센터별)</button>
           <button class="run-btn" onclick="downloadPickingImageFromFile()">피킹리스트(인쇄용)</button>
           <button class="run-btn" onclick="downloadOrderSheet()">발주서</button>
           <button class="run-btn" onclick="downloadBarcodeXLSX()">쿠팡바코드</button>
@@ -1394,6 +1418,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script>
@@ -7609,31 +7634,89 @@ function downloadPickingList(){
   S.writeFile(wb2,'쿠팡_수주등록_'+_ds1+'.xlsx');
 }
 
-// 센터별로 파일을 나눠서 각각 다운로드 (ERP 센터별 개별 업로드용)
-function downloadPickingListByCenter(){
+// ── 피킹리스트 센터별 추출 팝업 ──
+let _pcmCenterGroups=null; // {센터명: rows[]}
+
+function openPickingCenterModal(){
   if(!canEdit('main_extract')){ alert('파일 추출 권한이 없습니다.'); return; }
   if(!withNo.length){ alert('먼저 파일을 업로드해주세요.'); return; }
-  const S=typeof XLSXStyle!=='undefined'?XLSXStyle:XLSX;
 
   const rows=buildPickingRows();
   if(!rows.length){ alert('출고 가능한 항목이 없습니다.'); return; }
 
-  const centerGroups={};
-  rows.forEach(r=>{ if(!centerGroups[r.center]) centerGroups[r.center]=[]; centerGroups[r.center].push(r); });
-  const centers=Object.keys(centerGroups).sort(cmpCenterName);
+  _pcmCenterGroups={};
+  rows.forEach(r=>{ if(!_pcmCenterGroups[r.center]) _pcmCenterGroups[r.center]=[]; _pcmCenterGroups[r.center].push(r); });
+  const centers=Object.keys(_pcmCenterGroups).sort(cmpCenterName);
+
+  const listEl=document.getElementById('pcm-center-list');
+  listEl.innerHTML=centers.map(center=>{
+    const cnt=_pcmCenterGroups[center].length;
+    const safeId='pcm-c-'+centers.indexOf(center);
+    return `<label style="display:flex;align-items:center;gap:8px;padding:7px 2px;font-size:13px;color:#1B2559;border-bottom:1px solid #F4F6F9;">
+      <input type="checkbox" class="pcm-center-cb" value="${center.replace(/"/g,'&quot;')}" id="${safeId}">
+      <span style="flex:1;">${center||'미지정'}</span>
+      <span style="color:#A0AEC0;font-size:11px;">${cnt}건</span>
+    </label>`;
+  }).join('');
+  document.getElementById('pcm-select-all').checked=false;
+
+  document.getElementById('picking-center-modal').style.display='flex';
+}
+
+function closePickingCenterModal(){
+  document.getElementById('picking-center-modal').style.display='none';
+}
+
+function togglePickingCenterAll(checked){
+  document.querySelectorAll('.pcm-center-cb').forEach(cb=>{ cb.checked=checked; });
+}
+
+// mode: 'all' (팝업 내 전체 센터 추출 버튼) | 'selected' (체크한 센터만)
+function runPickingCenterExtract(mode){
+  if(!_pcmCenterGroups) return;
+  const S=typeof XLSXStyle!=='undefined'?XLSXStyle:XLSX;
+
+  let centers;
+  if(mode==='all'){
+    centers=Object.keys(_pcmCenterGroups).sort(cmpCenterName);
+  } else {
+    centers=Array.from(document.querySelectorAll('.pcm-center-cb:checked')).map(cb=>cb.value);
+    if(!centers.length){ alert('추출할 센터를 선택해주세요.'); return; }
+  }
 
   const _dk1=getSessionDateKey();
   const _ds1=_dk1?_dk1.replace(/-/g,''):(()=>{const _n=new Date();return _n.getFullYear()+String(_n.getMonth()+1).padStart(2,'0')+String(_n.getDate()).padStart(2,'0');})();
 
-  centers.forEach((center,idx)=>{
-    setTimeout(()=>{
-      const ws=writePickingSheet(S, centerGroups[center]);
-      const wb2=S.utils.book_new();
-      S.utils.book_append_sheet(wb2,ws,'수주등록');
-      const safeCenter=center.replace(/[\\/:*?"<>|]/g,'_')||'미지정';
-      S.writeFile(wb2,'쿠팡_수주등록_'+safeCenter+'_'+_ds1+'.xlsx');
-    }, idx*300);
+  function makeCenterBook(center){
+    const ws=writePickingSheet(S, _pcmCenterGroups[center]);
+    const wb2=S.utils.book_new();
+    S.utils.book_append_sheet(wb2,ws,'수주등록');
+    return wb2;
+  }
+
+  if(centers.length===1){
+    const safeCenter=(centers[0].replace(/[\\/:*?"<>|]/g,'_'))||'미지정';
+    S.writeFile(makeCenterBook(centers[0]),'쿠팡_수주등록_'+safeCenter+'_'+_ds1+'.xlsx');
+    closePickingCenterModal();
+    return;
+  }
+
+  // 파일이 2개 이상이면 브라우저의 다중 다운로드 차단을 피하기 위해 zip으로 묶어서 한 번에 다운로드
+  const zip=new JSZip();
+  centers.forEach(center=>{
+    const wb2=makeCenterBook(center);
+    const arr=S.write(wb2,{bookType:'xlsx',type:'array'});
+    const safeCenter=(center.replace(/[\\/:*?"<>|]/g,'_'))||'미지정';
+    zip.file('쿠팡_수주등록_'+safeCenter+'_'+_ds1+'.xlsx', arr);
   });
+  zip.generateAsync({type:'blob'}).then(blob=>{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='쿠팡_수주등록_센터별_'+_ds1+'.zip';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  closePickingCenterModal();
 }
 
 
