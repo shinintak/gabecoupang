@@ -7650,12 +7650,15 @@ function openPickingCenterModal(){
 
   const listEl=document.getElementById('pcm-center-list');
   listEl.innerHTML=centers.map(center=>{
-    const cnt=_pcmCenterGroups[center].length;
+    const rowsC=_pcmCenterGroups[center];
+    const cnt=rowsC.length;
+    const amt=rowsC.reduce((s,r)=>s+r.qty*r.price,0);
     const safeId='pcm-c-'+centers.indexOf(center);
     return `<label style="display:flex;align-items:center;gap:8px;padding:7px 2px;font-size:13px;color:#1B2559;border-bottom:1px solid #F4F6F9;">
       <input type="checkbox" class="pcm-center-cb" value="${center.replace(/"/g,'&quot;')}" id="${safeId}">
       <span style="flex:1;">${center||'미지정'}</span>
-      <span style="color:#A0AEC0;font-size:11px;">${cnt}건</span>
+      <span style="color:#4A5568;font-size:11px;">${amt.toLocaleString('ko-KR')}원</span>
+      <span style="color:#A0AEC0;font-size:11px;min-width:32px;text-align:right;">${cnt}건</span>
     </label>`;
   }).join('');
   document.getElementById('pcm-select-all').checked=false;
