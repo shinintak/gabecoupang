@@ -5971,7 +5971,7 @@ function calcSummary(){
     const autoType=centerTotal>=3000000?'밀크런':'택배';
     const inType=milkRunCenterOverrides[center]||autoType;
     return {ponum,center,amt,out,centerTotal,inType};
-  }).sort((a,b)=>a.center.localeCompare(b.center,'ko'));
+  }).sort((a,b)=>cmpCenterName(a.center,b.center));
 
   return {cats,poRows};
 }
