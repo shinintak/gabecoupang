@@ -8554,7 +8554,7 @@ function _lotteComputeCenterResult(rows){
     const base=db[r.productCode];
     const qty=r.packQty*r.orderQty;
     if(base){
-      erpRows.push({ SPEC:base.spec, qty, price:Math.round(base.priceNoVat), saleType:1 });
+      erpRows.push({ SPEC:base.spec, qty, price:Math.round(base.priceVat), saleType:1 });
       totalWeightG+=(base.weightG||0)*qty;
     } else {
       unmatched.push(r);
