@@ -5775,6 +5775,13 @@ function cmpCenterName(a, b){
   return a.localeCompare(b, ea?'en':'ko');
 }
 
+// 영문 우선 정렬: 영문으로 시작하는 값 먼저, 그 다음 한글
+function cmpEnFirst(a, b){
+  const ea=/^[A-Za-z]/.test(a), eb=/^[A-Za-z]/.test(b);
+  if(ea!==eb) return ea?-1:1;
+  return a.localeCompare(b, ea?'en':'ko');
+}
+
 function getColValue(row, globalIdx, colIdx){
   if(colIdx===0){
     const sid=normId(row[3]);
@@ -6677,7 +6684,7 @@ function renderLoadingListTable(){
         const vb=_llGetColValue(items[b],c+'/'+b,col);
         let cmp;
         if(typeof va==='number'&&typeof vb==='number') cmp=va-vb;
-        else cmp=String(va).localeCompare(String(vb),'ko');
+        else cmp=cmpEnFirst(String(va),String(vb));
         if(cmp!==0) return cmp*dir;
       }
       return 0;
