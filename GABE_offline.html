@@ -1624,9 +1624,10 @@ function setSidebarTheme(theme) { _applySidebarTheme(theme); }
 _applySidebarTheme(localStorage.getItem(SIDEBAR_THEME_LS_KEY) || 'palrong', { skipSync: true });
 
 async function _sharedSyncAll() {
-  // localStorage 키 동기화
-  for (const k of _SHARED_KEYS) {
-    const d = await _sharedRead(k);
+  // localStorage 키 동기화 — 17개 키를 순차 대기(각 수백ms씩)하면 로그인/재동기화가 수 초~수십 초 걸려
+  // "아직 동기화 중"인 상태를 "안 됨"으로 오인하기 쉬움 → 병렬 요청으로 단축
+  const results = await Promise.all(_SHARED_KEYS.map(k => _sharedRead(k).then(d => [k, d])));
+  for (const [k, d] of results) {
     if (d !== null) {
       try { localStorage.setItem(k, JSON.stringify(d)); } catch(e) {}
       // 판매데이터는 IndexedDB(_salesCache)가 실제 데이터 소스라 localStorage만으론 화면에 반영 안 됨 → 별도 반영
@@ -1674,6 +1675,16 @@ function _sharedSetUI(connected) {
     st.textContent = '📌 로컬 저장 모드';
     st.style.color = '#aaa';
   }
+}
+
+// 마지막으로 서버 동기화가 실제로 완료된 시각/세션 건수를 표시 — "동기화가 됐는지 안 됐는지" 화면에서 바로 확인용
+function _sharedShowSyncTime() {
+  const st = document.getElementById('shared-status');
+  if (!st || !_serverConnected) return;
+  const t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const sessCnt = (_sessionCache && typeof _sessionCache === 'object') ? Object.keys(_sessionCache).length : 0;
+  st.textContent = `☁️ 클라우드 연결됨 — 마지막 동기화 ${t} (세션 ${sessCnt}건)`;
+  st.style.color = '#68E6B8';
 }
 
 function _sharedFlash() {
@@ -1928,12 +1939,13 @@ async function _initSharedFolder() {
     _sharedSetUI(true);
     await _sharedSyncAll();
     _sharedRefreshAll();
+    _sharedShowSyncTime();
     // 로그인 후 탭을 계속 켜둔 채 쓰는 경우를 대비해 주기적으로 서버 데이터 재동기화
     // (기존엔 로그인 시 1회만 동기화되어, 다른 팀원이 저장한 내용이 재로그인 전까지 반영 안 되는 문제가 있었음)
     if (!_sharedSyncIntervalId) {
       _sharedSyncIntervalId = setInterval(async () => {
         if (!_serverConnected) return;
-        try { await _sharedSyncAll(); _sharedRefreshAll(); } catch(e) { console.warn('[자동 재동기화 실패]', e.message); }
+        try { await _sharedSyncAll(); _sharedRefreshAll(); _sharedShowSyncTime(); } catch(e) { console.warn('[자동 재동기화 실패]', e.message); }
       }, 3 * 60 * 1000);
     }
   } catch(e) {
