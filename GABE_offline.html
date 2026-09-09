@@ -1633,26 +1633,24 @@ async function _sharedSyncAll() {
       if (k === 'gabe_sales_v1' && typeof _ingestSyncedSales === 'function') _ingestSyncedSales(d);
     }
   }
-  // IndexedDB 세션 동기화 (납품 세션)
+  // 세션 동기화 (납품 세션) — 메모리 캐시(_sessionCache)를 먼저 갱신해서
+  // IndexedDB 쓰기가 막히거나(다른 탭 점유 등) 실패해도 화면엔 최신 데이터가 즉시 반영되게 함
   const sessions = await _sharedRead('gabe_sessions_v1');
   if (sessions && Object.keys(sessions).length) {
-    await new Promise(resolve => {
-      try {
-        const req = indexedDB.open(IDB_NAME, 1);
-        req.onsuccess = e => {
+    Object.entries(sessions).forEach(([k,v]) => { _sessionCache[k] = v; });
+    if (typeof renderSessionList === 'function') renderSessionList();
+    // IndexedDB 영구 저장은 백그라운드로 시도 (실패해도 위 메모리 캐시는 이미 최신 상태)
+    try {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onsuccess = e => {
+        try {
           const tx = e.target.result.transaction(IDB_STORE, 'readwrite');
           const st = tx.objectStore(IDB_STORE);
           Object.values(sessions).forEach(item => { try { st.put(item); } catch(e){} });
-          tx.oncomplete = () => {
-            Object.entries(sessions).forEach(([k,v]) => { _sessionCache[k] = v; });
-            resolve();
-          };
-          tx.onerror = resolve;
-        };
-        req.onerror = resolve;
-      } catch(e) { resolve(); }
-    });
-    if (typeof renderSessionList === 'function') renderSessionList();
+        } catch(e) { console.warn('[세션 IDB 저장 실패]', e.message); }
+      };
+      req.onerror = () => console.warn('[세션 IDB open 실패]', req.error && req.error.message);
+    } catch(e) { console.warn('[세션 IDB 접근 실패]', e.message); }
   }
   if (typeof _markDeliveryDirty === 'function') _markDeliveryDirty();
   if (typeof _markSettlementDirty === 'function') _markSettlementDirty();
