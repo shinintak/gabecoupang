@@ -1627,7 +1627,11 @@ async function _sharedSyncAll() {
   // localStorage 키 동기화
   for (const k of _SHARED_KEYS) {
     const d = await _sharedRead(k);
-    if (d !== null) try { localStorage.setItem(k, JSON.stringify(d)); } catch(e) {}
+    if (d !== null) {
+      try { localStorage.setItem(k, JSON.stringify(d)); } catch(e) {}
+      // 판매데이터는 IndexedDB(_salesCache)가 실제 데이터 소스라 localStorage만으론 화면에 반영 안 됨 → 별도 반영
+      if (k === 'gabe_sales_v1' && typeof _ingestSyncedSales === 'function') _ingestSyncedSales(d);
+    }
   }
   // IndexedDB 세션 동기화 (납품 세션)
   const sessions = await _sharedRead('gabe_sessions_v1');
@@ -1910,8 +1914,13 @@ function _sharedRefreshAll() {
   if (typeof renderSalesPanel === 'function') renderSalesPanel();
   if (typeof renderAnnualPanel === 'function') renderAnnualPanel();
   if (typeof renderReturnErrPanel === 'function') renderReturnErrPanel();
+  if (typeof _deliveryPageDirty !== 'undefined') _deliveryPageDirty = false;
+  if (typeof smtLoadDB === 'function') smtLoadDB();
+  if (typeof smtRenderPage === 'function') smtRenderPage();
+  if (typeof _settlementPageDirty !== 'undefined') _settlementPageDirty = false;
 }
 
+let _sharedSyncIntervalId = null;
 async function _initSharedFolder() {
   // 로그인 후 호출됨 — Supabase 연결 확인 및 데이터 동기화
   const sb = _getSupabase();
@@ -1921,6 +1930,14 @@ async function _initSharedFolder() {
     _sharedSetUI(true);
     await _sharedSyncAll();
     _sharedRefreshAll();
+    // 로그인 후 탭을 계속 켜둔 채 쓰는 경우를 대비해 주기적으로 서버 데이터 재동기화
+    // (기존엔 로그인 시 1회만 동기화되어, 다른 팀원이 저장한 내용이 재로그인 전까지 반영 안 되는 문제가 있었음)
+    if (!_sharedSyncIntervalId) {
+      _sharedSyncIntervalId = setInterval(async () => {
+        if (!_serverConnected) return;
+        try { await _sharedSyncAll(); _sharedRefreshAll(); } catch(e) { console.warn('[자동 재동기화 실패]', e.message); }
+      }, 3 * 60 * 1000);
+    }
   } catch(e) {
     console.warn('[Supabase 초기화 실패]', e.message);
     _serverConnected = false;
@@ -9842,6 +9859,24 @@ function salesSave(d){
     Object.entries(byYear).forEach(([y,yd])=>{ try{localStorage.setItem(SALES_LS_KEY+'_'+y,JSON.stringify(yd));}catch(e){ alert(`${y}년 저장 실패. 브라우저 저장 공간을 확인해주세요.`); } });
   }
   _sharedWrite(SALES_LS_KEY,d);
+  _markDeliveryDirty();
+}
+
+// 서버에서 동기화된 판매데이터를 캐시/IDB에 반영 (salesSave와 달리 서버로 다시 쓰지 않음 — 동기화 루프 방지)
+function _ingestSyncedSales(d){
+  if(!d || typeof d !== 'object') return;
+  _salesCache=d;
+  const byYear={};
+  Object.entries(d).forEach(([k,v])=>{ const y=k.slice(0,4); if(!byYear[y])byYear[y]={}; byYear[y][k]=v; });
+  if(_salesIdb){
+    try{
+      const tx=_salesIdb.transaction(SALES_IDB_STORE,'readwrite');
+      const st=tx.objectStore(SALES_IDB_STORE);
+      Object.entries(byYear).forEach(([y,yd])=>st.put({year:y,data:yd}));
+    }catch(e){ console.warn('IDB sync error',e); }
+  } else {
+    Object.entries(byYear).forEach(([y,yd])=>{ try{localStorage.setItem(SALES_LS_KEY+'_'+y,JSON.stringify(yd));}catch(e){} });
+  }
   _markDeliveryDirty();
 }
 
