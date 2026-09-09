@@ -3619,6 +3619,7 @@ function deleteSession(dateKey){
   const store=ssLoad();
   delete store[dateKey];
   ssSave(store);
+  _sharedWrite('gabe_sessions_v1',store); // 클라우드에도 삭제 반영 (안 하면 다음 동기화 때 되살아남)
   renderSessionList(); renderAnnualPanel();
 }
 
