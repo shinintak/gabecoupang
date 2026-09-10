@@ -1483,7 +1483,15 @@ const PRINT_SPEC_CODES = new Set(['KS3754','KS3755','KS3756','KS3757']);
 
 // ── 세트구성 매칭 건너뛰고 EPR 직접 조회할 SKU ID 목록 ──
 // (세트구성 시트에 잘못 매칭되거나, 완제품 재고로 판단해야 하는 경우)
-const SKIP_SET_MATCH_SKUS = new Set([]);
+const SKIP_SET_MATCH_SKUS = new Set([
+  '14527769', // LER0739 아기곰 분류 세트 — 세트구성 오매칭으로 재고부족(PDA21<발주24) 미판정 방지, EPR 직접재고 우선
+]);
+
+// ── 구성품 1개당 필요수량이 1이 아닌 특수 매칭 (SPEC 기준) ──
+// 예: IN86885-2는 실제로 IN86885-1을 2개 묶은 상품이라, 발주 1개당 IN86885-1 재고가 2개씩 필요함
+const COMPONENT_QTY_MULTIPLIER = {
+  'IN86885-2': [{spec:'IN86885-1', per:2}], // IN86885-1 2개 = IN86885-2 1개
+};
 
 // ── EPR 직접재고 우선 확인 후, 재고 없을 때만 세트구성 체크할 SPEC 코드 목록 ──
 // (EPR_FIRST_SKUS와 동일 동작, SPEC(KS코드 등) 기준으로 등록)
@@ -5154,6 +5162,16 @@ function getStockStatus(skuId){
   const id=normId(skuId);
   const spec=skuErpMap[id]||'';
   const totalQty=skuTotalQtyMap[id]||0;
+
+  // 구성품 1개당 필요수량이 1이 아닌 특수 매칭 (예: IN86885-2 = IN86885-1 2개)
+  if(COMPONENT_QTY_MULTIPLIER[spec]){
+    const needs=COMPONENT_QTY_MULTIPLIER[spec];
+    const hasShortage=needs.some(n=>{
+      const pda=getEprQty(n.spec);
+      return pda===null||pda<totalQty*n.per;
+    });
+    return hasShortage?'short':'ok';
+  }
 
   // 세트구성 매칭 건너뛰기 목록에 있으면 → EPR 직접 조회로 바로 이동
   if(SKIP_SET_MATCH_SKUS.has(id)){
