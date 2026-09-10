@@ -1583,23 +1583,90 @@ async function _sharedRead(lsKey) {
   } catch(e) { return null; }
 }
 
-// gabe_sessions_v1(납품 세션)은 여러 계정이 공유하는 통짜 데이터라
+// gabe_sessions_v1(납품 세션)은 원래 여러 계정이 공유하는 통짜 데이터 1덩어리였는데,
+// 데이터가 쌓이면서 한 번에 쓰기엔 너무 커져 Postgres statement timeout으로 저장 자체가 실패하는 문제가 생김.
+// (연도별로만 나눠도 실제 데이터가 한 해에 몰려있으면 청크가 충분히 안 줄어들 수 있어 월 단위로 쪼갬)
+// → 월별로 쪼개서(gabe_sessions_v1_2026-09 ...) 그 달만 병합·저장하도록 변경. 최대 31일치라 크기가 항상 작게 유지됨.
+function _sessionMonthKey(ym) { return 'gabe_sessions_v1_' + ym; }
+
+// 최초 1회: 옛 통짜 키(gabe_sessions_v1)에 데이터가 남아있으면 월별 키로 나눠 옮기고 색인(월 목록) 기록
+let _sessionsMigrated = false;
+async function _ensureSessionMonthMigration() {
+  if (_sessionsMigrated) return;
+  try {
+    const months = await _sharedRead('gabe_sessions_v1_months');
+    if (months && months.length) { _sessionsMigrated = true; return; }
+    const legacy = await _sharedRead('gabe_sessions_v1');
+    if (legacy && typeof legacy === 'object' && Object.keys(legacy).length) {
+      const byMonth = {};
+      Object.entries(legacy).forEach(([k, v]) => {
+        const ym = k.slice(0, 7);
+        if (!byMonth[ym]) byMonth[ym] = {};
+        byMonth[ym][k] = v;
+      });
+      await Promise.all(Object.entries(byMonth).map(([ym, d]) => _sharedWrite(_sessionMonthKey(ym), d)));
+      await _sharedWrite('gabe_sessions_v1_months', Object.keys(byMonth));
+      console.log('[세션 월별 마이그레이션 완료]', Object.keys(byMonth));
+    }
+    _sessionsMigrated = true;
+  } catch(e) { console.warn('[세션 마이그레이션 실패]', e.message); }
+}
+
+// 서버의 모든 월 청크를 읽어 하나로 합침. 마이그레이션 전이면(색인 없음) 옛 통짜 키로 폴백
+async function _sharedReadAllSessions() {
+  try {
+    const months = await _sharedRead('gabe_sessions_v1_months');
+    if (!months || !months.length) return await _sharedRead('gabe_sessions_v1');
+    const chunks = await Promise.all(months.map(ym => _sharedRead(_sessionMonthKey(ym))));
+    const merged = {};
+    chunks.forEach(c => { if (c && typeof c === 'object') Object.assign(merged, c); });
+    return merged;
+  } catch(e) { console.warn('[세션 읽기 실패]', e.message); return null; }
+}
+
 // 로컬 캐시로 그대로 덮어쓰면 다른 사람이 먼저 저장해둔 날짜가 통째로 사라질 수 있음
-// → 저장 직전 서버 최신본을 읽어 병합(로컬 우선) 후 저장. deleteKey는 병합 후 다시 제거(삭제 반영용)
+// → 바뀐 날짜가 속한 월 청크만 서버 최신본과 병합(로컬 우선)해서 저장. deleteKey는 병합 후 다시 제거(삭제 반영용)
 async function _sharedWriteSessions(localStore, deleteKey) {
   if (!_serverConnected) return false;
-  let merged = localStore;
-  try {
-    const serverData = await _sharedRead('gabe_sessions_v1');
-    if (serverData && typeof serverData === 'object') {
-      merged = Object.assign({}, serverData, localStore);
-      if (deleteKey) delete merged[deleteKey];
-      _sessionCache = merged;
-      if (typeof _idbWriteAll === 'function') _idbWriteAll(merged);
-      if (typeof renderSessionList === 'function') renderSessionList();
-    }
-  } catch(e) { console.warn('[세션 병합 실패]', e.message); }
-  return await _sharedWrite('gabe_sessions_v1', merged);
+  await _ensureSessionMonthMigration();
+
+  const monthGroups = {};
+  Object.entries(localStore).forEach(([k, v]) => {
+    const ym = k.slice(0, 7);
+    if (!monthGroups[ym]) monthGroups[ym] = {};
+    monthGroups[ym][k] = v;
+  });
+  if (deleteKey) {
+    const dym = deleteKey.slice(0, 7);
+    if (!monthGroups[dym]) monthGroups[dym] = {}; // 그 달에 로컬 데이터가 안 남아도 삭제는 반영해야 함
+  }
+
+  let allOk = true;
+  const newMonths = [];
+  await Promise.all(Object.keys(monthGroups).map(async (ym) => {
+    try {
+      const key = _sessionMonthKey(ym);
+      const serverChunk = await _sharedRead(key);
+      if (serverChunk === null) newMonths.push(ym);
+      const merged = Object.assign({}, serverChunk || {}, monthGroups[ym]);
+      if (deleteKey && deleteKey.slice(0, 7) === ym) delete merged[deleteKey];
+      Object.assign(_sessionCache, merged);
+      if (deleteKey && deleteKey.slice(0, 7) === ym) delete _sessionCache[deleteKey];
+      const ok = await _sharedWrite(key, merged);
+      if (!ok) allOk = false;
+    } catch(e) { console.warn('[세션 월 저장 실패]', ym, e.message); allOk = false; }
+  }));
+
+  if (newMonths.length) {
+    try {
+      const idx = await _sharedRead('gabe_sessions_v1_months') || [];
+      await _sharedWrite('gabe_sessions_v1_months', Array.from(new Set([...idx, ...newMonths])));
+    } catch(e) { console.warn('[세션 월 색인 저장 실패]', e.message); }
+  }
+
+  if (typeof _idbWriteAll === 'function') _idbWriteAll(_sessionCache);
+  if (typeof renderSessionList === 'function') renderSessionList();
+  return allOk;
 }
 
 // ── 사이드바 테마(팔롱이/클래식) 개인별 선택 ──
@@ -1655,7 +1722,7 @@ async function _sharedSyncAll() {
   }
   // 세션 동기화 (납품 세션) — 메모리 캐시(_sessionCache)를 먼저 갱신해서
   // IndexedDB 쓰기가 막히거나(다른 탭 점유 등) 실패해도 화면엔 최신 데이터가 즉시 반영되게 함
-  const sessions = await _sharedRead('gabe_sessions_v1');
+  const sessions = await _sharedReadAllSessions();
   if (sessions && Object.keys(sessions).length) {
     Object.entries(sessions).forEach(([k,v]) => { _sessionCache[k] = v; });
     if (typeof renderSessionList === 'function') renderSessionList();
