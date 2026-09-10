@@ -1583,6 +1583,25 @@ async function _sharedRead(lsKey) {
   } catch(e) { return null; }
 }
 
+// gabe_sessions_v1(납품 세션)은 여러 계정이 공유하는 통짜 데이터라
+// 로컬 캐시로 그대로 덮어쓰면 다른 사람이 먼저 저장해둔 날짜가 통째로 사라질 수 있음
+// → 저장 직전 서버 최신본을 읽어 병합(로컬 우선) 후 저장. deleteKey는 병합 후 다시 제거(삭제 반영용)
+async function _sharedWriteSessions(localStore, deleteKey) {
+  if (!_serverConnected) return false;
+  let merged = localStore;
+  try {
+    const serverData = await _sharedRead('gabe_sessions_v1');
+    if (serverData && typeof serverData === 'object') {
+      merged = Object.assign({}, serverData, localStore);
+      if (deleteKey) delete merged[deleteKey];
+      _sessionCache = merged;
+      if (typeof _idbWriteAll === 'function') _idbWriteAll(merged);
+      if (typeof renderSessionList === 'function') renderSessionList();
+    }
+  } catch(e) { console.warn('[세션 병합 실패]', e.message); }
+  return await _sharedWrite('gabe_sessions_v1', merged);
+}
+
 // ── 사이드바 테마(팔롱이/클래식) 개인별 선택 ──
 const SIDEBAR_THEME_LS_KEY = 'gabe_sidebar_theme';
 
@@ -2456,9 +2475,9 @@ function importAllData() {
       // 서버 연결 중이면 공유폴더에도 즉시 동기화
       if (_serverConnected) {
         await Promise.all(toSync.map(([k, v]) => _sharedWrite(k, v)));
-        // 세션 데이터도 서버에 저장
+        // 세션 데이터도 서버에 저장 (서버 최신본과 병합, 통째 덮어쓰기 방지)
         if (all._sessions && Object.keys(all._sessions).length) {
-          await _sharedWrite('gabe_sessions_v1', all._sessions);
+          await _sharedWriteSessions(all._sessions);
         }
       }
       const dt = all._exportedAt ? new Date(all._exportedAt).toLocaleString('ko-KR') : '알 수 없음';
@@ -3162,7 +3181,7 @@ async function clearUnreliableCancelData(){
   });
   if(!count){ alert('초기화할 데이터가 없습니다.'); return; }
   if(ssSave(store)){
-    await _sharedWrite('gabe_sessions_v1',store);
+    await _sharedWriteSessions(store);
     alert(count+'개 세션의 잘못된 발주취소 데이터를 초기화했습니다.\n이제 납품현황이 정상 표시됩니다.');
   }
 }
@@ -3213,7 +3232,7 @@ function loadAndSaveSession(dateKey, btn){
   rec.cancelData={orders:Object.values(_cancelMap),reliable:true};
   store[dateKey]=rec;
   if(!ssSave(store)){ if(btn){btn.disabled=false;btn.textContent='납품저장';} return; }
-  _sharedWrite('gabe_sessions_v1',store).then(()=>{ renderAnnualPanel(); });
+  _sharedWriteSessions(store).then(()=>{ renderAnnualPanel(); });
   if(btn){ btn.textContent='✓ 저장됨'; setTimeout(()=>{btn.disabled=false;btn.textContent='납품저장';},2000); }
 }
 
@@ -3320,7 +3339,7 @@ async function rebuildAllCancelData(btn){
     if(btn){btn.disabled=false;btn.textContent='🔄 발주취소 일괄재계산';}
     return;
   }
-  await _sharedWrite('gabe_sessions_v1',store);
+  await _sharedWriteSessions(store);
   alert(updated+'개 세션 발주취소 데이터 재계산 완료!\n월별 팝업에서 정상 집계를 확인하세요.');
   if(btn){btn.disabled=false;btn.textContent='🔄 발주취소 일괄재계산';}
 }
@@ -3511,8 +3530,8 @@ function saveCurrentSession(){
     // 제외(로딩 시 재빌드): eprNameMap, skuTotalQtyMap, skuIdSetComponents, milkRunCenterSet
   };
   if(!ssSave(store)) return;
-  // Supabase 클라우드 저장 (로그인된 경우)
-  _sharedWrite('gabe_sessions_v1', store).then(ok=>{
+  // Supabase 클라우드 저장 (로그인된 경우, 서버 최신본과 병합)
+  _sharedWriteSessions(store).then(ok=>{
     const msg=document.getElementById('session-save-msg');
     if(msg){
       msg.textContent = ok ? '✓ 저장됨 (클라우드)' : '✓ 저장됨 (로컬)';
@@ -3540,7 +3559,7 @@ async function syncAllSessionsToCloud(){
     if(!_serverConnected){ alert('클라우드 연결이 필요합니다. 로그인 상태를 확인해주세요.'); return; }
     const store=ssLoad();
     if(!Object.keys(store).length){ alert('저장된 세션이 없습니다.'); return; }
-    const ok=await _sharedWrite('gabe_sessions_v1', store);
+    const ok=await _sharedWriteSessions(store);
     if(ok){
       if(btn){ btn.textContent='✓ 동기화 완료'; btn.style.background='#059669'; }
       setTimeout(()=>{ if(btn){ btn.textContent='☁ 클라우드 동기화'; btn.style.background='#0891b2'; btn.disabled=false; } },2000);
@@ -3631,7 +3650,7 @@ function deleteSession(dateKey){
   const store=ssLoad();
   delete store[dateKey];
   ssSave(store);
-  _sharedWrite('gabe_sessions_v1',store); // 클라우드에도 삭제 반영 (안 하면 다음 동기화 때 되살아남)
+  _sharedWriteSessions(store, dateKey); // 서버 최신본과 병합 후 저장, 삭제한 날짜는 병합 뒤 다시 제거(안 하면 되살아남)
   renderSessionList(); renderAnnualPanel();
 }
 
