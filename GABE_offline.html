@@ -3362,7 +3362,7 @@ async function rebuildAllCancelData(btn){
       const sp=skuErpM[id]||'',comps=setComps[id],tq=totalQM[id]||0;
       if(EPR_FIRST_SKUS.has(id)||EPR_FIRST_SPECS.has(sp)){
         const pda=eprMap[normId(sp)]??eprMap[sp]??0;
-        if(pda>0)return'ok';
+        if(pda>=tq)return'ok';
         if(comps&&comps.length>0)return _chk(comps,tq)?'short':'ok';
         return'short';
       }
@@ -5187,8 +5187,8 @@ function getStockStatus(skuId){
     const lookupSpec = _aliasSpec || spec; // 별칭 있으면 별칭 SPEC으로 EPR 조회
     const pdaBySpec = lookupSpec ? getEprQty(lookupSpec) : null;
     const pda = pdaBySpec !== null ? pdaBySpec : getEprQty(id);
-    if(pda !== null && pda > 0) return 'ok'; // 재고 1개라도 있으면 즉시 ok
-    // EPR 재고 0 또는 미등록 → 세트구성 체크로 계속 진행
+    if(pda !== null && pda >= totalQty) return 'ok'; // 재고가 발주수량 이상 충분할 때만 즉시 ok
+    // EPR 재고 부족/0/미등록 → 세트구성 체크로 계속 진행
   }
 
   // 세트구성 있으면 → 구성품 재고 우선 (EPR 조립완제품 재고는 무시)
@@ -8034,7 +8034,10 @@ function makeNewOrderSheet(S, wb, rows, sheetName){
     ws[ec(R,2)]=cs(skuName,S_L);                                                      // C: SKU 이름
     ws[ec(R,3)]=cs(barcode,S_C);                                                      // D: SKU Barcode (직접 값)
     ws[ec(R,4)]=cs(attachFlag,S_E);                                                   // E: 바코드부착여부 (직접 값)
-    ws[ec(R,5)]=cs(center,S_F);                                                        // F: 물류센터 (자동 줄 바꿈)
+    const isRcCenter=center.includes('(RC)');
+    const centerDisp=isRcCenter?center+'\n*혼적X*':center;
+    const S_F_CELL=isRcCenter?{...S_F,fill:{patternType:'solid',fgColor:{rgb:'FFB300'}}}:S_F;
+    ws[ec(R,5)]=cs(centerDisp,S_F_CELL);                                               // F: 물류센터 (자동 줄 바꿈, (RC)센터는 *혼적X* 표기+주황색)
     ws[ec(R,6)]=cn(qty,S_R);                                                           // G: 확정수량
     ws[ec(R,7)]=cs('',S_C);                                                            // H: 박스번호 (수기)
     R++;
@@ -11267,10 +11270,10 @@ function _renderMonthPopupContent(year, monthLabel){
       // getStockStatus와 동일: EPR_FIRST_SKUS/SPECS는 EPR 직접재고 우선 확인
       if(EPR_FIRST_SKUS.has(id)||EPR_FIRST_SPECS.has(sp)){
         const pda=eprMap[normId(sp)]??eprMap[sp]??0;
-        if(pda>0){ stockSt='ok'; }
+        const tqFirst=totalQM[id]||0;
+        if(pda>=tqFirst){ stockSt='ok'; }
         else if(comps&&comps.length>0){
-          const tq=totalQM[id]||0;
-          const short=_checkComps(comps,tq);
+          const short=_checkComps(comps,tqFirst);
           stockSt=short?'short':'ok';
         } else { stockSt='short'; }
       } else if(comps&&comps.length>0){
