@@ -553,6 +553,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
   @keyframes pl-spin { to { transform: rotate(360deg); } }
   #productlist-page .loading-text { animation: pl-bounce 0.6s ease-in-out infinite alternate; }
   @keyframes pl-bounce { from { transform: translateY(0); } to { transform: translateY(-3px); } }
+  @keyframes plSheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 </style>
 </head>
 <body>
@@ -777,6 +778,23 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
     <div style="padding:12px 20px;border-top:1px solid #EDF2F7;text-align:right;display:flex;gap:8px;justify-content:flex-end;">
       <button onclick="closePickingCenterModal()" style="height:34px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #E0E5FF;background:#fff;color:#4A5568;cursor:pointer;">취소</button>
       <button onclick="runPickingCenterExtract('selected')" style="height:34px;padding:0 18px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#4318FF;color:#fff;cursor:pointer;">선택 센터 추출</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     피킹리스트 선택 - 하단 팝업 (erp용/센터별/인쇄용 통합)
+══════════════════════════════════════ -->
+<div id="picking-list-modal" style="display:none;position:fixed;inset:0;z-index:3200;background:rgba(27,37,89,.5);align-items:flex-end;justify-content:center;" onclick="if(event.target===this)closePickingListModal()">
+  <div style="background:#fff;border-radius:18px 18px 0 0;width:420px;max-width:100vw;box-shadow:0 -8px 32px rgba(27,37,89,0.22);animation:plSheetUp .18s ease-out;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #E0E5FF;">
+      <div style="font-size:15px;font-weight:800;color:#1B2559;">피킹리스트 추출</div>
+      <button onclick="closePickingListModal()" style="width:28px;height:28px;border-radius:50%;border:none;background:#F4F6F9;cursor:pointer;font-size:13px;">✕</button>
+    </div>
+    <div style="padding:14px 20px 24px;display:flex;flex-direction:column;gap:10px;">
+      <button onclick="closePickingListModal();downloadPickingList()" style="width:100%;height:48px;border-radius:10px;border:1.5px solid #E0E5FF;background:#fff;color:#1B2559;font-size:14px;font-weight:700;cursor:pointer;text-align:left;padding:0 16px;">피킹리스트(erp용)</button>
+      <button onclick="closePickingListModal();openPickingCenterModal()" style="width:100%;height:48px;border-radius:10px;border:1.5px solid #E0E5FF;background:#fff;color:#1B2559;font-size:14px;font-weight:700;cursor:pointer;text-align:left;padding:0 16px;">피킹리스트(센터별)</button>
+      <button onclick="closePickingListModal();downloadPickingImageFromFile()" style="width:100%;height:48px;border-radius:10px;border:1.5px solid #E0E5FF;background:#fff;color:#1B2559;font-size:14px;font-weight:700;cursor:pointer;text-align:left;padding:0 16px;">피킹리스트(인쇄용)</button>
     </div>
   </div>
 </div>
@@ -1385,9 +1403,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
         <p class="sec-title">파일 추출</p>
         <p style="font-size:14px;color:#A0AEC0;margin-bottom:.75rem;">정상 출고 가능 항목만 추출 · 재고부족·마진율미달·단종·확인필요 제외</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">
-          <button class="run-btn" onclick="downloadPickingList()">피킹리스트(erp용)</button>
-          <button class="run-btn" onclick="openPickingCenterModal()">피킹리스트(센터별)</button>
-          <button class="run-btn" onclick="downloadPickingImageFromFile()">피킹리스트(인쇄용)</button>
+          <button class="run-btn" onclick="openPickingListModal()">피킹리스트</button>
           <button class="run-btn" onclick="downloadOrderSheet()">발주서</button>
           <button class="run-btn" onclick="downloadBarcodeXLSX()">쿠팡바코드</button>
         </div>
@@ -7725,9 +7741,9 @@ async function _renderPickingImages(items, fileName){
     await new Promise(r=>setTimeout(r,50));
   }
 
-  // PDF 저장
-  const today=new Date();
-  const ds=today.getFullYear()+String(today.getMonth()+1).padStart(2,'0')+String(today.getDate()).padStart(2,'0');
+  // PDF 저장 — 파일명은 생성일이 아닌 납품일 기준
+  const _dkImg=getSessionDateKey();
+  const ds=_dkImg?_dkImg.replace(/-/g,''):(()=>{const _n=new Date();return _n.getFullYear()+String(_n.getMonth()+1).padStart(2,'0')+String(_n.getDate()).padStart(2,'0');})();
   pdf.save('픽킹위치정보_'+ds+'.pdf');
   alert(totalPg+'페이지 PDF 다운로드 완료');
 }
@@ -7790,6 +7806,17 @@ function writePickingSheet(S, rows){
   ws['!ref']='A1:'+cl(9)+R;
   ws['!cols']=[{wch:12},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12},{wch:16},{wch:12},{wch:8},{wch:10}];
   return ws;
+}
+
+// ── 피킹리스트 선택 팝업 (erp용/센터별/인쇄용 통합 버튼) ──
+function openPickingListModal(){
+  if(!canEdit('main_extract')){ alert('파일 추출 권한이 없습니다.'); return; }
+  if(!withNo.length){ alert('먼저 파일을 업로드해주세요.'); return; }
+  document.getElementById('picking-list-modal').style.display='flex';
+}
+
+function closePickingListModal(){
+  document.getElementById('picking-list-modal').style.display='none';
 }
 
 function downloadPickingList(){
