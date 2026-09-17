@@ -553,7 +553,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
   @keyframes pl-spin { to { transform: rotate(360deg); } }
   #productlist-page .loading-text { animation: pl-bounce 0.6s ease-in-out infinite alternate; }
   @keyframes pl-bounce { from { transform: translateY(0); } to { transform: translateY(-3px); } }
-  @keyframes plSheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  @keyframes plPopIn { from { opacity:0; transform: translateY(-6px); } to { opacity:1; transform: translateY(0); } }
 </style>
 </head>
 <body>
@@ -783,18 +783,18 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
 </div>
 
 <!-- ══════════════════════════════════════
-     피킹리스트 선택 - 하단 팝업 (erp용/센터별/인쇄용 통합)
+     피킹리스트 선택 - 버튼 바로 아래 드롭다운 (erp용/센터별/인쇄용 통합)
 ══════════════════════════════════════ -->
-<div id="picking-list-modal" style="display:none;position:fixed;inset:0;z-index:3200;background:rgba(27,37,89,.5);align-items:flex-end;justify-content:center;" onclick="if(event.target===this)closePickingListModal()">
-  <div style="background:#fff;border-radius:18px 18px 0 0;width:420px;max-width:100vw;box-shadow:0 -8px 32px rgba(27,37,89,0.22);animation:plSheetUp .18s ease-out;">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #E0E5FF;">
-      <div style="font-size:15px;font-weight:800;color:#1B2559;">피킹리스트 추출</div>
-      <button onclick="closePickingListModal()" style="width:28px;height:28px;border-radius:50%;border:none;background:#F4F6F9;cursor:pointer;font-size:13px;">✕</button>
+<div id="picking-list-modal" style="display:none;position:fixed;inset:0;z-index:3200;background:transparent;" onclick="if(event.target===this)closePickingListModal()">
+  <div id="picking-list-popover" style="position:absolute;background:#fff;border-radius:12px;width:250px;box-shadow:0 10px 30px rgba(27,37,89,0.22);border:1px solid #E0E5FF;overflow:hidden;animation:plPopIn .14s ease-out;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #E0E5FF;">
+      <div style="font-size:12px;font-weight:800;color:#1B2559;">피킹리스트 추출</div>
+      <button onclick="closePickingListModal()" style="width:20px;height:20px;border-radius:50%;border:none;background:#F4F6F9;cursor:pointer;font-size:10px;">✕</button>
     </div>
-    <div style="padding:14px 20px 24px;display:flex;flex-direction:column;gap:10px;">
-      <button onclick="closePickingListModal();downloadPickingList()" style="width:100%;height:48px;border-radius:10px;border:1.5px solid #E0E5FF;background:#fff;color:#1B2559;font-size:14px;font-weight:700;cursor:pointer;text-align:left;padding:0 16px;">피킹리스트(erp용)</button>
-      <button onclick="closePickingListModal();openPickingCenterModal()" style="width:100%;height:48px;border-radius:10px;border:1.5px solid #E0E5FF;background:#fff;color:#1B2559;font-size:14px;font-weight:700;cursor:pointer;text-align:left;padding:0 16px;">피킹리스트(센터별)</button>
-      <button onclick="closePickingListModal();downloadPickingImageFromFile()" style="width:100%;height:48px;border-radius:10px;border:1.5px solid #E0E5FF;background:#fff;color:#1B2559;font-size:14px;font-weight:700;cursor:pointer;text-align:left;padding:0 16px;">피킹리스트(인쇄용)</button>
+    <div style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+      <button onclick="closePickingListModal();downloadPickingList()" style="width:100%;height:38px;border-radius:8px;border:1.5px solid #E0E5FF;background:#fff;color:#1B2559;font-size:13px;font-weight:700;cursor:pointer;text-align:left;padding:0 12px;">피킹리스트(erp용)</button>
+      <button onclick="closePickingListModal();openPickingCenterModal()" style="width:100%;height:38px;border-radius:8px;border:1.5px solid #E0E5FF;background:#fff;color:#1B2559;font-size:13px;font-weight:700;cursor:pointer;text-align:left;padding:0 12px;">피킹리스트(센터별)</button>
+      <button onclick="closePickingListModal();downloadPickingImageFromFile()" style="width:100%;height:38px;border-radius:8px;border:1.5px solid #E0E5FF;background:#fff;color:#1B2559;font-size:13px;font-weight:700;cursor:pointer;text-align:left;padding:0 12px;">피킹리스트(인쇄용)</button>
     </div>
   </div>
 </div>
@@ -1403,7 +1403,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
         <p class="sec-title">파일 추출</p>
         <p style="font-size:14px;color:#A0AEC0;margin-bottom:.75rem;">정상 출고 가능 항목만 추출 · 재고부족·마진율미달·단종·확인필요 제외</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">
-          <button class="run-btn" onclick="openPickingListModal()">피킹리스트</button>
+          <button class="run-btn" onclick="openPickingListModal(this)">피킹리스트</button>
           <button class="run-btn" onclick="downloadOrderSheet()">발주서</button>
           <button class="run-btn" onclick="downloadBarcodeXLSX()">쿠팡바코드</button>
         </div>
@@ -6637,6 +6637,7 @@ let _llPalletCount={};  // safeKey → 센터별 총 파렛트 수량
 let _llItemPallet={};   // 'center/idx/si' → BOX 행별 팔렛 번호 (이전 'center/idx' 키도 폴백으로 지원)
 let _llPalletRanges={}; // safeKey → [{pallet:1,boxStart:1,boxEnd:15},{pallet:2,...}]
 let _llSortStack=[]; // 밀크런 적재리스트 팝업 정렬 스택: [{col,dir},...] — 마지막이 최우선 기준
+let _llExpectedBoxCount={}; // safeKey → 센터별 수기 입력 "전체 박스수" (수기 박스번호 합계와 대조)
 
 function getMilkRunSKUs(center){
   const map=new Map(); // Map 사용 → withNo 정렬 순서(발주번호→SKU ID) 유지
@@ -6701,8 +6702,13 @@ async function llSaveData(){
 
 async function llLoadData(){
   // 세션 전환 시 항상 초기화 — 이전 세션 데이터가 남아있지 않도록
-  _llBoxData={}; _llPalletCount={}; _llItemPallet={}; _llPalletRanges={};
+  _llBoxData={}; _llPalletCount={}; _llItemPallet={}; _llPalletRanges={}; _llExpectedBoxCount={};
   const sk=_llSessionKey();
+  // "전체 박스수" 입력값은 Supabase 스키마와 무관하게 로컬에만 저장/복원 (세션별)
+  try{
+    const rawBox=localStorage.getItem('ll_expected_box_'+sk);
+    if(rawBox) _llExpectedBoxCount=JSON.parse(rawBox)||{};
+  }catch(e){}
   try{
     const sb=_getSupabase();
     if(sb){
@@ -6764,11 +6770,60 @@ function _llMakeCenterTab(c){
   const safeC=c.replace(/[^a-z0-9]/gi,'_');
   const cnt=_llPalletCount[safeC]||1;
   const cEsc=c.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const expBox=_llExpectedBoxCount[safeC];
+  const actualBox=_llActualBoxCount(c);
+  const boxStyle=_llBoxCountStyle(expBox,actualBox);
+  const boxTitle=`전체 박스수 입력 — 수기 입력 박스번호 합계(${actualBox})와 비교하여 일치하면 초록, 불일치하면 빨강으로 표시됩니다.`;
   return `<div style="display:inline-flex;align-items:center;gap:4px;padding:2px 0;">
     <button data-center="${cEsc}" onclick="llSelectCenter('${cEsc}')" style="font-size:13px;padding:6px 14px;border-radius:20px;border:1px solid ${active?'#2D1660':'#ccc'};background:${active?'#2D1660':'#fff'};color:${active?'#fff':'#555'};cursor:pointer;font-weight:${active?'700':'400'};">${c}</button>
     <input type="number" min="1" value="${cnt}" oninput="llSetPalletCount('${safeC}',this.value)" style="width:40px;font-size:12px;text-align:center;border:1px solid #C0C8FF;border-radius:6px;padding:3px 4px;outline:none;" title="파렛트 수량">
     <span style="font-size:11px;color:#888;">Pallet</span>
+    <input type="number" min="0" id="llebox_${safeC}" value="${expBox||''}" oninput="llSetExpectedBoxCount('${safeC}',this.value)" placeholder="전체" style="width:48px;font-size:12px;text-align:center;border:1.5px solid ${boxStyle.border};border-radius:6px;padding:3px 4px;outline:none;background:${boxStyle.bg};color:${boxStyle.color};font-weight:700;" title="${boxTitle}">
+    <span style="font-size:11px;color:#888;">Box</span>
   </div>`;
+}
+
+// 센터의 실제 수기 입력 박스 합계 (모든 SKU 행의 boxStart~boxEnd 개수 합산)
+function _llActualBoxCount(center){
+  const items=_llItems[center]||[];
+  let total=0;
+  items.forEach((item,idx)=>{
+    const key=center+'/'+idx;
+    (_llBoxData[key]||[]).forEach(bd=>{
+      if(!bd||!bd.boxStart) return;
+      const start=parseInt(bd.boxStart)||0;
+      const end=bd.boxEnd?parseInt(bd.boxEnd)||start:start;
+      if(start&&end>=start) total+=end-start+1;
+    });
+  });
+  return total;
+}
+
+function _llBoxCountStyle(expBox,actualBox){
+  if(!expBox) return {border:'#C0C8FF',bg:'#fff',color:'#1B2559'};
+  return actualBox===expBox
+    ? {border:'#10B981',bg:'#ECFDF5',color:'#065F46'}
+    : {border:'#EF4444',bg:'#FEF2F2',color:'#B91C1C'};
+}
+
+function llSetExpectedBoxCount(safeC,val){
+  const n=val?parseInt(val):null;
+  if(n) _llExpectedBoxCount[safeC]=n; else delete _llExpectedBoxCount[safeC];
+  try{ localStorage.setItem('ll_expected_box_'+_llSessionKey(),JSON.stringify(_llExpectedBoxCount)); }catch(e){}
+  const center=[...milkRunCenterSet].find(c=>c.replace(/[^a-z0-9]/gi,'_')===safeC);
+  if(center) _llRefreshBoxCountBadge(center);
+}
+
+// SKU 박스 입력이 바뀔 때마다(전체 리렌더 없이) 해당 센터의 "전체 박스수" 배지 색상만 갱신
+function _llRefreshBoxCountBadge(center){
+  const safeC=center.replace(/[^a-z0-9]/gi,'_');
+  const el=document.getElementById('llebox_'+safeC);
+  if(!el) return;
+  const expBox=_llExpectedBoxCount[safeC];
+  const actualBox=_llActualBoxCount(center);
+  const s=_llBoxCountStyle(expBox,actualBox);
+  el.style.borderColor=s.border; el.style.background=s.bg; el.style.color=s.color;
+  el.title=`전체 박스수 입력 — 수기 입력 박스번호 합계(${actualBox})와 비교하여 일치하면 초록, 불일치하면 빨강으로 표시됩니다.`;
 }
 
 function _llRebuild(){
@@ -7034,6 +7089,7 @@ function llSetBox(key,si,field,val){
   const safeKey=key.replace(/[^a-z0-9]/gi,'_');
   const subEl=document.getElementById(`llst_${safeKey}_${si}`);
   if(subEl) subEl.textContent=llSubTotal(_llBoxData[key][si])||'-';
+  _llRefreshBoxCountBadge(key.split('/')[0]);
 }
 
 function llSetPalletNo(center,val){
@@ -7073,36 +7129,54 @@ function llAutoAssignPallets(center){
   const safeC=center.replace(/[^a-z0-9]/gi,'_');
   const allRanges=_llPalletRanges[safeC]||[];
 
-  // 파렛트별 박스번호 Set 구성 (연속범위 + 개별번호 합산)
-  const palletBoxMap=new Map();
+  // 박스번호 → 파렛트번호 매핑 (연속범위 + 개별번호, 박스 단위로 정밀 매칭)
+  const boxToPallet=new Map();
   allRanges.forEach(r=>{
-    if(!palletBoxMap.has(r.pallet)) palletBoxMap.set(r.pallet,new Set());
     const s=parseInt(r.boxStart)||0, e=parseInt(r.boxEnd)||s;
-    if(s) for(let b=s;b<=e;b++) palletBoxMap.get(r.pallet).add(b);
-    _parsePalletBoxText(r.boxNums).forEach(n=>palletBoxMap.get(r.pallet).add(n));
+    if(s) for(let b=s;b<=e;b++) boxToPallet.set(b,r.pallet);
+    _parsePalletBoxText(r.boxNums).forEach(n=>boxToPallet.set(n,r.pallet));
   });
 
-  const hasAny=[...palletBoxMap.values()].some(s=>s.size>0);
-  if(!hasAny){ alert('파렛트별 BOX 번호(연속 또는 개별)를 먼저 입력하세요.'); return; }
+  if(!boxToPallet.size){ alert('파렛트별 BOX 번호(연속 또는 개별)를 먼저 입력하세요.'); return; }
 
   const items=_llItems[center]||[];
-  let assigned=0;
+  let assigned=0, unmatched=0;
   items.forEach((item,idx)=>{
     const key=center+'/'+idx;
     const entries=_llBoxData[key]||[{}];
-    entries.forEach((bd,si)=>{
-      const boxNum=parseInt(bd&&bd.boxStart)||0;
-      if(!boxNum) return;
-      for(const [palNo,boxSet] of palletBoxMap){
-        if(boxSet.has(boxNum)){
-          _llItemPallet[key+'/'+si]=palNo;
-          assigned++;
-          break;
-        }
+
+    // 박스 범위가 여러 파렛트 구간에 걸쳐 있으면 박스 단위로 쪼개서 각 구간을 올바른 파렛트에 배정
+    const newEntries=[];
+    entries.forEach(bd=>{
+      const start=parseInt(bd&&bd.boxStart)||0;
+      if(!start){ newEntries.push(bd); return; }
+      const end=bd.boxEnd?parseInt(bd.boxEnd)||start:start;
+      let segStart=null, segPallet=undefined, prevBox=null;
+      const flush=segEnd=>{
+        if(segStart===null) return;
+        newEntries.push({...bd, boxStart:segStart, boxEnd:(segEnd>segStart?segEnd:null), __pallet:segPallet||null});
+      };
+      for(let b=start;b<=end;b++){
+        const pal=boxToPallet.get(b)||null;
+        if(segStart===null){ segStart=b; segPallet=pal; }
+        else if(pal!==segPallet){ flush(prevBox); segStart=b; segPallet=pal; }
+        prevBox=b;
       }
+      flush(prevBox);
+    });
+    _llBoxData[key]=newEntries.length?newEntries:[{}];
+
+    // 파렛트 재배정 (분할된 구간마다)
+    _llBoxData[key].forEach((bd,si)=>{
+      const rowKey=key+'/'+si;
+      if(bd.__pallet){ _llItemPallet[rowKey]=bd.__pallet; assigned++; }
+      else { unmatched++; delete _llItemPallet[rowKey]; }
+      delete bd.__pallet;
     });
   });
   renderLoadingListTable();
+  _llRefreshBoxCountBadge(center);
+  if(unmatched>0) alert(`파렛트 자동 배정 완료 — ${assigned}구간 배정됨, ${unmatched}구간은 파렛트 범위와 일치하는 BOX 번호가 없어 배정되지 않았습니다.`);
 }
 
 function llAddBoxRow(key){
@@ -7808,11 +7882,24 @@ function writePickingSheet(S, rows){
   return ws;
 }
 
-// ── 피킹리스트 선택 팝업 (erp용/센터별/인쇄용 통합 버튼) ──
-function openPickingListModal(){
+// ── 피킹리스트 선택 드롭다운 (erp용/센터별/인쇄용 통합 버튼) ──
+function openPickingListModal(btn){
   if(!canEdit('main_extract')){ alert('파일 추출 권한이 없습니다.'); return; }
   if(!withNo.length){ alert('먼저 파일을 업로드해주세요.'); return; }
-  document.getElementById('picking-list-modal').style.display='flex';
+  const modal=document.getElementById('picking-list-modal');
+  const pop=document.getElementById('picking-list-popover');
+  modal.style.display='block';
+  if(btn){
+    const r=btn.getBoundingClientRect();
+    const popW=250;
+    let left=r.left;
+    if(left+popW>window.innerWidth-8) left=window.innerWidth-8-popW;
+    if(left<8) left=8;
+    let top=r.bottom+6;
+    if(top+220>window.innerHeight-8) top=r.top-6-220;
+    pop.style.left=left+'px';
+    pop.style.top=top+'px';
+  }
 }
 
 function closePickingListModal(){
