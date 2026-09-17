@@ -12001,7 +12001,7 @@ document.getElementById('smt-fi-settle').addEventListener('change',function(e){
 
 <!-- ── 밀크런 적재리스트 팝업 ── -->
 <div id="ll-modal-overlay" onclick="closeLoadingListModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;"></div>
-<div id="ll-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9001;width:92vw;max-width:1100px;height:88vh;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);display:none;flex-direction:column;overflow:hidden;">
+<div id="ll-modal" style="display:none;position:fixed;inset:0;margin:auto;z-index:9001;width:92vw;max-width:1100px;height:88vh;min-width:640px;min-height:420px;max-height:96vh;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);flex-direction:column;overflow:auto;resize:both;">
   <!-- 팝업 헤더 -->
   <div style="padding:16px 24px 12px;border-bottom:1px solid #E0E5FF;display:flex;align-items:center;gap:12px;flex-shrink:0;background:#2D1660;border-radius:16px 16px 0 0;">
     <div>
