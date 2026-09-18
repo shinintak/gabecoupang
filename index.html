@@ -7256,6 +7256,7 @@ function downloadLoadingList(){
     const S_DATE_L={font:{name:'맑은 고딕',sz:19,bold:true},alignment:{horizontal:'left',vertical:'center'}};
     const S_LBL={font:{name:'맑은 고딕',sz:16,bold:true},alignment:{horizontal:'center',vertical:'center'}};
     const S_VAL={font:{name:'맑은 고딕',sz:16,bold:true},alignment:{horizontal:'left',vertical:'center'}};
+    const S_VAL_PO={font:{name:'맑은 고딕',sz:13,bold:true},alignment:{horizontal:'left',vertical:'center',wrapText:true}};
     const S_EMPTY={};
     const S_HDR={font:{name:'맑은 고딕',sz:11,bold:true,color:{rgb:'000000'}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:BD};
     const S_C={font:{name:'맑은 고딕',sz:11},alignment:{horizontal:'center',vertical:'center'},border:BD};
@@ -7318,10 +7319,10 @@ function downloadLoadingList(){
       rowH[R]={hpt:34.5}; R++;
 
       ws[ec(R,0)]=cs('발주번호 :',S_LBL); ws[ec(R,1)]=cs('',S_LBL); ws[ec(R,2)]=cs('',S_LBL);
-      ws[ec(R,3)]=cs([...allPOs].join('/'),S_VAL);
-      for(let c=4;c<10;c++) ws[ec(R,c)]=cs('',S_VAL);
+      ws[ec(R,3)]=cs([...allPOs].join('/'),S_VAL_PO);
+      for(let c=4;c<10;c++) ws[ec(R,c)]=cs('',S_VAL_PO);
       merges.push({s:{r:R,c:0},e:{r:R,c:2}}); merges.push({s:{r:R,c:3},e:{r:R,c:9}});
-      rowH[R]={hpt:24.75}; R++;
+      rowH[R]={hpt:38}; R++;
 
       ws[ec(R,0)]=cs('NO',S_HDR); ws[ec(R,1)]=cs('SKU No',S_HDR); ws[ec(R,2)]=cs('SKU NAME',S_HDR);
       for(let c=3;c<8;c++) ws[ec(R,c)]=cs('',S_HDR);
