@@ -1200,6 +1200,13 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
         <label class="lotte-drop" for="lotte-file-combined">클릭하여 발주서 파일 선택 (여러 개 선택 가능)</label>
         <input type="file" id="lotte-file-combined" accept=".xls,.xlsx" multiple style="display:none;" onchange="handleLotteOrderUploadMulti(event)">
       </div>
+      <div class="lotte-card" style="margin-top:20px;">
+        <div class="t" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <span>📋 작업지시서 생성</span>
+          <button onclick="downloadLotteWorkOrder()" style="height:30px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">📥 작업지시서 다운로드 (.xlsx)</button>
+        </div>
+        <div style="font-size:11.5px;color:#8A94A6;">오산·김해 센터별로 시트를 나눠서 작업지시서(SPEC·바코드·상품명·수량·입수량·작업수량(박스)·단가) 엑셀 1개로 내려받습니다. A4 인쇄에 맞춰 열·행 크기가 설정되어 있습니다.</div>
+      </div>
       <div class="lotte-centers-row" style="margin-top:20px;">
         <div class="lotte-center-col">
           <div style="font-size:15px;font-weight:800;color:#1E2530;margin:4px 0 10px;">🏭 오산센터</div>
@@ -8927,6 +8934,116 @@ function downloadLotteErpAll(){
   if(!hasOsan&&!hasGimhae){ alert('추출된 데이터가 없습니다.'); return; }
   if(hasOsan) downloadLotteErp('osan');
   if(hasGimhae) downloadLotteErp('gimhae');
+}
+
+// 작업자용 작업지시서 — 오산·김해 업로드 발주서 원본(rows)을 센터별 시트로 나눠 SPEC/바코드/상품명/수량/입수량/작업수량(박스)/단가 표로 정리
+function downloadLotteWorkOrder(){
+  const S=typeof XLSXStyle!=='undefined'?XLSXStyle:XLSX;
+  const db=lotteBaseLoad();
+  const centerDefs=[{key:'osan',label:'오산센터'},{key:'gimhae',label:'김해센터'}];
+  const sheetDefs=centerDefs.map(c=>({...c,data:lotteCenterLoad(c.key)})).filter(c=>c.data&&c.data.rows&&c.data.rows.length);
+  if(!sheetDefs.length){ alert('추출할 발주 데이터가 없습니다. 먼저 발주서를 업로드해주세요.'); return; }
+
+  const ec=(r,c)=>S.utils.encode_cell({r,c});
+  const cs=(v,s)=>({v:v??'',t:'s',s:s||{}});
+  const cn=(v,s)=>({v:typeof v==='number'?v:(parseFloat(v)||0),t:'n',s:s||{}});
+  const THIN={style:'thin',color:{rgb:'000000'}};
+  const BD={top:THIN,bottom:THIN,left:THIN,right:THIN};
+  const PINK={patternType:'solid',fgColor:{rgb:'F4B4B0'}};
+  const GREY={patternType:'solid',fgColor:{rgb:'EDEDED'}};
+
+  const S_TITLE={font:{name:'맑은 고딕',sz:16,bold:true},alignment:{horizontal:'center',vertical:'center'}};
+  const S_LBL ={font:{name:'맑은 고딕',sz:11,bold:true},alignment:{horizontal:'center',vertical:'center'},border:BD};
+  const S_VAL ={font:{name:'맑은 고딕',sz:11,bold:true},alignment:{horizontal:'center',vertical:'center'},border:BD,fill:PINK};
+  const S_HDR ={font:{name:'맑은 고딕',sz:11,bold:true},alignment:{horizontal:'center',vertical:'center'},border:BD,fill:PINK};
+  const S_C   ={font:{name:'맑은 고딕',sz:10},alignment:{horizontal:'center',vertical:'center'},border:BD};
+  const S_L   ={font:{name:'맑은 고딕',sz:10},alignment:{horizontal:'left',vertical:'center'},border:BD};
+  const S_SUM ={font:{name:'맑은 고딕',sz:11,bold:true},alignment:{horizontal:'center',vertical:'center'},border:BD,fill:GREY};
+
+  const wb=S.utils.book_new();
+  const printTitles=[];
+
+  sheetDefs.forEach(({label,data},sheetIdx)=>{
+    const rows=data.rows;
+    const deliveryDate=(rows[0]&&rows[0].orderDate)||'';
+
+    const items=rows.map(r=>{
+      const base=db[r.productCode];
+      return {
+        spec:base?base.spec:'',
+        barcode:r.productCode,
+        name:r.productName,
+        qty:r.packQty*r.orderQty,
+        packQty:r.packQty,
+        boxQty:r.receiveQty,
+        price:base?Math.round(base.priceVat):''
+      };
+    });
+
+    const ws={}, merges=[];
+    let R=0;
+    ws[ec(R,0)]=cs('롯데마트 작업지시서',S_TITLE);
+    for(let c=1;c<7;c++) ws[ec(R,c)]=cs('',S_TITLE);
+    merges.push({s:{r:R,c:0},e:{r:R,c:6}});
+    R++;
+
+    ws[ec(R,0)]=cs('센터명',S_LBL);
+    ws[ec(R,1)]=cs(label,S_VAL); ws[ec(R,2)]=cs('',S_VAL);
+    ws[ec(R,3)]=cs('납기일',S_LBL);
+    ws[ec(R,4)]=cs(deliveryDate,S_VAL); ws[ec(R,5)]=cs('',S_VAL); ws[ec(R,6)]=cs('',S_VAL);
+    merges.push({s:{r:R,c:1},e:{r:R,c:2}});
+    merges.push({s:{r:R,c:4},e:{r:R,c:6}});
+    R++;
+
+    const headerRow=R;
+    ['SPEC','바코드','상품명','수량','입수량','작업수량(박스)','단가'].forEach((h,c)=>{ ws[ec(R,c)]=cs(h,S_HDR); });
+    R++;
+
+    items.forEach(item=>{
+      ws[ec(R,0)]=cs(item.spec,S_C);
+      ws[ec(R,1)]=cs(item.barcode,S_C);
+      ws[ec(R,2)]=cs(item.name,S_L);
+      ws[ec(R,3)]=cn(item.qty,S_C);
+      ws[ec(R,4)]=cn(item.packQty,S_C);
+      ws[ec(R,5)]=cn(item.boxQty,S_C);
+      if(item.price==='') ws[ec(R,6)]=cs('',S_C); else ws[ec(R,6)]=cn(item.price,S_C);
+      R++;
+    });
+
+    ws[ec(R,0)]=cs('합계',S_SUM);
+    ws[ec(R,1)]=cs('',S_SUM); ws[ec(R,2)]=cs('',S_SUM);
+    merges.push({s:{r:R,c:0},e:{r:R,c:2}});
+    ws[ec(R,3)]=cn(items.reduce((s,it)=>s+(it.qty||0),0),S_SUM);
+    ws[ec(R,4)]=cs('',S_SUM);
+    ws[ec(R,5)]=cn(items.reduce((s,it)=>s+(it.boxQty||0),0),S_SUM);
+    ws[ec(R,6)]=cs('',S_SUM);
+    R++;
+
+    ws['!merges']=merges;
+    ws['!ref']=`A1:G${R}`;
+    ws['!cols']=[{wch:10},{wch:14},{wch:28},{wch:9},{wch:9},{wch:14},{wch:10}];
+    ws['!rows']=[{hpt:26},{hpt:20},{hpt:20}];
+
+    // A4 세로 인쇄에 맞춰 여백·페이지 설정 (열 너비를 한 페이지 폭에 자동으로 맞춤)
+    ws['!margins']={left:0.4,right:0.4,top:0.5,bottom:0.5,header:0.2,footer:0.2};
+    ws['!pageSetup']={paperSize:9,orientation:'portrait',fitToWidth:1,fitToHeight:0};
+
+    const sheetName=label.replace(/[\/:*?[\]]/g,'').substring(0,31);
+    S.utils.book_append_sheet(wb,ws,sheetName);
+    printTitles.push({sheetIdx,sheetName,headerRow});
+  });
+
+  // 페이지가 넘어가도 매 페이지 상단에 제목·헤더행이 반복 인쇄되도록 설정
+  wb.Workbook=wb.Workbook||{};
+  wb.Workbook.Names=printTitles.map(p=>({
+    Name:'_xlnm.Print_Titles',
+    Sheet:p.sheetIdx,
+    Ref:`'${p.sheetName}'!$1:$${p.headerRow+1}`
+  }));
+
+  const n=new Date();
+  const ds=n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');
+  S.writeFile(wb,`롯데마트_작업지시서_${ds}.xlsx`);
 }
 
 function _lotteRenderCenterPage(center){
