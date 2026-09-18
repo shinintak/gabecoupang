@@ -6690,7 +6690,7 @@ async function llSaveData(){
       pallet_ranges:_llPalletRanges,
       updated_at:new Date().toISOString(),
       updated_by:_currentUser?.email||'unknown'
-    });
+    },{onConflict:'session_key'});
     if(error) throw error;
 
     if(btn){ btn.textContent='저장됨 ✓'; btn.style.background='#059669'; btn.disabled=false; setTimeout(()=>{btn.textContent='저장';btn.style.background='#2D3748';},1500); }
@@ -6783,20 +6783,20 @@ function _llMakeCenterTab(c){
   </div>`;
 }
 
-// 센터의 실제 수기 입력 박스 합계 (모든 SKU 행의 boxStart~boxEnd 개수 합산)
+// 센터의 실제 사용 박스 개수 (여러 SKU가 같은 박스에 같이 담길 수 있으므로 박스 번호 중복 제거 후 집계)
 function _llActualBoxCount(center){
   const items=_llItems[center]||[];
-  let total=0;
+  const boxNums=new Set();
   items.forEach((item,idx)=>{
     const key=center+'/'+idx;
     (_llBoxData[key]||[]).forEach(bd=>{
       if(!bd||!bd.boxStart) return;
       const start=parseInt(bd.boxStart)||0;
       const end=bd.boxEnd?parseInt(bd.boxEnd)||start:start;
-      if(start&&end>=start) total+=end-start+1;
+      if(start&&end>=start) for(let n=start;n<=end;n++) boxNums.add(n);
     });
   });
-  return total;
+  return boxNums.size;
 }
 
 function _llBoxCountStyle(expBox,actualBox){
