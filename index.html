@@ -6685,18 +6685,25 @@ async function llSaveData(){
     const local={boxData:_llBoxData,palletCount:_llPalletCount,itemPallet:_llItemPallet,palletRanges:_llPalletRanges};
     localStorage.setItem(LL_SAVE_KEY+'_'+sk,JSON.stringify(local));
 
-    // Supabase 저장
+    // Supabase 저장 — session_key에 unique 제약이 없어 upsert(onConflict)를 못 쓰므로
+    // 먼저 조회해서 있으면 update, 없으면 insert
     const sb=_getSupabase();
     if(!sb) throw new Error('Supabase 연결 실패');
-    const {error}=await sb.from('ll_data').upsert({
-      session_key:_llSessionKey(),
+    const payload={
+      session_key:sk,
       box_data:_llBoxData,
       pallet_count:_llPalletCount,
       item_pallet:_llItemPallet,
       pallet_ranges:_llPalletRanges,
       updated_at:new Date().toISOString(),
       updated_by:_currentUser?.email||'unknown'
-    },{onConflict:'session_key'});
+    };
+    // 과거 버그로 같은 session_key 행이 중복 저장됐을 수 있어 maybeSingle 대신 limit(1)으로 존재 여부만 확인
+    const {data:existing,error:selErr}=await sb.from('ll_data').select('session_key').eq('session_key',sk).limit(1);
+    if(selErr) throw selErr;
+    const {error}=(existing&&existing.length>0)
+      ? await sb.from('ll_data').update(payload).eq('session_key',sk)
+      : await sb.from('ll_data').insert(payload);
     if(error) throw error;
 
     if(btn){ btn.textContent='저장됨 ✓'; btn.style.background='#059669'; btn.disabled=false; setTimeout(()=>{btn.textContent='저장';btn.style.background='#2D3748';},1500); }
@@ -6718,7 +6725,9 @@ async function llLoadData(){
   try{
     const sb=_getSupabase();
     if(sb){
-      const {data,error}=await sb.from('ll_data').select('*').eq('session_key',sk).maybeSingle();
+      // 과거 버그로 같은 session_key 행이 중복 저장됐을 수 있어 maybeSingle 대신 최신 1건만 조회
+      const {data:rows,error}=await sb.from('ll_data').select('*').eq('session_key',sk).order('updated_at',{ascending:false}).limit(1);
+      const data=rows&&rows[0];
       if(!error&&data){
         if(data.box_data)      _llBoxData=data.box_data;
         if(data.pallet_count)  _llPalletCount=data.pallet_count;
