@@ -6670,6 +6670,12 @@ function _llSessionKey(){
   return getSessionDateKey()||new Date().toISOString().slice(0,10);
 }
 
+// 센터명(한글 포함)을 저장키로 안전 변환 — 문자별 코드값을 보존해 서로 다른 센터명이 같은 키로 충돌하지 않도록 함
+// (예전엔 한글을 전부 '_'로 치환해 "고양1"·"양산1"처럼 숫자만 같으면 같은 키가 되는 버그가 있었음)
+function _llSafeKey(s){
+  return String(s).replace(/[^a-zA-Z0-9]/g,ch=>'_'+ch.charCodeAt(0)+'_');
+}
+
 async function llSaveData(){
   const btn=document.getElementById('ll-save-btn');
   if(btn){ btn.textContent='저장 중...'; btn.disabled=true; }
@@ -6767,7 +6773,7 @@ function renderLoadingListUI(){
 
 function _llMakeCenterTab(c){
   const active=c===_llSelCenter;
-  const safeC=c.replace(/[^a-z0-9]/gi,'_');
+  const safeC=_llSafeKey(c);
   const cnt=_llPalletCount[safeC]||1;
   const cEsc=c.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   const expBox=_llExpectedBoxCount[safeC];
@@ -6810,13 +6816,13 @@ function llSetExpectedBoxCount(safeC,val){
   const n=val?parseInt(val):null;
   if(n) _llExpectedBoxCount[safeC]=n; else delete _llExpectedBoxCount[safeC];
   try{ localStorage.setItem('ll_expected_box_'+_llSessionKey(),JSON.stringify(_llExpectedBoxCount)); }catch(e){}
-  const center=[...milkRunCenterSet].find(c=>c.replace(/[^a-z0-9]/gi,'_')===safeC);
+  const center=[...milkRunCenterSet].find(c=>_llSafeKey(c)===safeC);
   if(center) _llRefreshBoxCountBadge(center);
 }
 
 // SKU 박스 입력이 바뀔 때마다(전체 리렌더 없이) 해당 센터의 "전체 박스수" 배지 색상만 갱신
 function _llRefreshBoxCountBadge(center){
-  const safeC=center.replace(/[^a-z0-9]/gi,'_');
+  const safeC=_llSafeKey(center);
   const el=document.getElementById('llebox_'+safeC);
   if(!el) return;
   const expBox=_llExpectedBoxCount[safeC];
@@ -6919,7 +6925,7 @@ function renderLoadingListTable(){
     });
   }
 
-  const safeC=c.replace(/[^a-z0-9]/gi,'_');
+  const safeC=_llSafeKey(c);
   const palCount=_llPalletCount[safeC]||1;
 
   const INP='width:52px;font-size:13px;text-align:center;border:1px solid #C0C8FF;border-radius:6px;padding:4px;outline:none;';
@@ -6945,7 +6951,7 @@ function renderLoadingListTable(){
     const key=c+'/'+idx;
     if(!_llBoxData[key]||!Array.isArray(_llBoxData[key])) _llBoxData[key]=[{}];
     const entries=_llBoxData[key];
-    const safeKey=key.replace(/[^a-z0-9]/gi,'_');
+    const safeKey=_llSafeKey(key);
 
     entries.forEach((bd,si)=>{
       const isFirst=si===0;
@@ -7078,7 +7084,7 @@ function llSetBox(key,si,field,val){
   _llBoxData[key][si][field]=val?parseFloat(val):null;
   // 시작 입력 시 끝이 비어있거나 시작과 같은 값이면 자동 동기화
   if(field==='boxStart'){
-    const safeKey=key.replace(/[^a-z0-9]/gi,'_');
+    const safeKey=_llSafeKey(key);
     const endEl=document.getElementById(`llbe_${safeKey}_${si}`);
     const curEnd=_llBoxData[key][si].boxEnd;
     if(endEl&&(!curEnd||curEnd===oldStart)){
@@ -7086,7 +7092,7 @@ function llSetBox(key,si,field,val){
       endEl.value=val||'';
     }
   }
-  const safeKey=key.replace(/[^a-z0-9]/gi,'_');
+  const safeKey=_llSafeKey(key);
   const subEl=document.getElementById(`llst_${safeKey}_${si}`);
   if(subEl) subEl.textContent=llSubTotal(_llBoxData[key][si])||'-';
   _llRefreshBoxCountBadge(key.split('/')[0]);
@@ -7126,7 +7132,7 @@ function _parsePalletBoxText(text){
 }
 
 function llAutoAssignPallets(center){
-  const safeC=center.replace(/[^a-z0-9]/gi,'_');
+  const safeC=_llSafeKey(center);
   const allRanges=_llPalletRanges[safeC]||[];
 
   // 박스번호 → 파렛트번호 매핑 (연속범위 + 개별번호, 박스 단위로 정밀 매칭)
@@ -7206,7 +7212,7 @@ function downloadLoadingList(){
     const items=_llItems[center]||[];
     if(!items.length) return;
 
-    const safeC=center.replace(/[^a-z0-9]/gi,'_');
+    const safeC=_llSafeKey(center);
     const totalPallets=_llPalletCount[safeC]||1;
 
     // 박스 데이터 펼치기 (파렛트 배정 포함)
