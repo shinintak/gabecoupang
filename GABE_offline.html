@@ -1615,6 +1615,30 @@ async function _sharedRead(lsKey) {
   } catch(e) { return null; }
 }
 
+// ── 증분 동기화용 updated_at 캐시 ──
+// 3분마다 도는 자동 재동기화가 매번 gabe_kv의 모든 키를 통째로 재다운로드해서
+// Supabase 무료 egress 한도(월 5GB)를 며칠 만에 소진시키는 문제가 있었음.
+// → 키별 updated_at만 가볍게 먼저 조회해서 실제로 바뀐 키만 전체 데이터(data 컬럼)를 받아오도록 변경.
+const KV_META_LS_KEY = 'gabe_kv_meta_v1';
+function _kvMetaLoad() {
+  try { return JSON.parse(localStorage.getItem(KV_META_LS_KEY) || '{}'); } catch(e) { return {}; }
+}
+function _kvMetaSave(meta) {
+  try { localStorage.setItem(KV_META_LS_KEY, JSON.stringify(meta)); } catch(e) {}
+}
+// 여러 키의 updated_at을 한 번의 쿼리로 조회 (data 컬럼은 받지 않아 응답이 매우 작음)
+async function _sharedReadMetaBatch(keys) {
+  const sb = _getSupabase();
+  if (!sb || !keys || !keys.length) return {};
+  try {
+    const { data, error } = await sb.from('gabe_kv').select('key,updated_at').in('key', keys);
+    if (error || !data) return {};
+    const map = {};
+    data.forEach(row => { map[row.key] = row.updated_at; });
+    return map;
+  } catch(e) { return {}; }
+}
+
 // gabe_sessions_v1(납품 세션)은 원래 여러 계정이 공유하는 통짜 데이터 1덩어리였는데,
 // 데이터가 쌓이면서 한 번에 쓰기엔 너무 커져 Postgres statement timeout으로 저장 자체가 실패하는 문제가 생김.
 // (연도별로만 나눠도 실제 데이터가 한 해에 몰려있으면 청크가 충분히 안 줄어들 수 있어 월 단위로 쪼갬)
@@ -1644,14 +1668,23 @@ async function _ensureSessionMonthMigration() {
   } catch(e) { console.warn('[세션 마이그레이션 실패]', e.message); }
 }
 
-// 서버의 모든 월 청크를 읽어 하나로 합침. 마이그레이션 전이면(색인 없음) 옛 통짜 키로 폴백
+// 월 청크 중 지난 동기화 이후 실제로 바뀐 것만 읽어 합침. 마이그레이션 전이면(색인 없음) 옛 통짜 키로 폴백
 async function _sharedReadAllSessions() {
   try {
     const months = await _sharedRead('gabe_sessions_v1_months');
     if (!months || !months.length) return await _sharedRead('gabe_sessions_v1');
-    const chunks = await Promise.all(months.map(ym => _sharedRead(_sessionMonthKey(ym))));
+    const monthKeys = months.map(ym => _sessionMonthKey(ym));
+    const meta = _kvMetaLoad();
+    const remoteMeta = await _sharedReadMetaBatch(monthKeys);
+    const keysToFetch = monthKeys.filter(k => remoteMeta[k] !== undefined && remoteMeta[k] !== meta[k]);
+    if (!keysToFetch.length) return {};
+    const chunks = await Promise.all(keysToFetch.map(k => _sharedRead(k).then(d => [k, d])));
     const merged = {};
-    chunks.forEach(c => { if (c && typeof c === 'object') Object.assign(merged, c); });
+    chunks.forEach(([k, c]) => {
+      if (c && typeof c === 'object') Object.assign(merged, c);
+      meta[k] = remoteMeta[k];
+    });
+    _kvMetaSave(meta);
     return merged;
   } catch(e) { console.warn('[세션 읽기 실패]', e.message); return null; }
 }
@@ -1742,15 +1775,22 @@ function setSidebarTheme(theme) { _applySidebarTheme(theme); }
 _applySidebarTheme(localStorage.getItem(SIDEBAR_THEME_LS_KEY) || 'palrong', { skipSync: true });
 
 async function _sharedSyncAll() {
-  // localStorage 키 동기화 — 17개 키를 순차 대기(각 수백ms씩)하면 로그인/재동기화가 수 초~수십 초 걸려
-  // "아직 동기화 중"인 상태를 "안 됨"으로 오인하기 쉬움 → 병렬 요청으로 단축
-  const results = await Promise.all(_SHARED_KEYS.map(k => _sharedRead(k).then(d => [k, d])));
-  for (const [k, d] of results) {
-    if (d !== null) {
-      try { localStorage.setItem(k, JSON.stringify(d)); } catch(e) {}
-      // 판매데이터는 IndexedDB(_salesCache)가 실제 데이터 소스라 localStorage만으론 화면에 반영 안 됨 → 별도 반영
-      if (k === 'gabe_sales_v1' && typeof _ingestSyncedSales === 'function') _ingestSyncedSales(d);
+  // localStorage 키 동기화 — updated_at만 먼저 가볍게 조회해서 실제로 바뀐 키만 전체 데이터를 받아옴
+  // (3분마다 도는 자동 재동기화가 17개 키를 매번 통째로 재다운로드해 egress를 과도하게 쓰던 문제 개선)
+  const meta = _kvMetaLoad();
+  const remoteMeta = await _sharedReadMetaBatch(_SHARED_KEYS);
+  const keysToFetch = _SHARED_KEYS.filter(k => remoteMeta[k] !== undefined && remoteMeta[k] !== meta[k]);
+  if (keysToFetch.length) {
+    const results = await Promise.all(keysToFetch.map(k => _sharedRead(k).then(d => [k, d])));
+    for (const [k, d] of results) {
+      if (d !== null) {
+        try { localStorage.setItem(k, JSON.stringify(d)); } catch(e) {}
+        // 판매데이터는 IndexedDB(_salesCache)가 실제 데이터 소스라 localStorage만으론 화면에 반영 안 됨 → 별도 반영
+        if (k === 'gabe_sales_v1' && typeof _ingestSyncedSales === 'function') _ingestSyncedSales(d);
+      }
+      meta[k] = remoteMeta[k];
     }
+    _kvMetaSave(meta);
   }
   // 세션 동기화 (납품 세션) — 메모리 캐시(_sessionCache)를 먼저 갱신해서
   // IndexedDB 쓰기가 막히거나(다른 탭 점유 등) 실패해도 화면엔 최신 데이터가 즉시 반영되게 함
