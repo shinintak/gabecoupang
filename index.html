@@ -2113,6 +2113,66 @@ async function _initSharedFolder() {
   }
 }
 
+// ── 오프라인 로그인 우회 ──
+// Supabase 프로젝트가 egress 한도 초과 등으로 통째로 막히면 로그인 자체가 안 되어
+// 이미 로컬(localStorage/IndexedDB)에 동기화돼있는 데이터조차 볼 수 없게 됨.
+// → 정상 로그인 성공 시마다 이메일/권한을 로컬에 캐시해두고, "비밀번호 오류"가 아니라
+//   "서버 자체가 응답 없음"으로 로그인이 실패하면 그 캐시로 오프라인 진입을 허용.
+const OFFLINE_TRUST_LS_KEY = 'gabe_offline_trust_v1';
+function _offlineTrustSave(email, userId) {
+  try {
+    localStorage.setItem(OFFLINE_TRUST_LS_KEY, JSON.stringify({ email, userId, isAdmin: _isAdmin, userPerms: _userPerms, ts: Date.now() }));
+  } catch(e) {}
+}
+function _offlineTrustLoad() {
+  try { return JSON.parse(localStorage.getItem(OFFLINE_TRUST_LS_KEY) || 'null'); } catch(e) { return null; }
+}
+
+async function _enterOfflineMode(trust) {
+  _currentUser = { id: trust.userId, email: trust.email };
+  _serverConnected = false;
+  _isAdmin = !!trust.isAdmin;
+  _userPerms = trust.userPerms || {};
+
+  const userEl = document.getElementById('sb-user-name');
+  if (userEl) userEl.textContent = (_currentUser.email || _currentUser.id) + ' (오프라인)';
+  _applyPermissionsUI();
+
+  document.getElementById('login-screen').style.display = 'none';
+
+  if (!window._appInitDone) {
+    window._appInitDone = true;
+    await _initSessionStorage();
+    await _initSalesIdb();
+    _inject2026Data();
+    renderSessionList();
+  }
+  _sharedSetUI(false); // "📌 로컬 저장 모드" 표시, _initSharedFolder 호출 안 함(서버가 막힌 걸 이미 알고 있으므로)
+
+  const errEl = document.getElementById('login-error');
+  const btn   = document.getElementById('login-btn');
+  const loadEl = document.getElementById('login-loading');
+  if (errEl) errEl.style.display = 'none';
+  if (btn) btn.disabled = false;
+  if (loadEl) loadEl.style.display = 'none';
+}
+
+// 로그인이 "잘못된 비밀번호"가 아닌 다른 이유(서버 차단, 네트워크 오류 등)로 실패했을 때만 시도.
+// 캐시된 신뢰 계정이 없거나 이메일이 다르면 오프라인 진입 불가(false 반환 → 원래 에러 메시지 그대로 표시).
+async function _tryOfflineFallback(email, errorMessage) {
+  if (errorMessage && errorMessage.includes('Invalid')) return false;
+  const trust = _offlineTrustLoad();
+  if (!trust || trust.email !== email) return false;
+  const ok = confirm(
+    'Supabase 서버에 연결할 수 없습니다 (사용량 초과로 서비스가 제한된 상태일 수 있습니다).\n' +
+    '이 컴퓨터에 마지막으로 동기화된 로컬 데이터로 오프라인 모드로 들어갈까요?\n' +
+    '(클라우드 저장/동기화는 되지 않고, 이 기기의 로컬 데이터만 보고 씁니다)'
+  );
+  if (!ok) return false;
+  await _enterOfflineMode(trust);
+  return true;
+}
+
 // ── 로그인 / 로그아웃 ──
 async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
@@ -2137,6 +2197,7 @@ async function doLogin() {
   try {
     const { data, error } = await sb.auth.signInWithPassword({ email, password: pw });
     if (error) {
+      if (await _tryOfflineFallback(email, error.message)) return;
       errEl.textContent = error.message.includes('Invalid') ? '이메일 또는 비밀번호가 올바르지 않습니다.' : error.message;
       errEl.style.display = 'block';
       btn.disabled = false; loadEl.style.display = 'none';
@@ -2144,7 +2205,9 @@ async function doLogin() {
     }
     _currentUser = data.user;
     await _onLoginSuccess();
+    _offlineTrustSave(_currentUser.email, _currentUser.id);
   } catch(e) {
+    if (await _tryOfflineFallback(email, e.message)) return;
     errEl.textContent = '로그인 중 오류가 발생했습니다: ' + e.message;
     errEl.style.display = 'block';
     btn.disabled = false; loadEl.style.display = 'none';
@@ -2204,7 +2267,12 @@ async function _registerUser() {
     );
     const { data: me } = await sb.from('gabe_users').select('is_admin').eq('user_id', _currentUser.id).maybeSingle();
     _isAdmin = me?.is_admin || false;
-  } catch(e) { console.warn('[사용자 등록 실패]', e.message); }
+  } catch(e) {
+    console.warn('[사용자 등록 실패]', e.message);
+    // 서버 연결 불가 시 마지막으로 캐시된 관리자 여부를 유지 (기본값 false로 떨어져 권한이 몽땅 사라지는 것 방지)
+    const trust = _offlineTrustLoad();
+    if (trust && trust.email === _currentUser.email) _isAdmin = !!trust.isAdmin;
+  }
 }
 
 // ── 권한 로드 ──
@@ -2222,7 +2290,11 @@ async function _loadPermissions() {
     const { data } = await sb.from('gabe_permissions').select('page, can_edit').eq('user_id', _currentUser.id);
     _userPerms = defaultPerms();
     if (data) data.forEach(p => { if(p.page in _userPerms) _userPerms[p.page] = p.can_edit; });
-  } catch(e) { _userPerms = defaultPerms(); }
+  } catch(e) {
+    // 서버 연결 불가 시 마지막으로 캐시된 권한을 그대로 사용 (전부 false로 떨어져 화면이 텅 비는 것 방지)
+    const trust = _offlineTrustLoad();
+    _userPerms = (trust && trust.email === _currentUser.email && trust.userPerms) ? trust.userPerms : defaultPerms();
+  }
 }
 
 function canEdit(page) {
@@ -11798,6 +11870,7 @@ window.addEventListener('DOMContentLoaded',async ()=>{
     _inject2026Data();
     renderSessionList();
     await _onLoginSuccess();
+    _offlineTrustSave(_currentUser.email, _currentUser.id);
   } else {
     // 로그인 필요 — 로그인 화면 표시 (이미 기본값이 flex)
     // 앱 초기화는 로그인 성공 후 _onLoginSuccess()에서 수행
