@@ -2609,8 +2609,15 @@ async function exportAllData() {
   let count = 0;
   // localStorage 데이터
   _DATA_KEYS.forEach(k => {
+    if (k === SALES_LS_KEY) return; // 판매데이터는 아래에서 별도 처리(실제 최신 데이터는 IndexedDB에 있음)
     try { const v = localStorage.getItem(k); if(v){ all[k] = JSON.parse(v); count++; } } catch(e) {}
   });
+  // 판매데이터: localStorage의 gabe_sales_v1은 서버 동기화 시점의 옛 스냅샷일 뿐이라,
+  // salesLoad()(IndexedDB 캐시, 실제 최신 데이터)를 대신 사용
+  try {
+    const salesData = salesLoad();
+    if (salesData && Object.keys(salesData).length) { all[SALES_LS_KEY] = salesData; count++; }
+  } catch(e) {}
   // IndexedDB 세션 데이터 (납품데이터 · 연간 납품현황)
   const sessions = await new Promise(resolve => {
     try {
@@ -2652,6 +2659,7 @@ function importAllData() {
       let count = 0;
       const toSync = [];
       _DATA_KEYS.forEach(k => {
+        if (k === SALES_LS_KEY) return; // 아래에서 별도 처리
         if (all[k] !== undefined) {
           try {
             localStorage.setItem(k, JSON.stringify(all[k]));
@@ -2660,6 +2668,11 @@ function importAllData() {
           } catch(e) {}
         }
       });
+      // 판매데이터: localStorage가 아니라 salesSave()로 IndexedDB에 반영해야 실제로 화면에 잡힘
+      // (salesSave 내부에서 서버 연결 중이면 _sharedWrite로 서버에도 자동 반영됨)
+      if (all[SALES_LS_KEY] !== undefined) {
+        try { salesSave(all[SALES_LS_KEY]); count++; } catch(e) {}
+      }
       // IndexedDB 세션 데이터 가져오기 (2025년 등 납품 세션)
       let sessionCount = 0;
       if (all._sessions && Object.keys(all._sessions).length) {
