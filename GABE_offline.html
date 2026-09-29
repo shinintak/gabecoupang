@@ -1230,6 +1230,17 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
   </div>
 </div>
 
+<!-- ── 롯데마트 납품데이터: 월별 상세 팝업 ── -->
+<div id="lotte-month-popup" style="display:none;position:fixed;inset:0;z-index:2600;background:rgba(0,0,0,.55);overflow-y:auto;padding:20px 10px;">
+  <div style="background:#fff;border-radius:14px;max-width:820px;margin:0 auto;padding:20px 22px;box-shadow:0 16px 48px rgba(0,0,0,.28);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <span id="lotte-month-popup-title" style="font-size:13px;font-weight:700;color:#1B2559;"></span>
+      <button onclick="closeLotteMonthPopup()" style="width:30px;height:30px;border-radius:50%;border:none;background:#EDF2F7;cursor:pointer;font-size:13px;">✕</button>
+    </div>
+    <div id="lotte-month-popup-content"></div>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════
      앱 레이아웃: 사이드바 + 메인 콘텐츠
 ══════════════════════════════════════ -->
@@ -2153,10 +2164,20 @@ function showPoList(btn) {
 
 function _sharedRefreshAll() {
   if (typeof renderOutgoingTable === 'function') renderOutgoingTable();
-  if (typeof renderSalesPanel === 'function') renderSalesPanel();
-  if (typeof renderAnnualPanel === 'function') renderAnnualPanel();
-  if (typeof renderReturnErrPanel === 'function') renderReturnErrPanel();
-  if (typeof _deliveryPageDirty !== 'undefined') _deliveryPageDirty = false;
+  // renderAnnualPanel/renderSalesPanel/renderReturnErrPanel은 canvas 차트를 그리는데,
+  // 납품데이터 페이지가 화면에 안 보이는 상태(display:none)에서 그리면 캔버스 offsetWidth가 0으로 측정돼
+  // 차트가 영구히 빈 화면으로 남는 버그가 있었음(로그인 직후·3분 주기 자동동기화 시 페이지가 안 열려있어도 이 함수가 항상 호출됐음).
+  // → 페이지가 실제로 열려있을 때만 즉시 다시 그리고, 안 열려있으면 dirty 플래그를 세워서
+  //   나중에 openDeliveryPage()가 화면에 보이는 상태로 다시 그리게 함.
+  const deliveryVisible = document.getElementById('delivery-page') && document.getElementById('delivery-page').style.display !== 'none';
+  if (deliveryVisible) {
+    if (typeof renderSalesPanel === 'function') renderSalesPanel();
+    if (typeof renderAnnualPanel === 'function') renderAnnualPanel();
+    if (typeof renderReturnErrPanel === 'function') renderReturnErrPanel();
+    if (typeof _deliveryPageDirty !== 'undefined') _deliveryPageDirty = false;
+  } else {
+    if (typeof _deliveryPageDirty !== 'undefined') _deliveryPageDirty = true;
+  }
   if (typeof smtLoadDB === 'function') smtLoadDB();
   if (typeof smtRenderPage === 'function') smtRenderPage();
   if (typeof _settlementPageDirty !== 'undefined') _settlementPageDirty = false;
@@ -9302,6 +9323,62 @@ function _lotteRenderCenterPage(center){
   el.innerHTML=html;
 }
 
+// 날짜별 hist 레코드 → {amt,box,weight} (없으면 null)
+function _lotteCalcRec(rec){
+  if(!rec) return null;
+  const amt=rec.result.erpRows.reduce((s,r)=>s+(r.price||0)*(r.qty||0),0);
+  return {amt, box:rec.result.totalBox, weight:rec.result.totalWeightKg};
+}
+// 선택 연도 1개 센터('osan'|'gimhae'|'total')의 월별(1~12월) 집계
+function _lotteMonthAgg(hist, year, center){
+  return MONTHS.map((mLabel,mi)=>{
+    const prefix=`${year}-${String(mi+1).padStart(2,'0')}-`;
+    let amt=0, box=0, weight=0, hasData=false;
+    Object.keys(hist).filter(d=>d.startsWith(prefix)).forEach(d=>{
+      const co=_lotteCalcRec(hist[d].osan), cg=_lotteCalcRec(hist[d].gimhae);
+      let a=0,b=0,w=0,ok=false;
+      if(center==='osan'){ if(co){a=co.amt;b=co.box;w=co.weight;ok=true;} }
+      else if(center==='gimhae'){ if(cg){a=cg.amt;b=cg.box;w=cg.weight;ok=true;} }
+      else { if(co||cg){ a=(co?co.amt:0)+(cg?cg.amt:0); b=(co?co.box:0)+(cg?cg.box:0); w=(co?co.weight:0)+(cg?cg.weight:0); ok=true; } }
+      if(ok){ amt+=a; box+=b; weight+=w; hasData=true; }
+    });
+    return {label:mLabel, amt, box, weight, hasData};
+  });
+}
+function lotteDeliverySelYear(y){
+  localStorage.setItem('lotte_delivery_sel_year', y);
+  _lotteRenderDeliveryCharts();
+}
+function _lotteMonthTable(title, months, center, selYear){
+  const tot=months.reduce((s,m)=>({amt:s.amt+m.amt, box:s.box+m.box, weight:s.weight+m.weight}), {amt:0,box:0,weight:0});
+  let html=`<div style="font-size:15px;font-weight:800;color:#1E2530;margin:4px 0 10px;">${title}</div>
+    <div style="overflow-x:auto;border-radius:8px;border:1px solid #dde3ee;">
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead><tr style="background:#2D1660;">
+        <th style="padding:7px 10px;text-align:center;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">월</th>
+        <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">납품금액</th>
+        <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">박스수</th>
+        <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;">무게(kg)</th>
+      </tr></thead><tbody>`;
+  months.forEach((m,mi)=>{
+    const bg=m.hasData?(mi%2===0?'#fff':'#f7f9fc'):'#f4f4f4';
+    const clickAttr=m.hasData?`onclick="openLotteMonthPopup('${selYear}',${mi},'${center}')" style="padding:6px 10px;text-align:center;font-weight:700;color:#4318FF;border-right:1px solid #e8edf5;white-space:nowrap;cursor:pointer;text-decoration:underline;"`
+                              :`style="padding:6px 10px;text-align:center;font-weight:700;color:#bbb;border-right:1px solid #e8edf5;white-space:nowrap;"`;
+    html+=`<tr style="background:${bg};border-bottom:1px solid #e8edf5;">
+      <td ${clickAttr}>${m.label}</td>
+      <td style="padding:6px 8px;text-align:right;color:${m.hasData?'#C62828':'#bbb'};font-weight:600;${m.hasData?'background:#FFFDE7;':''}border-right:1px solid #f0f3f8;">${m.hasData?m.amt.toLocaleString()+'원':'-'}</td>
+      <td style="padding:6px 8px;text-align:right;color:${m.hasData?'#333':'#bbb'};font-weight:600;border-right:1px solid #f0f3f8;">${m.hasData?m.box.toLocaleString():'-'}</td>
+      <td style="padding:6px 8px;text-align:right;color:${m.hasData?'#333':'#bbb'};font-weight:600;">${m.hasData?m.weight.toLocaleString(undefined,{maximumFractionDigits:1}):'-'}</td>
+    </tr>`;
+  });
+  html+=`<tr style="background:#e8edf8;border-top:2px solid #4F2FA8;">
+    <td style="padding:7px 10px;text-align:center;font-weight:700;color:#1B2559;border-right:1px solid #c5cfe8;">합계</td>
+    <td style="padding:7px 8px;text-align:right;font-weight:700;color:#C62828;background:#FFFDE7;border-right:1px solid #d0d8ea;">${tot.amt.toLocaleString()}원</td>
+    <td style="padding:7px 8px;text-align:right;font-weight:700;color:#1B2559;border-right:1px solid #d0d8ea;">${tot.box.toLocaleString()}</td>
+    <td style="padding:7px 8px;text-align:right;font-weight:700;color:#1B2559;">${tot.weight.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
+  </tr></tbody></table></div>`;
+  return html;
+}
 function _lotteRenderDeliveryCharts(){
   const el=document.getElementById('lotte-delivery-content');
   if(!el) return;
@@ -9315,75 +9392,89 @@ function _lotteRenderDeliveryCharts(){
   const cardStyle='background:#fff;border:1px solid #dde3ee;border-radius:10px;padding:14px;box-shadow:0 1px 4px rgba(44,62,80,.07);';
   const titleStyle='font-size:11px;font-weight:700;color:#1B2559;margin-bottom:3px;';
 
-  const centerPoints={};
-  let html='<div class="lotte-centers-row">';
-  ['osan','gimhae'].forEach(center=>{
-    const label=center==='gimhae'?'김해센터':'오산센터';
-    const points=dates.map(d=>{
-      const rec=hist[d]&&hist[d][center];
-      if(!rec) return null;
-      const amt=rec.result.erpRows.reduce((s,r)=>s+(r.price||0)*(r.qty||0),0);
-      return {date:d, label:d.slice(5), amt, box:rec.result.totalBox, weight:rec.result.totalWeightKg};
-    }).filter(Boolean);
-    centerPoints[center]=points;
-    const tot=points.reduce((s,p)=>({amt:s.amt+p.amt, box:s.box+p.box, weight:s.weight+p.weight}), {amt:0,box:0,weight:0});
+  const years=Array.from(new Set(dates.map(d=>d.slice(0,4)))).sort();
+  let selYear=localStorage.getItem('lotte_delivery_sel_year');
+  if(!selYear||!years.includes(selYear)) selYear=years[years.length-1];
 
-    html+=`<div class="lotte-center-col"><div style="font-size:15px;font-weight:800;color:#1E2530;margin:4px 0 10px;">🏭 ${label}</div>
-      <div style="overflow-x:auto;border-radius:8px;border:1px solid #dde3ee;">
-      <table style="width:100%;border-collapse:collapse;font-size:11px;">
-        <thead><tr style="background:#2D1660;">
-          <th style="padding:7px 10px;text-align:center;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">날짜</th>
-          <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">납품금액</th>
-          <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">박스수</th>
-          <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;">무게(kg)</th>
-        </tr></thead><tbody>`;
-    if(!points.length){
-      html+='<tr><td colspan="4" style="padding:14px;text-align:center;color:#A0AEC0;">이 센터에 업로드된 데이터가 없습니다.</td></tr>';
-    } else {
-      points.forEach((p,i)=>{
-        const bg=i%2===0?'#fff':'#f7f9fc';
-        html+=`<tr style="background:${bg};border-bottom:1px solid #e8edf5;">
-          <td style="padding:6px 10px;text-align:center;font-weight:700;color:#1B2559;border-right:1px solid #e8edf5;white-space:nowrap;">${p.date}</td>
-          <td style="padding:6px 8px;text-align:right;color:#C62828;font-weight:600;background:#FFFDE7;border-right:1px solid #f0f3f8;">${p.amt.toLocaleString()}원</td>
-          <td style="padding:6px 8px;text-align:right;color:#333;font-weight:600;border-right:1px solid #f0f3f8;">${p.box.toLocaleString()}</td>
-          <td style="padding:6px 8px;text-align:right;color:#333;font-weight:600;">${p.weight.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
-        </tr>`;
-      });
-    }
-    html+=`<tr style="background:#e8edf8;border-top:2px solid #4F2FA8;">
-      <td style="padding:7px 10px;text-align:center;font-weight:700;color:#1B2559;border-right:1px solid #c5cfe8;">합계</td>
-      <td style="padding:7px 8px;text-align:right;font-weight:700;color:#C62828;background:#FFFDE7;border-right:1px solid #d0d8ea;">${tot.amt.toLocaleString()}원</td>
-      <td style="padding:7px 8px;text-align:right;font-weight:700;color:#1B2559;border-right:1px solid #d0d8ea;">${tot.box.toLocaleString()}</td>
-      <td style="padding:7px 8px;text-align:right;font-weight:700;color:#1B2559;">${tot.weight.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
-    </tr></tbody></table></div>
-    <div style="margin-top:12px;${cardStyle}">
-      <div style="${titleStyle}">① 납품금액 그래프</div>
-      <canvas id="lotte-chart-${center}-amt" style="width:100%;" height="190"></canvas>
-    </div>
-    <div style="margin-top:12px;${cardStyle}">
-      <div style="${titleStyle}">② 박스수·무게 그래프</div>
-      <canvas id="lotte-chart-${center}-13" style="width:100%;" height="190"></canvas>
-    </div>
+  // 연도 선택 버튼 — 쿠팡 납품데이터(연간 납품현황)와 동일한 UI 패턴
+  let html=`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
+    <span style="font-size:12px;font-weight:700;color:#1B2559;">연도 선택</span>`;
+  years.forEach(y=>{
+    const active=y===selYear;
+    const style=active
+      ?'font-size:12px;padding:6px 18px;border-radius:6px;cursor:pointer;font-weight:700;border:none;background:#2D1660;color:#fff;box-shadow:0 2px 6px rgba(26,48,96,.25);'
+      :'font-size:12px;padding:6px 18px;border-radius:6px;cursor:pointer;font-weight:600;border:2px solid #1B2559;background:#fff;color:#1B2559;';
+    html+=`<button onclick="lotteDeliverySelYear('${y}')" style="${style}">${y}년</button>`;
+  });
+  html+='</div>';
+
+  const monthsOsan=_lotteMonthAgg(hist, selYear, 'osan');
+  const monthsGimhae=_lotteMonthAgg(hist, selYear, 'gimhae');
+  const monthsTotal=MONTHS.map((mLabel,mi)=>({
+    label:mLabel,
+    amt:monthsOsan[mi].amt+monthsGimhae[mi].amt,
+    box:monthsOsan[mi].box+monthsGimhae[mi].box,
+    weight:monthsOsan[mi].weight+monthsGimhae[mi].weight,
+    hasData:monthsOsan[mi].hasData||monthsGimhae[mi].hasData
+  }));
+
+  html+='<div class="lotte-centers-row">';
+  [['osan','🏭 오산센터',monthsOsan],['gimhae','🏭 김해센터',monthsGimhae]].forEach(([center,label,months])=>{
+    html+=`<div class="lotte-center-col">
+      ${_lotteMonthTable(label, months, center, selYear)}
+      <div style="margin-top:12px;${cardStyle}">
+        <div style="${titleStyle}">① 납품금액 그래프</div>
+        <canvas id="lotte-chart-${center}-amt" style="width:100%;" height="190"></canvas>
+      </div>
+      <div style="margin-top:12px;${cardStyle}">
+        <div style="${titleStyle}">② 박스수·무게 그래프</div>
+        <canvas id="lotte-chart-${center}-13" style="width:100%;" height="190"></canvas>
+      </div>
     </div>`;
   });
   html+='</div>';
 
-  // ③ 오산+김해 합계
-  const totalMap={};
-  dates.forEach(d=>{
-    const o=centerPoints.osan.find(p=>p.date===d);
-    const g=centerPoints.gimhae.find(p=>p.date===d);
-    if(!o&&!g) return;
-    totalMap[d]={date:d, label:d.slice(5),
-      amt:(o?o.amt:0)+(g?g.amt:0),
-      box:(o?o.box:0)+(g?g.box:0),
-      weight:(o?o.weight:0)+(g?g.weight:0)};
-  });
-  const totalPoints=dates.map(d=>totalMap[d]).filter(Boolean);
-  const grandTot=totalPoints.reduce((s,p)=>({amt:s.amt+p.amt, box:s.box+p.box, weight:s.weight+p.weight}), {amt:0,box:0,weight:0});
+  html+=`<div style="margin-top:18px;">
+    ${_lotteMonthTable('🏬 오산+김해 합계', monthsTotal, 'total', selYear)}
+    <div style="margin-top:12px;${cardStyle}">
+      <div style="${titleStyle}">③ 오산+김해 합계 그래프</div>
+      <canvas id="lotte-chart-total-13" style="width:100%;" height="190"></canvas>
+    </div>
+  </div>`;
 
-  html+=`<div style="margin-top:18px;"><div style="font-size:15px;font-weight:800;color:#1E2530;margin:4px 0 10px;">🏬 오산+김해 합계</div>
-    <div style="overflow-x:auto;border-radius:8px;border:1px solid #dde3ee;">
+  el.innerHTML=html;
+
+  requestAnimationFrame(()=>{
+    const pOsan=monthsOsan.filter(m=>m.hasData), pGimhae=monthsGimhae.filter(m=>m.hasData), pTotal=monthsTotal.filter(m=>m.hasData);
+    _drawLotteAmountChart('lotte-chart-osan-amt', pOsan);
+    _drawLotteCombinedChart('lotte-chart-osan-13', pOsan);
+    _drawLotteAmountChart('lotte-chart-gimhae-amt', pGimhae);
+    _drawLotteCombinedChart('lotte-chart-gimhae-13', pGimhae);
+    _drawLotteTotalChart('lotte-chart-total-13', pTotal);
+  });
+}
+
+function closeLotteMonthPopup(){
+  document.getElementById('lotte-month-popup').style.display='none';
+}
+function openLotteMonthPopup(year, monthIdx, center){
+  const hist=lotteHistoryLoad();
+  const mm=String(monthIdx+1).padStart(2,'0');
+  const prefix=`${year}-${mm}-`;
+  const label=center==='gimhae'?'김해센터':center==='osan'?'오산센터':'오산+김해 합계';
+  document.getElementById('lotte-month-popup-title').textContent=`${year}년 ${monthIdx+1}월 · ${label} 납품 상세`;
+
+  const rows=Object.keys(hist).filter(d=>d.startsWith(prefix)).sort().map(d=>{
+    const co=_lotteCalcRec(hist[d].osan), cg=_lotteCalcRec(hist[d].gimhae);
+    let amt=0,box=0,weight=0,ok=false;
+    if(center==='osan'){ if(co){amt=co.amt;box=co.box;weight=co.weight;ok=true;} }
+    else if(center==='gimhae'){ if(cg){amt=cg.amt;box=cg.box;weight=cg.weight;ok=true;} }
+    else { if(co||cg){ amt=(co?co.amt:0)+(cg?cg.amt:0); box=(co?co.box:0)+(cg?cg.box:0); weight=(co?co.weight:0)+(cg?cg.weight:0); ok=true; } }
+    return ok?{date:d,amt,box,weight}:null;
+  }).filter(Boolean);
+
+  const tot=rows.reduce((s,r)=>({amt:s.amt+r.amt, box:s.box+r.box, weight:s.weight+r.weight}), {amt:0,box:0,weight:0});
+  let html=`<div style="overflow-x:auto;border-radius:8px;border:1px solid #dde3ee;">
     <table style="width:100%;border-collapse:collapse;font-size:11px;">
       <thead><tr style="background:#2D1660;">
         <th style="padding:7px 10px;text-align:center;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">날짜</th>
@@ -9391,40 +9482,28 @@ function _lotteRenderDeliveryCharts(){
         <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;">박스수</th>
         <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;">무게(kg)</th>
       </tr></thead><tbody>`;
-  if(!totalPoints.length){
+  if(!rows.length){
     html+='<tr><td colspan="4" style="padding:14px;text-align:center;color:#A0AEC0;">데이터가 없습니다.</td></tr>';
   } else {
-    totalPoints.forEach((p,i)=>{
+    rows.forEach((r,i)=>{
       const bg=i%2===0?'#fff':'#f7f9fc';
       html+=`<tr style="background:${bg};border-bottom:1px solid #e8edf5;">
-        <td style="padding:6px 10px;text-align:center;font-weight:700;color:#1B2559;border-right:1px solid #e8edf5;white-space:nowrap;">${p.date}</td>
-        <td style="padding:6px 8px;text-align:right;color:#C62828;font-weight:600;background:#FFFDE7;border-right:1px solid #f0f3f8;">${p.amt.toLocaleString()}원</td>
-        <td style="padding:6px 8px;text-align:right;color:#333;font-weight:600;border-right:1px solid #f0f3f8;">${p.box.toLocaleString()}</td>
-        <td style="padding:6px 8px;text-align:right;color:#333;font-weight:600;">${p.weight.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
+        <td style="padding:6px 10px;text-align:center;font-weight:700;color:#1B2559;border-right:1px solid #e8edf5;white-space:nowrap;">${r.date}</td>
+        <td style="padding:6px 8px;text-align:right;color:#C62828;font-weight:600;background:#FFFDE7;border-right:1px solid #f0f3f8;">${r.amt.toLocaleString()}원</td>
+        <td style="padding:6px 8px;text-align:right;color:#333;font-weight:600;border-right:1px solid #f0f3f8;">${r.box.toLocaleString()}</td>
+        <td style="padding:6px 8px;text-align:right;color:#333;font-weight:600;">${r.weight.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
       </tr>`;
     });
   }
   html+=`<tr style="background:#e8edf8;border-top:2px solid #4F2FA8;">
     <td style="padding:7px 10px;text-align:center;font-weight:700;color:#1B2559;border-right:1px solid #c5cfe8;">합계</td>
-    <td style="padding:7px 8px;text-align:right;font-weight:700;color:#C62828;background:#FFFDE7;border-right:1px solid #d0d8ea;">${grandTot.amt.toLocaleString()}원</td>
-    <td style="padding:7px 8px;text-align:right;font-weight:700;color:#1B2559;border-right:1px solid #d0d8ea;">${grandTot.box.toLocaleString()}</td>
-    <td style="padding:7px 8px;text-align:right;font-weight:700;color:#1B2559;">${grandTot.weight.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
-  </tr></tbody></table></div>
-  <div style="margin-top:12px;${cardStyle}">
-    <div style="${titleStyle}">③ 오산+김해 합계 그래프</div>
-    <canvas id="lotte-chart-total-13" style="width:100%;" height="190"></canvas>
-  </div>
-  </div>`;
+    <td style="padding:7px 8px;text-align:right;font-weight:700;color:#C62828;background:#FFFDE7;border-right:1px solid #d0d8ea;">${tot.amt.toLocaleString()}원</td>
+    <td style="padding:7px 8px;text-align:right;font-weight:700;color:#1B2559;border-right:1px solid #d0d8ea;">${tot.box.toLocaleString()}</td>
+    <td style="padding:7px 8px;text-align:right;font-weight:700;color:#1B2559;">${tot.weight.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
+  </tr></tbody></table></div>`;
 
-  el.innerHTML=html;
-
-  requestAnimationFrame(()=>{
-    ['osan','gimhae'].forEach(center=>{
-      _drawLotteAmountChart(`lotte-chart-${center}-amt`, centerPoints[center]);
-      _drawLotteCombinedChart(`lotte-chart-${center}-13`, centerPoints[center]);
-    });
-    _drawLotteTotalChart('lotte-chart-total-13', totalPoints);
-  });
+  document.getElementById('lotte-month-popup-content').innerHTML=html;
+  document.getElementById('lotte-month-popup').style.display='block';
 }
 
 // 납품금액 단독 차트 — 막대 + 값 라벨
