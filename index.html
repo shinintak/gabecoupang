@@ -1342,6 +1342,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
       <span id="shared-status" class="sb-status-txt">⏳ 확인 중...</span>
       <span id="shared-sync-msg" class="sb-sync-ok">✓ 동기화됨</span>
     </div>
+    <div id="sb-usage-row" class="sb-status-txt" style="font-size:11px;opacity:.75;margin-bottom:4px;">📊 사용량 확인 중...</div>
     <div id="sb-user-name" class="sb-user" style="margin-bottom:6px;">-</div>
     <button class="sb-logout-btn" onclick="doLogout()">로그아웃</button>
   </div>
@@ -1561,9 +1562,79 @@ let _userPerms = {
   settlement_view: false
 };
 
+// ── Supabase 사용량(추정) 트래킹 ──
+// Management API 토큰 없이, 이 앱이 만드는 Supabase 요청의 응답 크기를 합산해 Egress를 근사치로 추정해 표시.
+// Supabase 대시보드의 실제 결제 집계와는 정확히 일치하지 않을 수 있는 추정치(다른 프로젝트/앱 밖 접근은 집계 안 됨).
+const SUPA_USAGE_LS_KEY = 'gabe_supabase_usage_v1';
+const SUPA_USAGE_KV_KEY = 'gabe_supabase_usage_agg_v1';
+const SUPA_USAGE_CYCLE_DAY = 26; // Supabase 대시보드 결제주기 시작일(확인된 값) — 매월 이 날짜에 카운터 리셋
+
+function _supaCycleKey(d) {
+  d = d || new Date();
+  let y = d.getFullYear(), m = d.getMonth();
+  if (d.getDate() < SUPA_USAGE_CYCLE_DAY) { m -= 1; if (m < 0) { m = 11; y -= 1; } }
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(SUPA_USAGE_CYCLE_DAY).padStart(2, '0')}`;
+}
+function _supaUsageLoad() {
+  let d;
+  try { d = JSON.parse(localStorage.getItem(SUPA_USAGE_LS_KEY) || 'null'); } catch (e) { d = null; }
+  const cyc = _supaCycleKey();
+  if (!d || d.cycle !== cyc) d = { cycle: cyc, bytes: 0, requests: 0 };
+  return d;
+}
+function _supaUsageSave(d) { try { localStorage.setItem(SUPA_USAGE_LS_KEY, JSON.stringify(d)); } catch (e) {} }
+function _supaFmtBytes(b) {
+  const mb = (b || 0) / 1024 / 1024;
+  return mb >= 1024 ? (mb / 1024).toFixed(2) + 'GB' : mb.toFixed(2) + 'MB';
+}
+function _renderSupaUsage() {
+  const el = document.getElementById('sb-usage-row');
+  if (!el) return;
+  const d = _supaUsageLoad();
+  el.textContent = `📊 Egress 추정 ${_supaFmtBytes(d.bytes)} · 요청 ${d.requests.toLocaleString()}회 (내 PC)`;
+}
+function _renderSupaUsageTeam(agg) {
+  const el = document.getElementById('sb-usage-row');
+  if (!el || !agg || !agg.byUser) return;
+  let bytes = 0, requests = 0;
+  Object.values(agg.byUser).forEach(u => { bytes += u.bytes || 0; requests += u.requests || 0; });
+  el.textContent = `📊 Egress 추정 ${_supaFmtBytes(bytes)} · 요청 ${requests.toLocaleString()}회 (팀 전체 · ${SUPA_USAGE_CYCLE_DAY}일 리셋)`;
+  el.title = 'Supabase 앱 사용량 추정치(Management API 미사용) — 실제 대시보드 수치와 다를 수 있음';
+}
+// 팀 전체 합산값은 gabe_kv에 계정별로 나눠 저장 후 합산(다른 계정 값을 덮어쓰지 않기 위함)
+async function _supaUsageFlush() {
+  if (!_serverConnected || !_currentUser) return;
+  try {
+    const local = _supaUsageLoad();
+    const agg = (await _sharedRead(SUPA_USAGE_KV_KEY)) || {};
+    const cur = (agg.cycle === local.cycle) ? agg : { cycle: local.cycle, byUser: {} };
+    cur.byUser = cur.byUser || {};
+    cur.byUser[_currentUser.email] = { bytes: local.bytes, requests: local.requests };
+    const ok = await _sharedWrite(SUPA_USAGE_KV_KEY, cur);
+    if (ok) _renderSupaUsageTeam(cur);
+  } catch (e) { console.warn('[Supabase 사용량 집계 실패]', e.message); }
+}
+async function _supaMeteredFetch(input, init) {
+  const res = await fetch(input, init);
+  try {
+    let size = 0;
+    const cl = res.headers.get('content-length');
+    if (cl) size = parseInt(cl, 10) || 0;
+    else size = (await res.clone().arrayBuffer()).byteLength;
+    const d = _supaUsageLoad();
+    d.bytes += size;
+    d.requests += 1;
+    _supaUsageSave(d);
+    _renderSupaUsage();
+  } catch (e) {}
+  return res;
+}
+
 function _getSupabase() {
   if (!_supabase && window.supabase) {
-    _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { fetch: _supaMeteredFetch }
+    });
   }
   return _supabase;
 }
@@ -2100,12 +2171,14 @@ async function _initSharedFolder() {
     await _sharedSyncAll();
     _sharedRefreshAll();
     _sharedShowSyncTime();
+    _renderSupaUsage();
+    _supaUsageFlush();
     // 로그인 후 탭을 계속 켜둔 채 쓰는 경우를 대비해 주기적으로 서버 데이터 재동기화
     // (기존엔 로그인 시 1회만 동기화되어, 다른 팀원이 저장한 내용이 재로그인 전까지 반영 안 되는 문제가 있었음)
     if (!_sharedSyncIntervalId) {
       _sharedSyncIntervalId = setInterval(async () => {
         if (!_serverConnected) return;
-        try { await _sharedSyncAll(); _sharedRefreshAll(); _sharedShowSyncTime(); } catch(e) { console.warn('[자동 재동기화 실패]', e.message); }
+        try { await _sharedSyncAll(); _sharedRefreshAll(); _sharedShowSyncTime(); await _supaUsageFlush(); } catch(e) { console.warn('[자동 재동기화 실패]', e.message); }
       }, 3 * 60 * 1000);
     }
   } catch(e) {
@@ -2150,6 +2223,7 @@ async function _enterOfflineMode(trust) {
     renderSessionList();
   }
   _sharedSetUI(false); // "📌 로컬 저장 모드" 표시, _initSharedFolder 호출 안 함(서버가 막힌 걸 이미 알고 있으므로)
+  _renderSupaUsage(); // 서버 집계는 못 받아오므로 이 PC에 쌓인 로컬 추정치만 표시
 
   const errEl = document.getElementById('login-error');
   const btn   = document.getElementById('login-btn');
