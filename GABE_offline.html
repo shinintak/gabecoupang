@@ -739,7 +739,9 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
         </div>
       </div>
       <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">업체상품코드</label>
-      <input id="lp-vendor" type="text" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:4px;">
+      <input id="lp-vendor" type="text" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:12px;">
+      <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">물류바코드</label>
+      <input id="lp-logistics-barcode" type="text" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:4px;">
     </div>
     <div style="padding:12px 20px;border-top:1px solid #EDF2F7;text-align:right;display:flex;gap:8px;justify-content:flex-end;">
       <button onclick="closeLotteProductModal()" style="height:34px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #E0E5FF;background:#fff;color:#4A5568;cursor:pointer;">취소</button>
@@ -8817,7 +8819,8 @@ function handleLotteBaseUpload(e){
           weightG:_lotteParseWeight(r[4]),
           priceNoVat:Math.round(parseFloat(r[5])||0),
           vendorCode:String(r[6]||'').trim(),
-          packQty:parseFloat(r[7])||0
+          packQty:parseFloat(r[7])||0,
+          logisticsBarcode:String(r[8]||'').trim().replace(/\s+/g,'')
         };
       }
       lotteBaseSave(db);
@@ -8868,6 +8871,7 @@ function _lotteRenderBaseList(){
     +'<th>공급가(vat제외)</th>'
     +'<th style="text-align:left;">상품코드(업체코드)</th>'
     +'<th>입수</th>'
+    +'<th style="text-align:left;">물류바코드</th>'
     +'<th>관리</th></tr></thead><tbody>';
   filtered.forEach(([barcode,p])=>{
     html+=`<tr>
@@ -8879,6 +8883,7 @@ function _lotteRenderBaseList(){
       <td>${Math.round(p.priceNoVat||0).toLocaleString()}</td>
       <td style="text-align:left;">${esc(p.vendorCode)}</td>
       <td>${(p.packQty||0).toLocaleString()}</td>
+      <td style="text-align:left;">${esc(p.logisticsBarcode)}</td>
       <td style="white-space:nowrap;">
         <button onclick="openLotteProductModal('${esc(barcode)}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #E0E5FF;background:#fff;color:#4318FF;cursor:pointer;">수정</button>
         <button onclick="deleteLotteProduct('${esc(barcode)}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #FED7D7;background:#fff;color:#E53E3E;cursor:pointer;margin-left:4px;">삭제</button>
@@ -8905,6 +8910,7 @@ function openLotteProductModal(barcode){
   document.getElementById('lp-price-vat').value=p&&p.priceVat?p.priceVat:'';
   document.getElementById('lp-price-novat').value=p&&p.priceNoVat?Math.round(p.priceNoVat):'';
   document.getElementById('lp-vendor').value=p?p.vendorCode||'':'';
+  document.getElementById('lp-logistics-barcode').value=p?p.logisticsBarcode||'':'';
   modal.style.display='flex';
 }
 function closeLotteProductModal(){
@@ -8927,7 +8933,8 @@ function saveLotteProduct(){
     weightG:parseFloat(document.getElementById('lp-weight').value)||0,
     priceNoVat:Math.round(parseFloat(document.getElementById('lp-price-novat').value)||0),
     vendorCode:document.getElementById('lp-vendor').value.trim(),
-    packQty:parseFloat(document.getElementById('lp-pack').value)||0
+    packQty:parseFloat(document.getElementById('lp-pack').value)||0,
+    logisticsBarcode:document.getElementById('lp-logistics-barcode').value.trim().replace(/\s+/g,'')
   };
   lotteBaseSave(db);
   closeLotteProductModal();
