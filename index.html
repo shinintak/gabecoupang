@@ -740,6 +740,8 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
       </div>
       <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">업체상품코드</label>
       <input id="lp-vendor" type="text" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:12px;">
+      <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">작업박스</label>
+      <input id="lp-workbox" type="text" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:12px;">
       <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">물류바코드</label>
       <input id="lp-logistics-barcode" type="text" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:4px;">
     </div>
@@ -8894,7 +8896,8 @@ function handleLotteBaseUpload(e){
           priceNoVat:Math.round(parseFloat(r[5])||0),
           vendorCode:String(r[6]||'').trim(),
           packQty:parseFloat(r[7])||0,
-          logisticsBarcode:String(r[8]||'').trim().replace(/\s+/g,'')
+          workBox:String(r[8]||'').trim(),
+          logisticsBarcode:String(r[9]||'').trim().replace(/\s+/g,'')
         };
       }
       lotteBaseSave(db);
@@ -8945,6 +8948,7 @@ function _lotteRenderBaseList(){
     +'<th>공급가(vat제외)</th>'
     +'<th style="text-align:left;">상품코드(업체코드)</th>'
     +'<th>입수</th>'
+    +'<th style="text-align:left;">작업박스</th>'
     +'<th style="text-align:left;">물류바코드</th>'
     +'<th>관리</th></tr></thead><tbody>';
   filtered.forEach(([barcode,p])=>{
@@ -8957,6 +8961,7 @@ function _lotteRenderBaseList(){
       <td>${Math.round(p.priceNoVat||0).toLocaleString()}</td>
       <td style="text-align:left;">${esc(p.vendorCode)}</td>
       <td>${(p.packQty||0).toLocaleString()}</td>
+      <td style="text-align:left;">${esc(p.workBox)}</td>
       <td style="text-align:left;">${esc(p.logisticsBarcode)}</td>
       <td style="white-space:nowrap;">
         <button onclick="openLotteProductModal('${esc(barcode)}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #E0E5FF;background:#fff;color:#4318FF;cursor:pointer;">수정</button>
@@ -8984,6 +8989,7 @@ function openLotteProductModal(barcode){
   document.getElementById('lp-price-vat').value=p&&p.priceVat?p.priceVat:'';
   document.getElementById('lp-price-novat').value=p&&p.priceNoVat?Math.round(p.priceNoVat):'';
   document.getElementById('lp-vendor').value=p?p.vendorCode||'':'';
+  document.getElementById('lp-workbox').value=p?p.workBox||'':'';
   document.getElementById('lp-logistics-barcode').value=p?p.logisticsBarcode||'':'';
   modal.style.display='flex';
 }
@@ -9008,6 +9014,7 @@ function saveLotteProduct(){
     priceNoVat:Math.round(parseFloat(document.getElementById('lp-price-novat').value)||0),
     vendorCode:document.getElementById('lp-vendor').value.trim(),
     packQty:parseFloat(document.getElementById('lp-pack').value)||0,
+    workBox:document.getElementById('lp-workbox').value.trim(),
     logisticsBarcode:document.getElementById('lp-logistics-barcode').value.trim().replace(/\s+/g,'')
   };
   lotteBaseSave(db);
@@ -9159,9 +9166,10 @@ function downloadLotteWorkOrder(){
   const GREY={patternType:'solid',fgColor:{rgb:'EDEDED'}};
 
   const S_TITLE={font:{name:'맑은 고딕',sz:16,bold:true},alignment:{horizontal:'center',vertical:'center'}};
+  const S_TITLE_RED={font:{name:'맑은 고딕',sz:16,bold:true,color:{rgb:'FF0000'}},alignment:{horizontal:'center',vertical:'center'}};
   const S_LBL ={font:{name:'맑은 고딕',sz:11,bold:true},alignment:{horizontal:'center',vertical:'center'},border:BD};
   const S_VAL ={font:{name:'맑은 고딕',sz:11,bold:true},alignment:{horizontal:'center',vertical:'center'},border:BD,fill:PINK};
-  const S_HDR ={font:{name:'맑은 고딕',sz:11,bold:true},alignment:{horizontal:'center',vertical:'center'},border:BD,fill:PINK};
+  const S_HDR ={font:{name:'맑은 고딕',sz:11,bold:true},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:BD,fill:PINK};
   const S_C   ={font:{name:'맑은 고딕',sz:10},alignment:{horizontal:'center',vertical:'center'},border:BD};
   const S_L   ={font:{name:'맑은 고딕',sz:10},alignment:{horizontal:'left',vertical:'center'},border:BD};
   const S_SUM ={font:{name:'맑은 고딕',sz:11,bold:true},alignment:{horizontal:'center',vertical:'center'},border:BD,fill:GREY};
@@ -9181,16 +9189,21 @@ function downloadLotteWorkOrder(){
         name:r.productName,
         qty:r.packQty*r.orderQty,
         packQty:r.packQty,
-        boxQty:r.receiveQty
+        boxQty:r.receiveQty,
+        workBox:base?base.workBox||'':''
       };
     });
 
     const ws={}, merges=[];
     const rowHeights=[];
     let R=0;
+    const centerParen=label.includes('오산')?'(오산)':label.includes('김해')?'(김해)':'';
     ws[ec(R,0)]=cs('롯데마트 작업지시서',S_TITLE);
-    for(let c=1;c<7;c++) ws[ec(R,c)]=cs('',S_TITLE);
-    merges.push({s:{r:R,c:0},e:{r:R,c:6}});
+    for(let c=1;c<5;c++) ws[ec(R,c)]=cs('',S_TITLE);
+    merges.push({s:{r:R,c:0},e:{r:R,c:4}});
+    ws[ec(R,5)]=cs(centerParen,S_TITLE_RED);
+    ws[ec(R,6)]=cs('',S_TITLE_RED);
+    merges.push({s:{r:R,c:5},e:{r:R,c:6}});
     rowHeights[R]={hpt:43.5}; R++;
 
     ws[ec(R,0)]=cs('센터명',S_LBL);
@@ -9202,7 +9215,7 @@ function downloadLotteWorkOrder(){
     rowHeights[R]={hpt:20.1}; R++;
 
     const headerRow=R;
-    ['SPEC','바코드','상품명','수량','박스번호','입수량','작업수량(박스)'].forEach((h,c)=>{ ws[ec(R,c)]=cs(h,S_HDR); });
+    ['SPEC','바코드','상품명','수량','작업박스','입수량','작업수량(박스)'].forEach((h,c)=>{ ws[ec(R,c)]=cs(h,S_HDR); });
     rowHeights[R]={hpt:37.5}; R++;
 
     items.forEach(item=>{
@@ -9210,7 +9223,7 @@ function downloadLotteWorkOrder(){
       ws[ec(R,1)]=cs(item.barcode,S_C);
       ws[ec(R,2)]=cs(item.name,S_L);
       ws[ec(R,3)]=cn(item.qty,S_C);
-      ws[ec(R,4)]=cs('',S_C); // 박스번호 — 작업 후 현장에서 수기 기입
+      ws[ec(R,4)]=cs(item.workBox,S_C); // 작업박스 — 기본데이터의 작업박스 값을 바코드로 매칭
       ws[ec(R,5)]=cn(item.packQty,S_C);
       ws[ec(R,6)]=cn(item.boxQty,S_C);
       rowHeights[R]={hpt:24}; R++;
@@ -9549,7 +9562,7 @@ function _drawLotteTotalChart(canvasId,points){
 function downloadLotteErp(center){
   const data=lotteCenterLoad(center);
   if(!data||!data.result.erpRows.length){ alert('추출된 데이터가 없습니다.'); return; }
-  const S=typeof XLSXStyle!=='undefined'?XLSXStyle:XLSX;
+  const S=XLSX; // ERP등록용 파일은 색상/스타일이 없는 단순 표라 구형 xls(biff8) 저장이 되는 기본 XLSX 라이브러리 사용
   const label=center==='gimhae'?'김해':'오산';
   const aoa=[['SPEC','수량','단가','매출구분'], ...data.result.erpRows.map(r=>[r.SPEC,r.qty,r.price,r.saleType])];
   const ws=S.utils.aoa_to_sheet(aoa);
@@ -9558,7 +9571,7 @@ function downloadLotteErp(center){
   S.utils.book_append_sheet(wb,ws,label+'2');
   const n=new Date();
   const ds=n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');
-  S.writeFile(wb,`ERP등록용_${label}_${ds}.xlsx`);
+  S.writeFile(wb,`ERP등록용_${label}_${ds}.xls`,{bookType:'xls'});
 }
 
 function openDeliveryPage(){
