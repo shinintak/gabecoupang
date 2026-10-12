@@ -1296,7 +1296,10 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
       <div class="lotte-card">
         <div class="t" style="display:flex;align-items:center;justify-content:space-between;">
           <span>현재 상태</span>
-          <button onclick="openLotteProductModal()" style="height:30px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">+ 상품 추가</button>
+          <div style="display:flex;gap:6px;">
+            <button id="lotte-label-bulk-btn" onclick="downloadLotteLabelsBulk()" disabled style="height:30px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #2D1660;background:#fff;color:#2D1660;opacity:.45;">☑ 선택 물류바코드 다운로드 (0)</button>
+            <button onclick="openLotteProductModal()" style="height:30px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">+ 상품 추가</button>
+          </div>
         </div>
         <div id="lotte-base-summary" style="font-size:13px;color:#1E2530;font-weight:700;margin-bottom:10px;">저장된 기본데이터가 없습니다.</div>
         <input id="lotte-base-search" type="text" placeholder="바코드·SPEC·상품명 검색" oninput="_lotteRenderBaseList()" style="display:none;width:100%;box-sizing:border-box;height:34px;padding:0 12px;font-size:12px;border:1px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:10px;">
@@ -9081,7 +9084,7 @@ function _lotteRenderBaseList(){
     +'<th style="text-align:left;">상품코드(업체코드)</th>'
     +'<th>입수</th>'
     +'<th style="text-align:left;">작업박스</th>'
-    +'<th style="text-align:left;">물류바코드</th>'
+    +'<th style="text-align:left;white-space:nowrap;"><input type="checkbox" id="lotte-label-sel-all" onchange="toggleLotteLabelSelAll(this.checked)" title="전체 선택" style="width:14px;height:14px;vertical-align:middle;margin:0 4px 0 0;cursor:pointer;">물류바코드</th>'
     +'<th>관리</th></tr></thead><tbody>';
   filtered.forEach(([barcode,p])=>{
     html+=`<tr>
@@ -9098,6 +9101,7 @@ function _lotteRenderBaseList(){
         ${p.logisticsBarcode?esc(p.logisticsBarcode):'<span style="color:#A0AEC0;">없음</span>'}
         ${p.labelPdf?'<span title="'+esc(p.labelPdf.name)+'" style="font-size:10.5px;color:#4318FF;background:#E0E5FF;border-radius:5px;padding:1px 5px;margin-left:4px;">PDF</span>':''}
         <div style="margin-top:3px;">
+          <input type="checkbox" class="lotte-label-sel" data-barcode="${esc(barcode)}" ${_lotteLabelSel.has(barcode)?'checked':''} onchange="toggleLotteLabelSel(this.dataset.barcode,this.checked)" title="일괄 다운로드 선택" style="width:14px;height:14px;vertical-align:middle;margin:0 3px 0 0;cursor:pointer;accent-color:#2D1660;">
           <button onclick="printLotteLabel('${esc(barcode)}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:none;background:#2D1660;color:#fff;cursor:pointer;">출력</button>
           <button onclick="openLotteLabelModal('${esc(barcode)}')" title="라벨 설정 / PDF 업로드" style="font-size:11px;padding:3px 7px;border-radius:6px;border:1px solid #E0E5FF;background:#fff;color:#4318FF;cursor:pointer;margin-left:2px;">⚙</button>
         </div>
@@ -9110,6 +9114,7 @@ function _lotteRenderBaseList(){
   });
   html+='</tbody></table>';
   listEl.innerHTML=html;
+  _lotteLabelSelUpdate();
 }
 
 function openLotteProductModal(barcode){
@@ -9439,25 +9444,31 @@ function saveLotteLabelSettings(thenPrint){
   if(thenPrint) printLotteLabel(barcode);
 }
 
-// 물류바코드 열 "출력" 버튼: 설정에 따라 업로드 PDF 다운로드 또는 라벨 PDF 생성
-async function printLotteLabel(barcode){
+// 상품 1개의 물류바코드 PDF를 준비 (업로드 PDF 또는 설정대로 생성)
+// 반환: {ok:true, filename, blob} / {ok:false, reason, openModal}
+async function _lotteBuildLabelPdf(barcode){
   const p=lotteBaseLoad()[barcode];
-  if(!p) return;
+  if(!p) return {ok:false, reason:'상품 정보 없음'};
   const cfg=_lotteLabelCfg(barcode);
+  const safe=s=>String(s||'').replace(/[\\/:*?"<>|]/g,'_').trim();
+  const fromUpload=async()=>{
+    const dataUrl=await _lotteLabelPdfLoad(barcode);
+    if(!dataUrl) return {ok:false, reason:'업로드한 PDF를 불러오지 못했습니다. 클라우드 연결 상태를 확인하거나 PDF를 다시 업로드해주세요.'};
+    const blob=await (await fetch(dataUrl)).blob();
+    return {ok:true, filename:p.labelPdf.name||`물류바코드_${safe(p.spec||barcode)}.pdf`, blob};
+  };
   if(cfg.mode==='pdf'){
-    if(p.labelPdf) return downloadLotteLabelPdfFile(barcode);
-    if(!p.logisticsBarcode){ alert('업로드된 PDF가 없습니다. 설정 창에서 PDF를 업로드해주세요.'); openLotteLabelModal(barcode); return; }
+    if(p.labelPdf) return fromUpload();
+    if(!p.logisticsBarcode) return {ok:false, reason:'업로드된 PDF가 없습니다. 설정 창에서 PDF를 업로드해주세요.', openModal:true};
   }
   const value=p.logisticsBarcode||'';
   if(!value){
-    if(p.labelPdf) return downloadLotteLabelPdfFile(barcode);
-    alert('물류바코드가 없습니다. 설정 창에서 물류바코드를 입력하거나 PDF를 업로드해주세요.');
-    openLotteLabelModal(barcode);
-    return;
+    if(p.labelPdf) return fromUpload();
+    return {ok:false, reason:'물류바코드가 없습니다. 설정 창에서 물류바코드를 입력하거나 PDF를 업로드해주세요.', openModal:true};
   }
   const cv=document.createElement('canvas');
   const err=_lotteDrawLabel(cv, cfg, value, 12);
-  if(err){ alert(err+'\n설정 창에서 바코드 형식을 확인해주세요.'); openLotteLabelModal(barcode); return; }
+  if(err) return {ok:false, reason:err+'\n설정 창에서 바코드 형식을 확인해주세요.', openModal:true};
   const img=cv.toDataURL('image/png');
   const {jsPDF}=window.jspdf;
   let pdf;
@@ -9465,7 +9476,7 @@ async function printLotteLabel(barcode){
     pdf=new jsPDF({unit:'mm', format:[LOTTE_LABEL_W, LOTTE_LABEL_H], orientation:'portrait'});
     for(let i=0;i<cfg.copies;i++){
       if(i) pdf.addPage([LOTTE_LABEL_W, LOTTE_LABEL_H], 'portrait');
-      pdf.addImage(img, 'PNG', 0, 0, LOTTE_LABEL_W, LOTTE_LABEL_H);
+      pdf.addImage(img, 'PNG', 0, 0, LOTTE_LABEL_W, LOTTE_LABEL_H, 'lotteLbl', 'FAST');
     }
   } else {
     const L=LOTTE_LABEL_SHEET, per=L.cols*L.rows;
@@ -9476,11 +9487,89 @@ async function printLotteLabel(barcode){
     for(let i=0;i<cfg.copies;i++,slot++){
       if(slot>=per){ pdf.addPage('a4','portrait'); slot=0; }
       const c=slot%L.cols, r=Math.floor(slot/L.cols);
-      pdf.addImage(img, 'PNG', mx+c*(LOTTE_LABEL_W+L.gapX), my+r*(LOTTE_LABEL_H+L.gapY), LOTTE_LABEL_W, LOTTE_LABEL_H);
+      pdf.addImage(img, 'PNG', mx+c*(LOTTE_LABEL_W+L.gapX), my+r*(LOTTE_LABEL_H+L.gapY), LOTTE_LABEL_W, LOTTE_LABEL_H, 'lotteLbl', 'FAST');
     }
   }
-  const safe=s=>String(s||'').replace(/[\\/:*?"<>|]/g,'_').trim();
-  pdf.save(`물류바코드_${safe(p.spec||barcode)}${p.displayName?'_'+safe(p.displayName):''}.pdf`);
+  return {ok:true, filename:`물류바코드_${safe(p.spec||barcode)}${p.displayName?'_'+safe(p.displayName):''}.pdf`, blob:pdf.output('blob')};
+}
+
+function _lotteSaveBlob(blob, filename){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
+// 물류바코드 열 "출력" 버튼: 설정에 따라 업로드 PDF 다운로드 또는 라벨 PDF 생성
+async function printLotteLabel(barcode){
+  if(!lotteBaseLoad()[barcode]) return;
+  const r=await _lotteBuildLabelPdf(barcode);
+  if(!r.ok){ alert(r.reason); if(r.openModal) openLotteLabelModal(barcode); return; }
+  _lotteSaveBlob(r.blob, r.filename);
+}
+
+// ── 물류바코드 일괄 다운로드 (체크한 상품들을 ZIP 하나로) ──
+const _lotteLabelSel=new Set();
+function _lotteLabelSelUpdate(){
+  const db=lotteBaseLoad();
+  [..._lotteLabelSel].forEach(b=>{ if(!db[b]) _lotteLabelSel.delete(b); });
+  const btn=document.getElementById('lotte-label-bulk-btn');
+  if(btn){
+    const n=_lotteLabelSel.size;
+    btn.textContent=`☑ 선택 물류바코드 다운로드 (${n})`;
+    btn.disabled=!n;
+    btn.style.opacity=n?'1':'0.45';
+    btn.style.cursor=n?'pointer':'default';
+  }
+  const all=document.getElementById('lotte-label-sel-all');
+  if(all){
+    const boxes=[...document.querySelectorAll('.lotte-label-sel')];
+    const checked=boxes.filter(c=>c.checked).length;
+    all.checked=!!boxes.length && checked===boxes.length;
+    all.indeterminate=checked>0 && checked<boxes.length;
+  }
+}
+function toggleLotteLabelSel(barcode, on){
+  if(on) _lotteLabelSel.add(barcode); else _lotteLabelSel.delete(barcode);
+  _lotteLabelSelUpdate();
+}
+// 헤더 체크박스: 현재 화면(검색 결과)에 보이는 상품 전체 선택/해제
+function toggleLotteLabelSelAll(on){
+  document.querySelectorAll('.lotte-label-sel').forEach(c=>{
+    c.checked=on;
+    if(on) _lotteLabelSel.add(c.dataset.barcode); else _lotteLabelSel.delete(c.dataset.barcode);
+  });
+  _lotteLabelSelUpdate();
+}
+
+async function downloadLotteLabelsBulk(){
+  const list=[..._lotteLabelSel];
+  if(!list.length){ alert('다운로드할 상품을 선택해주세요.'); return; }
+  const btn=document.getElementById('lotte-label-bulk-btn');
+  const db=lotteBaseLoad();
+  const zip=new JSZip();
+  const used={}, fails=[];
+  let done=0;
+  for(const barcode of list){
+    if(btn) btn.textContent=`⏳ 준비 중... (${++done}/${list.length})`;
+    let r;
+    try{ r=await _lotteBuildLabelPdf(barcode); }catch(e){ r={ok:false, reason:e.message}; }
+    const p=db[barcode]||{};
+    if(!r.ok){ fails.push(`${p.spec||barcode} ${p.displayName||''} : ${String(r.reason).split('\n')[0]}`); continue; }
+    // 같은 파일명이 겹치면 (2), (3)… 붙여서 덮어쓰기 방지
+    let name=r.filename;
+    if(used[name]){ used[name]++; name=name.replace(/\.pdf$/i,'')+` (${used[name]}).pdf`; } else used[name]=1;
+    zip.file(name, r.blob);
+  }
+  _lotteLabelSelUpdate();
+  const okCount=list.length-fails.length;
+  if(!okCount){ alert('다운로드할 수 있는 PDF가 없습니다.\n\n'+fails.join('\n')); return; }
+  const now=new Date();
+  const stamp=`${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  const blob=await zip.generateAsync({type:'blob'});
+  _lotteSaveBlob(blob, `롯데마트_물류바코드_${stamp}_${okCount}건.zip`);
+  if(fails.length) alert(`${okCount}건 다운로드 완료, ${fails.length}건 제외\n\n`+fails.join('\n'));
 }
 
 // 롯데마트 시스템에서 다운로드한 "입고예약 상세내역" 파일은 .xls 확장자지만 실제로는 HTML 문서
