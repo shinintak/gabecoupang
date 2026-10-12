@@ -798,6 +798,16 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
           </div>
           <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">상품명</label>
           <input id="ll-name" type="text" oninput="_lotteLabelPreview()" style="width:100%;box-sizing:border-box;height:34px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:10px;">
+          <div style="display:flex;gap:10px;">
+            <div style="flex:1;">
+              <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">입수량</label>
+              <input id="ll-pack" type="text" oninput="_lotteLabelPreview()" placeholder="비우면 표시 안 함" style="width:100%;box-sizing:border-box;height:34px;padding:0 10px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:10px;">
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">박스번호</label>
+              <input id="ll-boxno" type="text" oninput="_lotteLabelPreview()" placeholder="비우면 표시 안 함" style="width:100%;box-sizing:border-box;height:34px;padding:0 10px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:10px;">
+            </div>
+          </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
             <div style="flex:1;min-width:110px;">
               <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">바코드 형식</label>
@@ -9187,7 +9197,7 @@ function _lotteKeepLabelFields(prev){
 
 function _lotteLabelCfg(barcode){
   const p=lotteBaseLoad()[barcode]||{};
-  const cfg=Object.assign({}, LOTTE_LABEL_DEFAULT, {code:p.spec||'', name:p.displayName||''}, p.label||{});
+  const cfg=Object.assign({}, LOTTE_LABEL_DEFAULT, {code:p.spec||'', name:p.displayName||'', pack:p.packQty?String(p.packQty):'', boxNo:p.workBox||''}, p.label||{});
   if(!p.label) cfg.mode=p.labelPdf&&!p.logisticsBarcode?'pdf':'auto';
   return cfg;
 }
@@ -9261,6 +9271,8 @@ function _lotteDrawLabel(cv, cfg, value, pxPerMm){
   let y=padY;
   if(cfg.code){ ctx.fillText(`상품코드 : ${cfg.code}`, padX, y); y+=lineH; }
   if(cfg.name){ _lotteWrapText(ctx, cfg.name, W-padX*2).forEach(l=>{ ctx.fillText(l, padX, y); y+=lineH; }); }
+  if(cfg.pack){ ctx.fillText(`입수량 : ${cfg.pack}${/^\d+(\.\d+)?$/.test(cfg.pack)?'개':''}`, padX, y); y+=lineH; }
+  if(cfg.boxNo){ ctx.fillText(`박스번호 : ${cfg.boxNo}`, padX, y); y+=lineH; }
   const headerBottom=y;
   const compY=H-padY-font;
   if(cfg.company){ ctx.textAlign='center'; ctx.fillText(cfg.company, W/2, compY); }
@@ -9302,6 +9314,8 @@ function _lotteLabelReadForm(){
     mode:modeEl?modeEl.value:'auto',
     code:v('ll-code').trim(),
     name:v('ll-name').trim(),
+    pack:v('ll-pack').trim(),
+    boxNo:v('ll-boxno').trim(),
     company:v('ll-company').trim(),
     format:v('ll-format'),
     fontMm:parseFloat(v('ll-font'))||LOTTE_LABEL_DEFAULT.fontMm,
@@ -9324,6 +9338,8 @@ function openLotteLabelModal(barcode){
   document.getElementById('ll-value').value=p.logisticsBarcode||'';
   document.getElementById('ll-code').value=cfg.code;
   document.getElementById('ll-name').value=cfg.name;
+  document.getElementById('ll-pack').value=cfg.pack||'';
+  document.getElementById('ll-boxno').value=cfg.boxNo||'';
   document.getElementById('ll-company').value=cfg.company;
   document.getElementById('ll-format').value=cfg.format;
   document.getElementById('ll-font').value=cfg.fontMm;
