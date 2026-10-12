@@ -744,10 +744,110 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
       <input id="lp-workbox" type="text" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:12px;">
       <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">물류바코드</label>
       <input id="lp-logistics-barcode" type="text" style="width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:4px;">
+      <div style="font-size:11px;color:#8A94A6;">물류바코드가 없으면 비워두세요. 신규 상품은 저장 후 물류바코드 라벨 설정 창(PDF 업로드 가능)이 열립니다.</div>
     </div>
     <div style="padding:12px 20px;border-top:1px solid #EDF2F7;text-align:right;display:flex;gap:8px;justify-content:flex-end;">
       <button onclick="closeLotteProductModal()" style="height:34px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #E0E5FF;background:#fff;color:#4A5568;cursor:pointer;">취소</button>
       <button onclick="saveLotteProduct()" style="height:34px;padding:0 18px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 롯데마트 물류바코드 라벨 설정 팝업 (바코드라벨생성기 롯데마트형 · V3310 12칸 63.5x71.98mm) -->
+<div id="lotte-label-modal" style="display:none;position:fixed;inset:0;z-index:3300;background:rgba(27,37,89,.5);align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;width:760px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(27,37,89,0.22);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #E0E5FF;">
+      <div>
+        <div style="font-size:15px;font-weight:800;color:#1B2559;">물류바코드 라벨 설정</div>
+        <div id="ll-subtitle" style="font-size:11.5px;color:#8A94A6;margin-top:2px;"></div>
+      </div>
+      <button onclick="closeLotteLabelModal()" style="width:28px;height:28px;border-radius:50%;border:none;background:#F4F6F9;cursor:pointer;font-size:13px;">✕</button>
+    </div>
+    <input type="hidden" id="ll-barcode">
+    <div style="display:flex;gap:18px;padding:18px 20px;flex-wrap:wrap;">
+      <div style="flex:1 1 360px;min-width:300px;">
+        <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">출력 방식</label>
+        <div style="display:flex;gap:14px;font-size:12.5px;margin-bottom:12px;">
+          <label style="cursor:pointer;"><input type="radio" name="ll-mode" value="auto" onchange="_lotteLabelPreview()"> 물류바코드로 라벨 생성</label>
+          <label style="cursor:pointer;"><input type="radio" name="ll-mode" value="pdf" onchange="_lotteLabelPreview()"> 업로드한 PDF</label>
+        </div>
+
+        <div style="background:#F4F6F9;border:1px solid #E0E5FF;border-radius:10px;padding:10px 12px;margin-bottom:12px;">
+          <div style="font-size:12px;font-weight:700;color:#1B2559;margin-bottom:6px;">📎 PDF 파일</div>
+          <div id="ll-pdf-status" style="font-size:12px;color:#4A5568;margin-bottom:8px;">업로드된 PDF 없음</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <label for="ll-pdf-file" style="height:28px;line-height:28px;padding:0 12px;font-size:11.5px;font-weight:700;border-radius:7px;background:#2D1660;color:#fff;cursor:pointer;">PDF 업로드</label>
+            <input type="file" id="ll-pdf-file" accept="application/pdf,.pdf" style="display:none;" onchange="handleLotteLabelPdfUpload(event)">
+            <button id="ll-pdf-dl" onclick="downloadLotteLabelPdfFile(document.getElementById('ll-barcode').value)" style="height:28px;padding:0 12px;font-size:11.5px;font-weight:700;border-radius:7px;border:1px solid #E0E5FF;background:#fff;color:#4318FF;cursor:pointer;">받기</button>
+            <button id="ll-pdf-del" onclick="deleteLotteLabelPdf()" style="height:28px;padding:0 12px;font-size:11.5px;font-weight:700;border-radius:7px;border:1px solid #FED7D7;background:#fff;color:#E53E3E;cursor:pointer;">삭제</button>
+          </div>
+        </div>
+
+        <div id="ll-auto-fields">
+          <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">물류바코드 값</label>
+          <input id="ll-value" type="text" oninput="_lotteLabelPreview()" placeholder="물류바코드 없음" style="width:100%;box-sizing:border-box;height:34px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:10px;">
+          <div style="display:flex;gap:10px;">
+            <div style="flex:1;">
+              <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">상품코드 표시</label>
+              <input id="ll-code" type="text" oninput="_lotteLabelPreview()" style="width:100%;box-sizing:border-box;height:34px;padding:0 10px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:10px;">
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">회사명</label>
+              <input id="ll-company" type="text" oninput="_lotteLabelPreview()" style="width:100%;box-sizing:border-box;height:34px;padding:0 10px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:10px;">
+            </div>
+          </div>
+          <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">상품명</label>
+          <input id="ll-name" type="text" oninput="_lotteLabelPreview()" style="width:100%;box-sizing:border-box;height:34px;padding:0 12px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:10px;">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:110px;">
+              <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">바코드 형식</label>
+              <select id="ll-format" onchange="_lotteLabelPreview()" style="width:100%;height:34px;padding:0 8px;font-size:12.5px;border:1.5px solid #E0E5FF;border-radius:8px;margin-bottom:10px;">
+                <option value="CODE128">Code128</option>
+                <option value="ITF14">ITF-14</option>
+                <option value="EAN13">EAN-13</option>
+              </select>
+            </div>
+            <div style="flex:1;min-width:90px;">
+              <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">글자 크기(mm)</label>
+              <input id="ll-font" type="number" min="1.5" max="8" step="0.1" oninput="_lotteLabelPreview()" style="width:100%;box-sizing:border-box;height:34px;padding:0 10px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:10px;">
+            </div>
+            <div style="flex:1;min-width:90px;">
+              <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">바코드 크기(%)</label>
+              <input id="ll-scale" type="number" min="30" max="150" step="5" oninput="_lotteLabelPreview()" style="width:100%;box-sizing:border-box;height:34px;padding:0 10px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:10px;">
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+            <div style="flex:1;min-width:120px;">
+              <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">용지</label>
+              <select id="ll-paper" onchange="_lotteLabelPreview()" style="width:100%;height:34px;padding:0 8px;font-size:12.5px;border:1.5px solid #E0E5FF;border-radius:8px;margin-bottom:10px;">
+                <option value="a4">A4 시트 (V3310 12칸)</option>
+                <option value="roll">낱장 (63.5x71.98mm)</option>
+              </select>
+            </div>
+            <div style="flex:1;min-width:80px;">
+              <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">출력 매수</label>
+              <input id="ll-copies" type="number" min="1" max="600" step="1" style="width:100%;box-sizing:border-box;height:34px;padding:0 10px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:10px;">
+            </div>
+            <div style="flex:1;min-width:80px;">
+              <label style="font-size:12px;font-weight:600;color:#4A5568;display:block;margin-bottom:5px;">시작 칸(1~12)</label>
+              <input id="ll-start" type="number" min="1" max="12" step="1" style="width:100%;box-sizing:border-box;height:34px;padding:0 10px;font-size:13px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;margin-bottom:10px;">
+            </div>
+          </div>
+          <label style="font-size:12px;color:#4A5568;cursor:pointer;"><input type="checkbox" id="ll-showvalue" onchange="_lotteLabelPreview()"> 바코드 아래 숫자 표시</label>
+        </div>
+      </div>
+      <div style="flex:0 0 250px;display:flex;flex-direction:column;align-items:center;">
+        <div style="font-size:12px;font-weight:700;color:#1B2559;margin-bottom:8px;align-self:flex-start;">미리보기</div>
+        <div style="background:#F4F6F9;border:1px dashed #E0E5FF;border-radius:10px;padding:14px;width:100%;box-sizing:border-box;display:flex;justify-content:center;">
+          <canvas id="ll-preview" style="width:212px;height:240px;background:#fff;box-shadow:0 0 0 1px #CBD2E0;"></canvas>
+        </div>
+        <div id="ll-preview-msg" style="font-size:11.5px;color:#E53E3E;margin-top:8px;text-align:center;min-height:16px;"></div>
+      </div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #EDF2F7;display:flex;gap:8px;justify-content:flex-end;">
+      <button onclick="closeLotteLabelModal()" style="height:34px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #E0E5FF;background:#fff;color:#4A5568;cursor:pointer;">닫기</button>
+      <button onclick="saveLotteLabelSettings(true)" style="height:34px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #2D1660;background:#fff;color:#2D1660;cursor:pointer;">저장 후 출력</button>
+      <button onclick="saveLotteLabelSettings(false)" style="height:34px;padding:0 18px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">저장</button>
     </div>
   </div>
 </div>
@@ -8910,6 +9010,7 @@ function handleLotteBaseUpload(e){
         if(!barcode) continue;
         if(db[barcode]) updated++; else added++;
         db[barcode]={
+          ..._lotteKeepLabelFields(db[barcode]),
           spec:String(r[1]||'').trim(),
           priceVat:parseFloat(r[2])||0,
           displayName:String(r[3]||'').trim(),
@@ -8983,7 +9084,14 @@ function _lotteRenderBaseList(){
       <td style="text-align:left;">${esc(p.vendorCode)}</td>
       <td>${(p.packQty||0).toLocaleString()}</td>
       <td style="text-align:left;">${esc(p.workBox)}</td>
-      <td style="text-align:left;">${esc(p.logisticsBarcode)}</td>
+      <td style="text-align:left;white-space:nowrap;">
+        ${p.logisticsBarcode?esc(p.logisticsBarcode):'<span style="color:#A0AEC0;">없음</span>'}
+        ${p.labelPdf?'<span title="'+esc(p.labelPdf.name)+'" style="font-size:10.5px;color:#4318FF;background:#E0E5FF;border-radius:5px;padding:1px 5px;margin-left:4px;">PDF</span>':''}
+        <div style="margin-top:3px;">
+          <button onclick="printLotteLabel('${esc(barcode)}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:none;background:#2D1660;color:#fff;cursor:pointer;">출력</button>
+          <button onclick="openLotteLabelModal('${esc(barcode)}')" title="라벨 설정 / PDF 업로드" style="font-size:11px;padding:3px 7px;border-radius:6px;border:1px solid #E0E5FF;background:#fff;color:#4318FF;cursor:pointer;margin-left:2px;">⚙</button>
+        </div>
+      </td>
       <td style="white-space:nowrap;">
         <button onclick="openLotteProductModal('${esc(barcode)}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #E0E5FF;background:#fff;color:#4318FF;cursor:pointer;">수정</button>
         <button onclick="deleteLotteProduct('${esc(barcode)}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #FED7D7;background:#fff;color:#E53E3E;cursor:pointer;margin-left:4px;">삭제</button>
@@ -9028,6 +9136,7 @@ function saveLotteProduct(){
     if(!confirm('이미 등록된 바코드입니다. 기존 정보를 덮어쓸까요?')) return;
   }
   db[barcode]={
+    ..._lotteKeepLabelFields(db[orig||barcode]),
     spec,
     priceVat:parseFloat(document.getElementById('lp-price-vat').value)||0,
     displayName:document.getElementById('lp-name').value.trim(),
@@ -9041,14 +9150,321 @@ function saveLotteProduct(){
   lotteBaseSave(db);
   closeLotteProductModal();
   _lotteRenderBaseSummary();
+  // 신규 상품 등록 시 바로 물류바코드 라벨 설정 팝업을 열어서 설정/PDF 업로드를 이어서 할 수 있게 함
+  if(!orig) openLotteLabelModal(barcode);
 }
 function deleteLotteProduct(barcode){
   if(!canEdit('lotte_product_edit')){ alert('롯데마트 상품 수정 권한이 없습니다.'); return; }
   if(!confirm(`'${barcode}' 상품을 삭제할까요?`)) return;
   const db=lotteBaseLoad();
+  const hadPdf=!!(db[barcode]&&db[barcode].labelPdf);
   delete db[barcode];
   lotteBaseSave(db);
+  if(hadPdf) _lotteLabelPdfRemove(barcode);
   _lotteRenderBaseSummary();
+}
+
+// ══════════════════════════════════════
+// 롯데마트 물류바코드 라벨 (바코드라벨생성기 "롯데마트형" 양식)
+// 규격: 프린텍 V3310 12칸 (63.5 x 71.98mm), A4 3열 x 4행
+// 라벨 설정은 기본데이터 항목의 label 필드에, 업로드 PDF는 용량이 커서
+// 공용 키(gabe_lotte_base_v1)에 넣지 않고 상품별 gabe_kv 키(gabe_lotte_lblpdf_{바코드})에 따로 저장
+// (기본데이터 항목에는 labelPdf:{name,size,uploadedAt} 메타만 기록)
+// ══════════════════════════════════════
+const LOTTE_LABEL_W=63.5, LOTTE_LABEL_H=71.98;
+const LOTTE_LABEL_SHEET={ cols:3, rows:4, gapX:2, gapY:0 };
+const LOTTE_LABEL_PDF_PREFIX='gabe_lotte_lblpdf_';
+const LOTTE_LABEL_DEFAULT={ mode:'auto', format:'CODE128', company:'주식회사 가베', fontMm:3, scale:100, paper:'a4', copies:12, start:1, showValue:true };
+const _lotteLabelPdfMem={};
+
+// 엑셀 재업로드/상품 수정 시 라벨 설정·PDF 메타가 사라지지 않도록 보존
+function _lotteKeepLabelFields(prev){
+  const keep={};
+  if(prev&&prev.label) keep.label=prev.label;
+  if(prev&&prev.labelPdf) keep.labelPdf=prev.labelPdf;
+  return keep;
+}
+
+function _lotteLabelCfg(barcode){
+  const p=lotteBaseLoad()[barcode]||{};
+  const cfg=Object.assign({}, LOTTE_LABEL_DEFAULT, {code:p.spec||'', name:p.displayName||''}, p.label||{});
+  if(!p.label) cfg.mode=p.labelPdf&&!p.logisticsBarcode?'pdf':'auto';
+  return cfg;
+}
+
+async function _lotteLabelPdfLoad(barcode){
+  if(_lotteLabelPdfMem[barcode]) return _lotteLabelPdfMem[barcode];
+  try{ const v=localStorage.getItem(LOTTE_LABEL_PDF_PREFIX+barcode); if(v){ _lotteLabelPdfMem[barcode]=v; return v; } }catch(e){}
+  const remote=await _sharedRead(LOTTE_LABEL_PDF_PREFIX+barcode);
+  const dataUrl=remote&&remote.dataUrl;
+  if(dataUrl) _lotteLabelPdfMem[barcode]=dataUrl;
+  return dataUrl||null;
+}
+async function _lotteLabelPdfStore(barcode, dataUrl, meta){
+  _lotteLabelPdfMem[barcode]=dataUrl;
+  // PDF는 용량이 커서 localStorage(약 5MB 공용)를 채우면 다른 데이터 저장이 막힘 → 클라우드 저장 실패(로컬 모드)일 때만 로컬에 보관
+  if(await _sharedWrite(LOTTE_LABEL_PDF_PREFIX+barcode, Object.assign({dataUrl}, meta))){
+    try{ localStorage.removeItem(LOTTE_LABEL_PDF_PREFIX+barcode); }catch(e){}
+    return true;
+  }
+  try{ localStorage.setItem(LOTTE_LABEL_PDF_PREFIX+barcode, dataUrl); return true; }catch(e){ return false; }
+}
+async function _lotteLabelPdfRemove(barcode){
+  delete _lotteLabelPdfMem[barcode];
+  try{ localStorage.removeItem(LOTTE_LABEL_PDF_PREFIX+barcode); }catch(e){}
+  const sb=_serverConnected&&_getSupabase();
+  if(sb){ try{ await sb.from('gabe_kv').delete().eq('key', LOTTE_LABEL_PDF_PREFIX+barcode); }catch(e){} }
+}
+
+function _lotteDownloadDataUrl(dataUrl, filename){
+  const bin=atob(dataUrl.split(',')[1]);
+  const buf=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
+  const url=URL.createObjectURL(new Blob([buf],{type:'application/pdf'}));
+  const a=document.createElement('a');
+  a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
+async function downloadLotteLabelPdfFile(barcode){
+  const p=lotteBaseLoad()[barcode];
+  if(!p||!p.labelPdf){ alert('업로드된 PDF가 없습니다.'); return; }
+  const dataUrl=await _lotteLabelPdfLoad(barcode);
+  if(!dataUrl){ alert('PDF 파일을 불러오지 못했습니다. 클라우드 연결 상태를 확인하거나 PDF를 다시 업로드해주세요.'); return; }
+  _lotteDownloadDataUrl(dataUrl, p.labelPdf.name||`물류바코드_${p.spec||barcode}.pdf`);
+}
+
+// 상품명이 라벨 폭을 넘으면 글자 단위로 줄바꿈
+function _lotteWrapText(ctx, text, maxW){
+  const lines=[]; let cur='';
+  for(const ch of String(text||'')){
+    if(cur && ctx.measureText(cur+ch).width>maxW){ lines.push(cur); cur=ch.trim()?ch:''; }
+    else cur+=ch;
+  }
+  if(cur) lines.push(cur);
+  return lines;
+}
+
+// 라벨 1장을 캔버스에 그림 (상단: 상품코드/상품명 좌측정렬, 중앙: 바코드, 하단: 회사명 가운데)
+// 반환값: 오류 메시지(없으면 '')
+function _lotteDrawLabel(cv, cfg, value, pxPerMm){
+  const W=Math.round(LOTTE_LABEL_W*pxPerMm), H=Math.round(LOTTE_LABEL_H*pxPerMm);
+  cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#111'; ctx.textBaseline='top';
+  const font=Math.max(1.5, parseFloat(cfg.fontMm)||3)*pxPerMm;
+  const padX=2*pxPerMm, padY=1.5*pxPerMm, lineH=font*1.3;
+  ctx.font=`${font}px "Malgun Gothic",Arial,sans-serif`;
+  ctx.textAlign='left';
+  let y=padY;
+  if(cfg.code){ ctx.fillText(`상품코드 : ${cfg.code}`, padX, y); y+=lineH; }
+  if(cfg.name){ _lotteWrapText(ctx, cfg.name, W-padX*2).forEach(l=>{ ctx.fillText(l, padX, y); y+=lineH; }); }
+  const headerBottom=y;
+  const compY=H-padY-font;
+  if(cfg.company){ ctx.textAlign='center'; ctx.fillText(cfg.company, W/2, compY); }
+
+  // 바코드: 좌우 3mm 여백, 라벨 높이의 40% (바코드라벨생성기 롯데마트형과 동일 비율)
+  const scale=Math.min(1.5, Math.max(0.3, (parseFloat(cfg.scale)||100)/100));
+  const boxW=(W-6*pxPerMm)*scale;
+  const boxH=Math.min(H*0.4*scale, compY-headerBottom-2*pxPerMm);
+  if(!value){
+    ctx.strokeStyle='#CBD2E0'; ctx.setLineDash([6,6]); ctx.lineWidth=2;
+    const bx=(W-boxW)/2, by=headerBottom+(compY-headerBottom-boxH)/2;
+    ctx.strokeRect(bx,by,boxW,boxH); ctx.setLineDash([]);
+    ctx.fillStyle='#A0AEC0'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('물류바코드 없음', W/2, by+boxH/2);
+    return '물류바코드 값이 없습니다.';
+  }
+  let ok=true;
+  const opts=(h, fs)=>({ format:cfg.format||'CODE128', width:2, height:h, displayValue:!!cfg.showValue, fontSize:fs, textMargin:2, margin:0, font:'Arial', valid:v=>{ ok=v; } });
+  let bc=document.createElement('canvas');
+  try{ JsBarcode(bc, value, opts(100, 20)); }catch(e){ ok=false; }
+  if(!ok||!bc.width) return `"${value}"은(는) ${cfg.format} 형식에 맞지 않습니다.`;
+  // 1차 렌더 폭으로 축척을 구한 뒤, 축척 후 높이·숫자 크기가 목표에 맞도록 다시 렌더
+  const s=boxW/bc.width;
+  const fsRaw=Math.max(8, Math.round(font*1.05/s));
+  const textRaw=cfg.showValue?fsRaw+4:0;
+  const barRaw=Math.max(20, Math.round(boxH/s-textRaw));
+  bc=document.createElement('canvas');
+  JsBarcode(bc, value, opts(barRaw, fsRaw));
+  const dw=bc.width*s, dh=bc.height*s;
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(bc, (W-dw)/2, headerBottom+(compY-headerBottom-dh)/2, dw, dh);
+  return '';
+}
+
+function _lotteLabelReadForm(){
+  const v=id=>document.getElementById(id).value;
+  const modeEl=document.querySelector('input[name="ll-mode"]:checked');
+  return {
+    mode:modeEl?modeEl.value:'auto',
+    code:v('ll-code').trim(),
+    name:v('ll-name').trim(),
+    company:v('ll-company').trim(),
+    format:v('ll-format'),
+    fontMm:parseFloat(v('ll-font'))||LOTTE_LABEL_DEFAULT.fontMm,
+    scale:parseFloat(v('ll-scale'))||100,
+    paper:v('ll-paper'),
+    copies:Math.max(1, Math.min(600, parseInt(v('ll-copies'))||12)),
+    start:Math.max(1, Math.min(12, parseInt(v('ll-start'))||1)),
+    showValue:document.getElementById('ll-showvalue').checked
+  };
+}
+
+function openLotteLabelModal(barcode){
+  const db=lotteBaseLoad();
+  const p=db[barcode];
+  if(!p){ alert('상품 정보를 찾을 수 없습니다.'); return; }
+  const cfg=_lotteLabelCfg(barcode);
+  document.getElementById('ll-barcode').value=barcode;
+  document.getElementById('ll-subtitle').textContent=`${p.spec||''} · ${p.displayName||''} (${barcode})`;
+  document.querySelectorAll('input[name="ll-mode"]').forEach(r=>{ r.checked=(r.value===cfg.mode); });
+  document.getElementById('ll-value').value=p.logisticsBarcode||'';
+  document.getElementById('ll-code').value=cfg.code;
+  document.getElementById('ll-name').value=cfg.name;
+  document.getElementById('ll-company').value=cfg.company;
+  document.getElementById('ll-format').value=cfg.format;
+  document.getElementById('ll-font').value=cfg.fontMm;
+  document.getElementById('ll-scale').value=cfg.scale;
+  document.getElementById('ll-paper').value=cfg.paper;
+  document.getElementById('ll-copies').value=cfg.copies;
+  document.getElementById('ll-start').value=cfg.start;
+  document.getElementById('ll-showvalue').checked=!!cfg.showValue;
+  document.getElementById('ll-pdf-file').value='';
+  _lotteLabelRenderPdfStatus();
+  document.getElementById('lotte-label-modal').style.display='flex';
+  _lotteLabelPreview();
+}
+function closeLotteLabelModal(){
+  document.getElementById('lotte-label-modal').style.display='none';
+}
+
+function _lotteLabelRenderPdfStatus(){
+  const barcode=document.getElementById('ll-barcode').value;
+  const p=lotteBaseLoad()[barcode]||{};
+  const st=document.getElementById('ll-pdf-status');
+  const has=!!p.labelPdf;
+  st.innerHTML=has
+    ? `<b>${String(p.labelPdf.name||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</b> <span style="color:#8A94A6;">(${Math.max(1,Math.round((p.labelPdf.size||0)/1024))}KB · ${p.labelPdf.uploadedAt||''})</span>`
+    : '업로드된 PDF 없음';
+  document.getElementById('ll-pdf-dl').style.display=has?'':'none';
+  document.getElementById('ll-pdf-del').style.display=has?'':'none';
+}
+
+function _lotteLabelPreview(){
+  const cfg=_lotteLabelReadForm();
+  const isPdf=cfg.mode==='pdf';
+  document.getElementById('ll-auto-fields').style.opacity=isPdf?'0.45':'1';
+  const cv=document.getElementById('ll-preview');
+  const msgEl=document.getElementById('ll-preview-msg');
+  const err=_lotteDrawLabel(cv, cfg, document.getElementById('ll-value').value.trim().replace(/\s+/g,''), 8);
+  if(isPdf){
+    const p=lotteBaseLoad()[document.getElementById('ll-barcode').value]||{};
+    msgEl.style.color=p.labelPdf?'#4318FF':'#E53E3E';
+    msgEl.textContent=p.labelPdf?'출력 시 업로드한 PDF가 다운로드됩니다.':'PDF를 업로드해주세요.';
+  } else {
+    msgEl.style.color='#E53E3E';
+    msgEl.textContent=err;
+  }
+}
+
+function handleLotteLabelPdfUpload(e){
+  const file=e.target.files[0];
+  if(!file) return;
+  if(!canEdit('lotte_product_edit')){ alert('롯데마트 상품 수정 권한이 없습니다.'); e.target.value=''; return; }
+  if(!/\.pdf$/i.test(file.name) && file.type!=='application/pdf'){ alert('PDF 파일만 업로드할 수 있습니다.'); e.target.value=''; return; }
+  if(file.size>3*1024*1024){ alert('PDF 파일은 3MB 이하만 업로드할 수 있습니다.'); e.target.value=''; return; }
+  const barcode=document.getElementById('ll-barcode').value;
+  const reader=new FileReader();
+  reader.onload=async function(ev){
+    const now=new Date();
+    const meta={ name:file.name, size:file.size, uploadedAt:`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}` };
+    const saved=await _lotteLabelPdfStore(barcode, ev.target.result, meta);
+    if(!saved){ alert('PDF 저장에 실패했습니다. (로컬 저장 용량 초과 + 클라우드 미연결)'); return; }
+    const db=lotteBaseLoad();
+    if(!db[barcode]) return;
+    db[barcode].labelPdf=meta;
+    lotteBaseSave(db);
+    // PDF를 올리면 출력 방식도 PDF로 전환
+    document.querySelectorAll('input[name="ll-mode"]').forEach(r=>{ r.checked=(r.value==='pdf'); });
+    _lotteLabelRenderPdfStatus();
+    _lotteLabelPreview();
+    _lotteRenderBaseList();
+  };
+  reader.readAsDataURL(file);
+  e.target.value='';
+}
+
+async function deleteLotteLabelPdf(){
+  if(!canEdit('lotte_product_edit')){ alert('롯데마트 상품 수정 권한이 없습니다.'); return; }
+  const barcode=document.getElementById('ll-barcode').value;
+  if(!confirm('업로드한 PDF를 삭제할까요?')) return;
+  const db=lotteBaseLoad();
+  if(db[barcode]){ delete db[barcode].labelPdf; lotteBaseSave(db); }
+  await _lotteLabelPdfRemove(barcode);
+  document.querySelectorAll('input[name="ll-mode"]').forEach(r=>{ r.checked=(r.value==='auto'); });
+  _lotteLabelRenderPdfStatus();
+  _lotteLabelPreview();
+  _lotteRenderBaseList();
+}
+
+function saveLotteLabelSettings(thenPrint){
+  if(!canEdit('lotte_product_edit')){ alert('롯데마트 상품 수정 권한이 없습니다.'); return; }
+  const barcode=document.getElementById('ll-barcode').value;
+  const db=lotteBaseLoad();
+  if(!db[barcode]) return;
+  db[barcode].label=_lotteLabelReadForm();
+  db[barcode].logisticsBarcode=document.getElementById('ll-value').value.trim().replace(/\s+/g,'');
+  lotteBaseSave(db);
+  _lotteRenderBaseList();
+  closeLotteLabelModal();
+  if(thenPrint) printLotteLabel(barcode);
+}
+
+// 물류바코드 열 "출력" 버튼: 설정에 따라 업로드 PDF 다운로드 또는 라벨 PDF 생성
+async function printLotteLabel(barcode){
+  const p=lotteBaseLoad()[barcode];
+  if(!p) return;
+  const cfg=_lotteLabelCfg(barcode);
+  if(cfg.mode==='pdf'){
+    if(p.labelPdf) return downloadLotteLabelPdfFile(barcode);
+    if(!p.logisticsBarcode){ alert('업로드된 PDF가 없습니다. 설정 창에서 PDF를 업로드해주세요.'); openLotteLabelModal(barcode); return; }
+  }
+  const value=p.logisticsBarcode||'';
+  if(!value){
+    if(p.labelPdf) return downloadLotteLabelPdfFile(barcode);
+    alert('물류바코드가 없습니다. 설정 창에서 물류바코드를 입력하거나 PDF를 업로드해주세요.');
+    openLotteLabelModal(barcode);
+    return;
+  }
+  const cv=document.createElement('canvas');
+  const err=_lotteDrawLabel(cv, cfg, value, 12);
+  if(err){ alert(err+'\n설정 창에서 바코드 형식을 확인해주세요.'); openLotteLabelModal(barcode); return; }
+  const img=cv.toDataURL('image/png');
+  const {jsPDF}=window.jspdf;
+  let pdf;
+  if(cfg.paper==='roll'){
+    pdf=new jsPDF({unit:'mm', format:[LOTTE_LABEL_W, LOTTE_LABEL_H], orientation:'portrait'});
+    for(let i=0;i<cfg.copies;i++){
+      if(i) pdf.addPage([LOTTE_LABEL_W, LOTTE_LABEL_H], 'portrait');
+      pdf.addImage(img, 'PNG', 0, 0, LOTTE_LABEL_W, LOTTE_LABEL_H);
+    }
+  } else {
+    const L=LOTTE_LABEL_SHEET, per=L.cols*L.rows;
+    const mx=(210-LOTTE_LABEL_W*L.cols-L.gapX*(L.cols-1))/2;
+    const my=(297-LOTTE_LABEL_H*L.rows-L.gapY*(L.rows-1))/2;
+    pdf=new jsPDF({unit:'mm', format:'a4', orientation:'portrait'});
+    let slot=(cfg.start||1)-1;
+    for(let i=0;i<cfg.copies;i++,slot++){
+      if(slot>=per){ pdf.addPage('a4','portrait'); slot=0; }
+      const c=slot%L.cols, r=Math.floor(slot/L.cols);
+      pdf.addImage(img, 'PNG', mx+c*(LOTTE_LABEL_W+L.gapX), my+r*(LOTTE_LABEL_H+L.gapY), LOTTE_LABEL_W, LOTTE_LABEL_H);
+    }
+  }
+  const safe=s=>String(s||'').replace(/[\\/:*?"<>|]/g,'_').trim();
+  pdf.save(`물류바코드_${safe(p.spec||barcode)}${p.displayName?'_'+safe(p.displayName):''}.pdf`);
 }
 
 // 롯데마트 시스템에서 다운로드한 "입고예약 상세내역" 파일은 .xls 확장자지만 실제로는 HTML 문서
