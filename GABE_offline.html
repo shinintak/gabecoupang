@@ -4286,6 +4286,51 @@ function renderSessionList(){
   el.innerHTML=html;
 }
 
+// ── 밀크런 파렛트 수 (납품일별) ──
+// 밀크런 적재리스트(ll_data, 세션 날짜별)에 저장된 센터별 파렛트 수를 합산해 납품일별로 캐시
+const LL_PALLET_CACHE_KEY='ll_pallet_by_date_v1';
+let _llPalletByDate=(()=>{ try{ return JSON.parse(localStorage.getItem(LL_PALLET_CACHE_KEY)||'{}')||{}; }catch(e){ return {}; } })();
+let _llPalletFetchedAt=0;
+// 저장된 적재리스트 1건 → 총 파렛트 수 (파렛트 수를 따로 안 바꾼 센터는 화면 기본값과 같이 1로 계산)
+function _llCalcPalletTotal(palletCount, boxData){
+  const pc=palletCount||{};
+  const centers=new Set(Object.keys(pc));
+  Object.entries(boxData||{}).forEach(([k,arr])=>{
+    const i=k.lastIndexOf('/'); if(i<0) return;
+    if((arr||[]).some(bd=>bd&&bd.boxStart)) centers.add(_llSafeKey(k.slice(0,i)));
+  });
+  let tot=0;
+  centers.forEach(c=>{ tot+=Math.max(1,parseInt(pc[c])||1); });
+  return tot;
+}
+function _llSetPalletForDate(dk,total){
+  if(!dk) return;
+  if(_llPalletByDate[dk]===total) return;
+  if(total) _llPalletByDate[dk]=total; else delete _llPalletByDate[dk];
+  try{ localStorage.setItem(LL_PALLET_CACHE_KEY,JSON.stringify(_llPalletByDate)); }catch(e){}
+  _markDeliveryDirty();
+}
+// Supabase ll_data 전체에서 납품일별 파렛트 수 갱신 (3분 이내 재호출은 생략)
+async function _llRefreshPalletByDate(force){
+  if(!force&&Date.now()-_llPalletFetchedAt<180000) return false;
+  _llPalletFetchedAt=Date.now();
+  try{
+    const sb=_getSupabase(); if(!sb) return false;
+    const {data,error}=await sb.from('ll_data').select('session_key,pallet_count,box_data,updated_at').order('updated_at',{ascending:true});
+    if(error||!data) return false;
+    const map={};
+    data.forEach(r=>{ if(r.session_key) map[r.session_key]=_llCalcPalletTotal(r.pallet_count,r.box_data); }); // 중복행은 최신값이 덮어씀
+    Object.keys(map).forEach(k=>{ if(!map[k]) delete map[k]; });
+    const changed=JSON.stringify(map)!==JSON.stringify(_llPalletByDate);
+    if(changed){
+      _llPalletByDate=map;
+      try{ localStorage.setItem(LL_PALLET_CACHE_KEY,JSON.stringify(map)); }catch(e){}
+      _markDeliveryDirty();
+    }
+    return changed;
+  }catch(e){ console.warn('파렛트 수 불러오기 실패',e); return false; }
+}
+
 // ── 연간 납품현황 패널 ──
 const ANNUAL_LS_KEY = 'coupang_annual_extra_v1'; // 택배비·밀크런 별도 저장
 const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
@@ -4350,7 +4395,8 @@ function renderAnnualPanel(){
   MONTHS.forEach(m=>{
     const mNum=String(MONTHS.indexOf(m)+1).padStart(2,'0');
     const prefix=selYear+'-'+mNum+'-';
-    let costAmt=0,delivery=0,milkrun=0;
+    let costAmt=0,delivery=0,milkrun=0,pallet=0;
+    Object.entries(_llPalletByDate).forEach(([dk,v])=>{ if(dk.startsWith(prefix)) pallet+=(v||0); });
     // 모든 날짜 키 수집 (세션 + localStorage 합집합)
     const allDks=new Set([
       ...Object.keys(sessStore).filter(dk=>dk.startsWith(prefix)),
@@ -4364,7 +4410,7 @@ function renderAnnualPanel(){
       delivery+=(rv.delivery!=null?rv.delivery:dv.delivery)||0;
       milkrun+=(rv.milkrun!=null?rv.milkrun:dv.milkrun)||0;
     });
-    dailySums[m]={costAmt,delivery,milkrun};
+    dailySums[m]={costAmt,delivery,milkrun,pallet};
   });
 
   // 연도 버튼 (▼ 접힘 / ▲ 펼침)
@@ -4409,16 +4455,18 @@ function renderAnnualPanel(){
     {key:'rate',     label:'납품비율',    color:'#C62828', fmt:'pct', hdr:'#BF360C', cellBg:'#FFFDE7'},
     {key:'delivery', label:'택배비',      color:'#111',    fmt:'amt', hdr:'#4A148C'},
     {key:'milkrun',  label:'밀크런(VAT포함)', color:'#111',    fmt:'amt', hdr:'#4A148C'},
+    {key:'pallet',   label:'파렛트',      color:'#111',    fmt:'qty', hdr:'#4A148C'},
   ];
 
   // 합계 행 계산
-  let tot={ordQty:0,tAmt:0,outQty:0,tOut:0,delivery:0,milkrun:0,costAmt:0,gmv:0};
+  let tot={ordQty:0,tAmt:0,outQty:0,tOut:0,delivery:0,milkrun:0,pallet:0,costAmt:0,gmv:0};
   MONTHS.forEach(m=>{
     const d=mn[m]||{};
     tot.ordQty+=(d.ordQty||0); tot.tAmt+=(d.tAmt||0);
     tot.outQty+=(d.outQty||0); tot.tOut+=(d.tOut||0);
     tot.delivery+=(dailySums[m].delivery||0);
     tot.milkrun +=(dailySums[m].milkrun ||0);
+    tot.pallet  +=(dailySums[m].pallet  ||0);
     tot.costAmt +=(dailySums[m].costAmt ||0);
     tot.gmv     +=(monthGmvMap[m]||0);
   });
@@ -4476,7 +4524,7 @@ function renderAnnualPanel(){
   // 합계행
   const totUnQty=tot.ordQty-tot.outQty, totUnAmt=tot.tAmt-tot.tOut;
   const totRate=tot.tAmt>0?tot.tOut/tot.tAmt:0;
-  const totRow={ordQty:tot.ordQty,tAmt:tot.tAmt,outQty:tot.outQty,tOut:tot.tOut,unQty:totUnQty,unAmt:totUnAmt,rate:totRate,delivery:tot.delivery,milkrun:tot.milkrun,costAmt:tot.costAmt,gmv:tot.gmv};
+  const totRow={ordQty:tot.ordQty,tAmt:tot.tAmt,outQty:tot.outQty,tOut:tot.tOut,unQty:totUnQty,unAmt:totUnAmt,rate:totRate,delivery:tot.delivery,milkrun:tot.milkrun,pallet:tot.pallet,costAmt:tot.costAmt,gmv:tot.gmv};
   html+=`<tr style="background:#e8edf8;border-top:2px solid #4F2FA8;">
     <td style="padding:7px 10px;text-align:center;font-weight:700;color:#1B2559;border-right:1px solid #c5cfe8;">합계</td>`;
   cols.forEach((c,ci)=>{
@@ -7049,6 +7097,7 @@ async function llSaveData(){
       ? await sb.from('ll_data').update(payload).eq('session_key',sk)
       : await sb.from('ll_data').insert(payload);
     if(error) throw error;
+    _llSetPalletForDate(sk,_llCalcPalletTotal(_llPalletCount,_llBoxData));
 
     if(btn){ btn.textContent='저장됨 ✓'; btn.style.background='#059669'; btn.disabled=false; setTimeout(()=>{btn.textContent='저장';btn.style.background='#2D3748';},1500); }
   }catch(e){
@@ -10185,6 +10234,11 @@ function openDeliveryPage(){
     renderReturnErrPanel();
     _deliveryPageDirty=false;
   }
+  _llRefreshPalletByDate().then(changed=>{
+    if(!changed) return;
+    const pg=document.getElementById('delivery-page');
+    if(pg&&pg.style.display!=='none'){ renderAnnualPanel(); _deliveryPageDirty=false; }
+  });
 }
 function closeDeliveryPage(){
   document.getElementById('delivery-page').style.display='none';
@@ -12088,17 +12142,17 @@ function _renderMonthPopupContent(year, monthLabel){
     const cats=r.cats||{};
     // IDB 세션 데이터 우선, dailyEx(localStorage) 폴백
     return {dk,day,ordQty,tAmt:r.tAmt||0,outQty,tOut:r.tOut||0,unQty,unAmt,rate,cats,
-      costAmt:r.costAmt||dex.costAmt||0, delivery:r.delivery||dex.delivery||0, milkrun:r.milkrun||dex.milkrun||0};
+      costAmt:r.costAmt||dex.costAmt||0, delivery:r.delivery||dex.delivery||0, milkrun:r.milkrun||dex.milkrun||0, pallet:_llPalletByDate[dk]||0};
   });
 
   // 합계
-  const tot={ordQty:0,tAmt:0,outQty:0,tOut:0,unQty:0,unAmt:0,costAmt:0,delivery:0,milkrun:0};
+  const tot={ordQty:0,tAmt:0,outQty:0,tOut:0,unQty:0,unAmt:0,costAmt:0,delivery:0,milkrun:0,pallet:0};
   const totCats={};
   CAT_KEYS.forEach(k=>totCats[k]=0);
   rows.forEach(r=>{
     tot.ordQty+=r.ordQty; tot.tAmt+=r.tAmt; tot.outQty+=r.outQty; tot.tOut+=r.tOut;
     tot.unQty+=r.unQty; tot.unAmt+=r.unAmt;
-    tot.costAmt+=r.costAmt; tot.delivery+=r.delivery; tot.milkrun+=r.milkrun;
+    tot.costAmt+=r.costAmt; tot.delivery+=r.delivery; tot.milkrun+=r.milkrun; tot.pallet+=r.pallet;
     CAT_KEYS.forEach(k=>totCats[k]+=(r.cats[k]||0));
   });
   const totRate=tot.tAmt>0?tot.tOut/tot.tAmt:0;
@@ -12123,7 +12177,7 @@ function _renderMonthPopupContent(year, monthLabel){
         <th style="${thS}">미납금액</th>
         <th style="${thS}color:#ffcdd2;">원가금액</th>
         <th style="${thS}color:#ffcdd2;">납품비율</th>
-        <th colspan="2" style="padding:7px 8px;text-align:center;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;">물류비</th>
+        <th colspan="3" style="padding:7px 8px;text-align:center;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;">물류비</th>
       </tr>
       <tr style="background:#37474F;">
         <th style="${thL}"></th>
@@ -12133,7 +12187,8 @@ function _renderMonthPopupContent(year, monthLabel){
         <th style="${thS}color:#ffcdd2;"></th>
         <th style="${thS}color:#ffcdd2;"></th>
         <th style="${thS}">택배</th>
-        <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;">밀크런(VAT포함)</th>
+        <th style="${thS}">밀크런(VAT포함)</th>
+        <th style="padding:7px 8px;text-align:right;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;">파렛트</th>
       </tr>
     </thead><tbody>`;
 
@@ -12161,13 +12216,14 @@ function _renderMonthPopupContent(year, monthLabel){
           class="daily-col-input" data-field="delivery" data-dk="${r.dk}"
           style="width:72px;border:1px solid #c8d0de;border-radius:4px;padding:2px 5px;text-align:right;font-size:11px;color:#111;background:#fafaff;"
           placeholder="0"></td>
-      <td style="padding:3px 6px;text-align:right;">
+      <td style="padding:3px 6px;text-align:right;border-right:1px solid #f0f3f8;">
         <input type="text" value="${r.milkrun?r.milkrun.toLocaleString('ko-KR'):''}"
           onchange="updateDailyCell('${r.dk}','milkrun',this.value)"
           onkeydown="dailyInputEnter(event,this)"
           class="daily-col-input" data-field="milkrun" data-dk="${r.dk}"
           style="width:72px;border:1px solid #c8d0de;border-radius:4px;padding:2px 5px;text-align:right;font-size:11px;color:#111;background:#fafaff;"
           placeholder="0"></td>
+      <td style="padding:5px 8px;text-align:right;color:#111;font-weight:600;font-size:11px;" title="밀크런 적재리스트에 저장된 파렛트 수">${fmt(r.pallet,'qty')}</td>
     </tr>`;
   });
 
@@ -12184,6 +12240,7 @@ function _renderMonthPopupContent(year, monthLabel){
     <td style="${tdS('#C62828','700')}">${totRate?(totRate*100).toFixed(1)+'%':'-'}</td>
     <td style="${tdS('#111','700')}">₩${tot.delivery.toLocaleString('ko-KR')}</td>
     <td style="${tdS('#111','700')}">₩${tot.milkrun.toLocaleString('ko-KR')}</td>
+    <td style="padding:5px 8px;text-align:right;color:#111;font-weight:700;font-size:11px;">${tot.pallet?tot.pallet.toLocaleString('ko-KR'):'-'}</td>
   </tr></tbody></table></div>`;
 
   // ── 테이블 2 ──
