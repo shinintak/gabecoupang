@@ -3014,10 +3014,12 @@ function basedataRefSave(fileName){
 }
 function basedataRefLoad(){ try{ return JSON.parse(localStorage.getItem(BASEDATA_REF_KEY)||'null'); }catch(e){ return null; } }
 
-function basedataMarginSave(fileName){
+// 기초데이터 마진율(최신 업로드 파일 값) — 발주파일 마진율 시트·세션 저장값보다 우선 적용
+let _bdMarginMap={};
+function basedataMarginSave(fileName, mMap, discList){
   const snapshot={
-    marginMap:Object.assign({},marginMap),
-    discontinuedList:[...discontinuedSet],
+    marginMap:Object.assign({},mMap||marginMap),
+    discontinuedList:discList?[...discList]:[...discontinuedSet],
     fileName, savedAt:new Date().toISOString()
   };
   try{ localStorage.setItem(BASEDATA_MARGIN_KEY,JSON.stringify(snapshot)); }catch(e){ alert('저장 용량이 초과되었습니다.'); }
@@ -3040,6 +3042,7 @@ function applyBaseDataToMaps(){
     _dedupeSetComponentMaps();
   }
   const mg=basedataMarginLoad();
+  _bdMarginMap=(mg&&mg.marginMap)||{};
   if(mg){
     Object.assign(marginMap, mg.marginMap||{});
     (mg.discontinuedList||[]).forEach(id=>discontinuedSet.add(id));
@@ -3275,7 +3278,7 @@ function parseAllInOne(buf, file){
         discontinuedSet.add(id);
         continue;
       }
-      const val=parseFloat(cB.v);
+      const val=_normMargin(cB.v);
       if(!isNaN(val)) marginMap[id]=val;
     }
   }
@@ -3902,7 +3905,7 @@ function saveCurrentSession(){
   const rowReasonSnapshot={};
   withNo.forEach((r,i)=>{
     const sid=normId(r[3]),pct=getMarginPct(sid);
-    const isGr=discontinuedSet.has(sid),isOr=pct!==null&&pct<17;
+    const isGr=discontinuedSet.has(sid),isOr=_isMarginLow(pct);
     const st=getStockStatus(sid);
     const sysR=isGr?'단종':isOr?'마진율 미달':printSkuSet.has(sid)?'':st==='short'?'재고부족':st==='check'?'확인필요':'';
     const rsn=manualReasonMap[i]!==undefined?manualReasonMap[i]:sysR;
@@ -4067,7 +4070,7 @@ function loadSession(dateKey){
   const tAmt=withNo.reduce((s,r)=>s+(parseFloat(String(r[10]||'').replace(/,/g,''))||0),0);
   const tOut=withNo.reduce((s,r,i)=>{
     const sid=normId(r[3]),pct=getMarginPct(sid);
-    const isOr=pct!==null&&pct<17,isGr=discontinuedSet.has(sid);
+    const isOr=_isMarginLow(pct),isGr=discontinuedSet.has(sid);
     const st=getStockStatus(sid);
     const sysR=isGr?'단종':isOr?'마진율 미달':st==='short'?'재고부족':st==='check'?'확인필요':'';
     const rsn=manualReasonMap[i]!==undefined?manualReasonMap[i]:sysR;
@@ -5538,9 +5541,29 @@ function assignNo(rows){
   });
 }
 
+// 마진율 셀 값 → 소수(0.42) 정규화
+// 엑셀 오류셀(#N/A·#DIV/0!)은 SheetJS가 v에 오류코드 숫자(#N/A=42, #DIV/0!=7)를 넣어
+// 그대로 읽으면 4200%·700%로 표시되던 문제가 있었음 → 오류셀은 호출부에서 제외하고,
+// 이미 저장된 오류코드 값(1 초과 = 100% 초과, 마진율로 불가능)은 무효 처리
+function _normMargin(v){
+  if(v===undefined||v===null||v==='') return NaN;
+  const str=String(v).replace(/,/g,'').trim();
+  let n=parseFloat(str);
+  if(isNaN(n)) return NaN;
+  if(str.includes('%')) n=n/100;
+  if(Math.abs(n)>1) return NaN;
+  return n;
+}
+// 마진율 미달 판정: 17% 미만 또는 마진율이 숫자로 표기되지 않은 상품(빈칸·#N/A 등)
+// — 마진율 데이터 자체가 아직 없을 때(기초데이터 미업로드)는 전부 미달 처리되지 않도록 예외
+function _hasMarginData(){ for(const k in _bdMarginMap) return true; for(const k in marginMap) return true; return false; }
+function _isMarginLow(pct){ return pct===null ? _hasMarginData() : pct<17; }
 function getMarginPct(skuId){
-  const val=marginMap[normId(skuId)];
-  return val===undefined ? null : Math.round(val*100);
+  const id=normId(skuId);
+  const val=_bdMarginMap[id]!==undefined ? _bdMarginMap[id] : marginMap[id];
+  if(val===undefined) return null;
+  const n=_normMargin(val); // 이미 저장된 잘못된 값도 표시 시점에 보정
+  return isNaN(n) ? null : Math.round(n*100);
 }
 
 // 제품코드 추출: "KS4287", "LER4359", "IN95429-2", "LER3790S" 같은 패턴
@@ -5788,7 +5811,7 @@ function renderTable(){
   const totalOut=withNo.reduce((s,r,i)=>{
     const skuId=normId(r[3]);
     const pct=getMarginPct(skuId);
-    const isOrange=pct!==null&&pct<17;
+    const isOrange=_isMarginLow(pct);
     const isGray=discontinuedSet.has(skuId);
     const stock=getStockStatus(skuId);
     const isRed=stock==='short', isGreen=stock==='check';
@@ -5822,7 +5845,7 @@ function renderTable(){
     const row=withNo[globalIdx];
     const skuId    =normId(row[3]);
     const pct      =getMarginPct(skuId);
-    const isOrange =pct!==null&&pct<17;
+    const isOrange =_isMarginLow(pct);
     const isGray   =discontinuedSet.has(skuId);
     const orderQty =parseFloat(String(row[8]||'').replace(/,/g,''))||0;
     const stock    =getStockStatus(skuId);
@@ -5851,7 +5874,7 @@ function renderTable(){
     const mgCell=isGray
       ?'<td style="color:#bbb;font-size:11px;">단종</td>'
       :pct===null
-        ?'<td style="color:#bbb;font-size:11px;">-</td>'
+        ?(isOrange?'<td style="background:#FFB300;font-weight:600;font-size:11px;" title="마진율 미표기 → 마진율 미달">미표기</td>':'<td style="color:#bbb;font-size:11px;">-</td>')
         :'<td style="'+(isOrange?'background:#FFB300;font-weight:600;':'color:#4A5568;')+'">'+pct+'%</td>';
 
     const isInserted=!!row._inserted;
@@ -5988,7 +6011,7 @@ function editOutAmt(event, globalIdx){
   const skuId=normId(row[3]);
   const pct=getMarginPct(skuId);
   const isGray=discontinuedSet.has(skuId);
-  const sysR=isGray?'단종':(pct!==null&&pct<17)?'마진율 미달':printSkuSet.has(skuId)?'':(getStockStatus(skuId)==='short'?'재고부족':getStockStatus(skuId)==='check'?'확인필요':'');
+  const sysR=isGray?'단종':(_isMarginLow(pct))?'마진율 미달':printSkuSet.has(skuId)?'':(getStockStatus(skuId)==='short'?'재고부족':getStockStatus(skuId)==='check'?'확인필요':'');
   const reason=manualReasonMap[globalIdx]!==undefined?manualReasonMap[globalIdx]:sysR;
   const base=reason?0:(parseFloat(String(row[10]||'').replace(/,/g,''))||0);
   const cur=outAmtOverrides[globalIdx]!==undefined?outAmtOverrides[globalIdx]:base;
@@ -6356,7 +6379,7 @@ function getColValue(row, globalIdx, colIdx){
   if(colIdx===0){
     const sid=normId(row[3]);
     const pct=getMarginPct(sid);
-    const isO=pct!==null&&pct<17;
+    const isO=_isMarginLow(pct);
     const isG=discontinuedSet.has(sid);
     const st=getStockStatus(sid);
     const sys=isG?'단종':isO?'마진율 미달':st==='short'?'재고부족':st==='check'?'확인필요':'';
@@ -6546,7 +6569,7 @@ function calcSummary(){
   const poMap={};
   withNo.forEach((row,i)=>{
     const skuId=normId(row[3]),pct=getMarginPct(skuId);
-    const isOrange=pct!==null&&pct<17;
+    const isOrange=_isMarginLow(pct);
     const isGray=discontinuedSet.has(skuId);
     const orderQty=parseFloat(String(row[8]||'').replace(/,/g,''))||0;
     const stock=getStockStatus(skuId);
@@ -6638,7 +6661,7 @@ function renderSummaryTable(){
     withNo.forEach((row,i)=>{
       if(!delPoSet.has(String(row[1]||'').trim())) return;
       const sid=normId(row[3]),pct=getMarginPct(sid);
-      const isOr=pct!==null&&pct<17,isGr=discontinuedSet.has(sid);
+      const isOr=_isMarginLow(pct),isGr=discontinuedSet.has(sid);
       const qty=parseFloat(String(row[8]||'').replace(/,/g,''))||0;
       const st=getStockStatus(sid);
       const sysR=isGr?'단종':isOr?'마진율 미달':st==='short'?'재고부족':st==='check'?'확인필요':'';
@@ -6716,7 +6739,7 @@ function downloadXLSX(){
   let tQty=0,tAmt=0,tOut=0;
   withNo.forEach(r=>{
     const skuId=normId(r[3]),pct=getMarginPct(skuId);
-    const isOrange=pct!==null&&pct<17,isGray=discontinuedSet.has(skuId);
+    const isOrange=_isMarginLow(pct),isGray=discontinuedSet.has(skuId);
     const oQty=parseFloat(String(r[8]||'').replace(/,/g,''))||0;
     const stock=getStockStatus(skuId);
     const isRed=stock==='short',isGreen=stock==='check';
@@ -6741,7 +6764,7 @@ function downloadXLSX(){
   // 데이터 행
   withNo.forEach((row,idx)=>{
     const skuId=normId(row[3]),pct=getMarginPct(skuId);
-    const isOrange=pct!==null&&pct<17;
+    const isOrange=_isMarginLow(pct);
     const isGray=discontinuedSet.has(skuId);
     const isFirst=firstRows.has(idx), isLast=lastRows.has(idx);
     const qty=parseFloat(String(row[8]||'').replace(/,/g,''))||0;
@@ -6830,7 +6853,7 @@ function downloadXLSX(){
       const ponum=String(row[1]||'').trim();
       if(!deletedPoSet.has(ponum)) return;
       const sid=normId(row[3]),pct=getMarginPct(sid);
-      const isOr=pct!==null&&pct<17,isGr=discontinuedSet.has(sid);
+      const isOr=_isMarginLow(pct),isGr=discontinuedSet.has(sid);
       const qty=parseFloat(String(row[8]||'').replace(/,/g,''))||0;
       const st=getStockStatus(sid);
       const sysR=isGr?'단종':isOr?'마진율 미달':st==='short'?'재고부족':st==='check'?'확인필요':'';
@@ -7044,7 +7067,7 @@ function getMilkRunSKUs(center){
     if(c!==center) return;
     const isGray=discontinuedSet.has(skuId);
     const pct=getMarginPct(skuId);
-    const isOrange=pct!==null&&pct<17;
+    const isOrange=_isMarginLow(pct);
     const stock=getStockStatus(skuId);
     const isRed=stock==='short',isGreen=stock==='check';
     const sysReason=isGray?'단종':isOrange?'마진율 미달':printSkuSet.has(skuId)?'':isRed?'재고부족':isGreen?'확인필요':'';
@@ -8242,7 +8265,7 @@ function buildPickingRows(){
   withNo.forEach((row,i)=>{
     const skuId=normId(row[3]);
     const pct=getMarginPct(skuId);
-    const isOrange=pct!==null&&pct<17;
+    const isOrange=_isMarginLow(pct);
     const isGray=discontinuedSet.has(skuId);
     const stock=getStockStatus(skuId);
     const isRed=stock==='short', isGreen=stock==='check';
@@ -8442,7 +8465,7 @@ function downloadCSV(){
   const rows=[header,...withNo.map((row,i)=>{
     const skuId=normId(row[3]);
     const pct=getMarginPct(skuId);
-    const isOrange=pct!==null&&pct<17;
+    const isOrange=_isMarginLow(pct);
     const isGray=discontinuedSet.has(skuId);
     const oQty=parseFloat(String(row[8]||'').replace(/,/g,''))||0;
     const stock=getStockStatus(skuId);
@@ -8601,7 +8624,7 @@ function downloadBarcodeXLSX(){
     const pct=getMarginPct(skuId);
     const isGr=discontinuedSet.has(skuId);
     const st=getStockStatus(skuId);
-    const sysR=isGr?'단종':(pct!==null&&pct<17)?'마진율 미달':st==='short'?'재고부족':st==='check'?'확인필요':'';
+    const sysR=isGr?'단종':(_isMarginLow(pct))?'마진율 미달':st==='short'?'재고부족':st==='check'?'확인필요':'';
     const rsn=manualReasonMap[i]!==undefined?manualReasonMap[i]:sysR;
     if(rsn) return;
     const isException=EXCEPTION.has(center);
@@ -8674,7 +8697,7 @@ function downloadOrderSheet(){
   const okRows=withNo.filter((row,i)=>{
     const skuId=normId(row[3]);
     const pct=getMarginPct(skuId);
-    const isOrange=pct!==null&&pct<17;
+    const isOrange=_isMarginLow(pct);
     const isGray=discontinuedSet.has(skuId);
     const stock=getStockStatus(skuId);
     const isRed=stock==='short', isGreen=stock==='check';
@@ -8932,30 +8955,39 @@ document.getElementById('basedata-margin-fi').addEventListener('change',function
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rng=XLSX.utils.decode_range(ws['!ref']||'A1');
       const hr=_findHeaderRow(ws,rng,'SKU',3);
-      let idCol=-1, statusCol=-1, marginCol=-1;
+      let idCol=-1, statusCol=-1, marginCol=-1, marginHdrIsRate=false;
       for(let c=0;c<=rng.e.c;c++){
         const cell=ws[XLSX.utils.encode_cell({r:hr,c})];
         const h=cell?String(cell.v||'').trim():'';
-        if(idCol<0&&h.includes('SKU')) idCol=c;
+        const hn=h.replace(/\s/g,'').toUpperCase();
+        if(hn==='SKUID') idCol=c;                              // "SKU ID" 정확히 일치하는 열 최우선
+        else if(idCol<0&&hn.includes('SKUID')) idCol=c;
         if(statusCol<0&&h==='상태') statusCol=c;
-        if(marginCol<0&&h.includes('마진')) marginCol=c;
+        if(!marginHdrIsRate&&h.includes('마진율')){ marginCol=c; marginHdrIsRate=true; } // "마진율" 헤더 최우선
+        else if(marginCol<0&&h.includes('마진')) marginCol=c;  // "마진율" 헤더가 없을 때만 "마진" 포함 열 사용
       }
+      if(idCol<0){ for(let c=0;c<=rng.e.c;c++){ const cell=ws[XLSX.utils.encode_cell({r:hr,c})]; if(cell&&String(cell.v||'').includes('SKU')){ idCol=c; break; } } }
       if(idCol<0) idCol=0;
       if(marginCol<0){ alert('마진율 컬럼("마진"이 포함된 헤더)을 찾지 못했습니다.'); return; }
-      let cnt=0, dcnt=0;
+      // 이번 파일 값만으로 새로 구성 — 예전 업로드/발주파일에서 남은 옛 마진율이 섞여 저장되지 않도록
+      const newMargin={}, newDisc=new Set();
       for(let R=hr+1;R<=rng.e.r;R++){
         const cId=ws[XLSX.utils.encode_cell({r:R,c:idCol})];
         if(!cId) continue;
         const id=normId(cId.v); if(!id) continue;
         const status=statusCol>=0?String((ws[XLSX.utils.encode_cell({r:R,c:statusCol})]||{}).v||'').trim():'';
-        if(status.includes('단종')){ discontinuedSet.add(id); dcnt++; continue; }
+        if(status.includes('단종')){ newDisc.add(id); delete newMargin[id]; continue; }
         const cM=ws[XLSX.utils.encode_cell({r:R,c:marginCol})];
-        if(cM && cM.v!==''){
-          const val=parseFloat(cM.v);
-          if(!isNaN(val)){ marginMap[id]=val; cnt++; }
+        if(cM && cM.t!=='e' && cM.v!==''){
+          const val=_normMargin(cM.v);
+          if(!isNaN(val)) newMargin[id]=val;
         }
       }
-      basedataMarginSave(file.name);
+      Object.keys(newMargin).forEach(id=>{ marginMap[id]=newMargin[id]; discontinuedSet.delete(id); });
+      newDisc.forEach(id=>discontinuedSet.add(id));
+      _bdMarginMap=newMargin;
+      const cnt=Object.keys(newMargin).length, dcnt=newDisc.size;
+      basedataMarginSave(file.name, newMargin, newDisc);
       renderBaseDataSummary();
       alert('✅ 마진율 데이터 저장 완료\n마진율 '+cnt+'개 · 단종 '+dcnt+'개');
     }catch(err){ alert('파일 처리 중 오류: '+err.message); }
@@ -10592,7 +10624,7 @@ function renderOutgoingTable(){
   if(window._marginFilter){
     merged=merged.filter(r=>{
       const pct=getMarginPct(r.skuId);
-      return pct!==null && pct<17;
+      return _isMarginLow(pct);
     });
   }
   // 필터 버튼 상태 표시
@@ -10682,8 +10714,8 @@ function renderOutgoingTable(){
     })()+
     (()=>{
       const pct = getMarginPct(r.skuId);
-      const pctText = pct===null ? '-' : pct+'%';
-      const pctColor = pct===null ? '#aaa' : pct<17 ? '#e74c3c' : '#1B2559';
+      const pctText = pct===null ? (_isMarginLow(pct)?'미표기':'-') : pct+'%';
+      const pctColor = _isMarginLow(pct) ? '#e74c3c' : pct===null ? '#aaa' : '#1B2559';
       return `<td style="text-align:right;font-size:13px;font-weight:700;color:${pctColor};">${pctText}</td>`;
     })()+
     (()=>{
