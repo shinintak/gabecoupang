@@ -357,6 +357,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
 /* 메인 본문 패딩 */
 .main-body{padding:1rem 1.2rem;flex:1;}
 
+.pallet-input::placeholder{color:#111;opacity:1;font-weight:600;}
 </style>
 <style id="pl-styles">
   #productlist-page {
@@ -4396,7 +4397,6 @@ function renderAnnualPanel(){
     const mNum=String(MONTHS.indexOf(m)+1).padStart(2,'0');
     const prefix=selYear+'-'+mNum+'-';
     let costAmt=0,delivery=0,milkrun=0,pallet=0;
-    Object.entries(_llPalletByDate).forEach(([dk,v])=>{ if(dk.startsWith(prefix)) pallet+=(v||0); });
     // 모든 날짜 키 수집 (세션 + localStorage 합집합)
     const allDks=new Set([
       ...Object.keys(sessStore).filter(dk=>dk.startsWith(prefix)),
@@ -4409,6 +4409,11 @@ function renderAnnualPanel(){
       costAmt+=(rv.costAmt!=null?rv.costAmt:dv.costAmt)||0;
       delivery+=(rv.delivery!=null?rv.delivery:dv.delivery)||0;
       milkrun+=(rv.milkrun!=null?rv.milkrun:dv.milkrun)||0;
+    });
+    // 파렛트: 팝업 수기 입력값 우선, 없으면 밀크런 적재리스트 자동값
+    new Set([...allDks, ...Object.keys(_llPalletByDate).filter(dk=>dk.startsWith(prefix))]).forEach(dk=>{
+      const rv=sessStore[dk]||{}, dv=dailyEx[dk]||{};
+      pallet+=((rv.pallet!=null?rv.pallet:dv.pallet)||0)||_llPalletByDate[dk]||0;
     });
     dailySums[m]={costAmt,delivery,milkrun,pallet};
   });
@@ -12142,7 +12147,9 @@ function _renderMonthPopupContent(year, monthLabel){
     const cats=r.cats||{};
     // IDB 세션 데이터 우선, dailyEx(localStorage) 폴백
     return {dk,day,ordQty,tAmt:r.tAmt||0,outQty,tOut:r.tOut||0,unQty,unAmt,rate,cats,
-      costAmt:r.costAmt||dex.costAmt||0, delivery:r.delivery||dex.delivery||0, milkrun:r.milkrun||dex.milkrun||0, pallet:_llPalletByDate[dk]||0};
+      costAmt:r.costAmt||dex.costAmt||0, delivery:r.delivery||dex.delivery||0, milkrun:r.milkrun||dex.milkrun||0,
+      palletManual:r.pallet||dex.pallet||0, palletAuto:_llPalletByDate[dk]||0,
+      get pallet(){ return this.palletManual||this.palletAuto; }};
   });
 
   // 합계
@@ -12223,7 +12230,14 @@ function _renderMonthPopupContent(year, monthLabel){
           class="daily-col-input" data-field="milkrun" data-dk="${r.dk}"
           style="width:72px;border:1px solid #c8d0de;border-radius:4px;padding:2px 5px;text-align:right;font-size:11px;color:#111;background:#fafaff;"
           placeholder="0"></td>
-      <td style="padding:5px 8px;text-align:right;color:#111;font-weight:600;font-size:11px;" title="밀크런 적재리스트에 저장된 파렛트 수">${fmt(r.pallet,'qty')}</td>
+      <td style="padding:3px 6px;text-align:right;">
+        <input type="text" value="${r.palletManual?r.palletManual.toLocaleString('ko-KR'):''}"
+          onchange="updateDailyCell('${r.dk}','pallet',this.value)"
+          onkeydown="dailyInputEnter(event,this)"
+          class="daily-col-input pallet-input" data-field="pallet" data-dk="${r.dk}"
+          title="${r.palletAuto?'적재리스트 자동값: '+r.palletAuto+' (수기 입력 시 수기값 우선, 지우면 자동값 사용)':'수기 입력 (밀크런 적재리스트에 저장되면 자동 표시)'}"
+          style="width:52px;border:1px solid ${r.palletManual?'#7B2FBE':'#c8d0de'};border-radius:4px;padding:2px 5px;text-align:right;font-size:11px;color:#111;font-weight:${r.palletManual?'700':'400'};background:${r.palletManual?'#F5EEFF':'#fafaff'};"
+          placeholder="${r.palletAuto||0}"></td>
     </tr>`;
   });
 
