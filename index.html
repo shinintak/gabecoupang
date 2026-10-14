@@ -10030,20 +10030,76 @@ function _lotteRenderProductMonthSection(){
       <span style="font-size:15px;font-weight:800;color:#1E2530;">📦 상품별 월별 발주현황 (${selYear}년)</span>
       <span style="display:flex;gap:4px;margin-left:6px;">${btns}</span>
       <input id="lotte-prod-search" type="text" placeholder="바코드·상품코드·상품명 검색" oninput="_lotteRenderProductMonthTable()" style="margin-left:auto;width:240px;max-width:100%;box-sizing:border-box;height:32px;padding:0 12px;font-size:12px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;">
+      <button onclick="downloadLotteProductMonthXlsx()" title="현재 검색 결과 기준으로 다운로드" style="height:32px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid #2D1660;background:#2D1660;color:#fff;cursor:pointer;white-space:nowrap;">⬇ 엑셀 다운로드</button>
     </div>
     <div style="font-size:11px;color:#8A94A6;margin-bottom:6px;">수량 = 입수×주문량(EA), 금액 = 수량×공급가 · 합계 행은 검색 결과 기준</div>
     <div id="lotte-prod-month-table"></div>`;
   document.getElementById('lotte-prod-search').value=q;
   wrap._data=_lotteProductMonthAgg(hist, selYear, center);
+  wrap._meta={year:selYear, center};
   _lotteRenderProductMonthTable();
+}
+function _lotteProductMonthFiltered(){
+  const wrap=document.getElementById('lotte-prod-month');
+  const q=((document.getElementById('lotte-prod-search')||{}).value||'').trim().toLowerCase();
+  return ((wrap&&wrap._data)||[]).filter(p=>!q||p.code.toLowerCase().includes(q)||String(p.spec).toLowerCase().includes(q)||String(p.name).toLowerCase().includes(q));
+}
+function downloadLotteProductMonthXlsx(){
+  const wrap=document.getElementById('lotte-prod-month');
+  const list=_lotteProductMonthFiltered();
+  if(!wrap||!list.length){ alert('다운로드할 데이터가 없습니다.'); return; }
+  const {year, center}=wrap._meta||{};
+  const centerLabel=center==='osan'?'오산':center==='gimhae'?'김해':'오산+김해';
+  const h1=['상품명','상품코드','바코드'], h2=['','',''];
+  MONTHS.forEach(m=>{ h1.push(m,''); h2.push('수량','금액'); });
+  h1.push('합계',''); h2.push('수량','금액');
+  const aoa=[h1,h2];
+  const colTot=MONTHS.map(()=>({qty:0,amt:0})); let gQty=0, gAmt=0;
+  list.forEach(p=>{
+    const row=[p.name||'', p.spec||'', p.code];
+    p.months.forEach((m,mi)=>{ row.push(m.qty, m.amt); colTot[mi].qty+=m.qty; colTot[mi].amt+=m.amt; });
+    row.push(p.qty, p.amt); gQty+=p.qty; gAmt+=p.amt;
+    aoa.push(row);
+  });
+  const tot=[`합계 (${list.length}개 상품)`,'',''];
+  colTot.forEach(c=>tot.push(c.qty, c.amt)); tot.push(gQty, gAmt);
+  aoa.push(tot);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  const merges=[{s:{r:0,c:0},e:{r:1,c:0}},{s:{r:0,c:1},e:{r:1,c:1}},{s:{r:0,c:2},e:{r:1,c:2}}];
+  for(let i=0;i<13;i++) merges.push({s:{r:0,c:3+i*2},e:{r:0,c:4+i*2}});
+  merges.push({s:{r:aoa.length-1,c:0},e:{r:aoa.length-1,c:2}});
+  ws['!merges']=merges;
+  ws['!cols']=[{wch:30},{wch:14},{wch:15}].concat(Array(26).fill(0).map((_,i)=>({wch:i%2?12:8})));
+  ws['!freeze']={xSplit:3,ySplit:2};
+  const border={top:{style:'thin',color:{rgb:'D0D8EA'}},bottom:{style:'thin',color:{rgb:'D0D8EA'}},left:{style:'thin',color:{rgb:'D0D8EA'}},right:{style:'thin',color:{rgb:'D0D8EA'}}};
+  const range=XLSX.utils.decode_range(ws['!ref']);
+  for(let r=range.s.r;r<=range.e.r;r++){
+    for(let c=range.s.c;c<=range.e.c;c++){
+      const ref=XLSX.utils.encode_cell({r,c});
+      if(!ws[ref]) ws[ref]={t:'s',v:''};
+      const cell=ws[ref];
+      if(r<2){
+        cell.s={font:{bold:true,color:{rgb:'FFFFFF'},sz:10},fill:{fgColor:{rgb:'2D1660'}},alignment:{horizontal:'center',vertical:'center'},border};
+      } else {
+        const isTot=r===range.e.r;
+        cell.s={font:{bold:isTot||c>=27,sz:10,color:{rgb:(c>=3&&c%2===0)?'C62828':'1B2559'}},border,
+          alignment:{horizontal:c<3?'left':'right',vertical:'center'},
+          fill:isTot?{fgColor:{rgb:'E8EDF8'}}:(c>=27?{fgColor:{rgb:'FFFDE7'}}:undefined)};
+        if(typeof cell.v==='number') cell.z='#,##0';
+      }
+    }
+  }
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `${year}년 ${centerLabel}`.slice(0,31));
+  const q=((document.getElementById('lotte-prod-search')||{}).value||'').trim();
+  XLSX.writeFile(wb, `롯데마트_상품별월별발주_${year}_${centerLabel}${q?'_검색-'+q.replace(/[\\/:*?"<>|]/g,''):''}.xlsx`);
 }
 function _lotteRenderProductMonthTable(){
   const wrap=document.getElementById('lotte-prod-month');
   const el=document.getElementById('lotte-prod-month-table');
   if(!wrap||!el) return;
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const q=((document.getElementById('lotte-prod-search')||{}).value||'').trim().toLowerCase();
-  const list=(wrap._data||[]).filter(p=>!q||p.code.toLowerCase().includes(q)||String(p.spec).toLowerCase().includes(q)||String(p.name).toLowerCase().includes(q));
+  const list=_lotteProductMonthFiltered();
   if(!list.length){
     el.innerHTML=`<div class="lotte-card" style="color:#A0AEC0;font-size:12px;">${(wrap._data||[]).length?'검색 결과가 없습니다.':'해당 연도에 발주 데이터가 없습니다.'}</div>`;
     return;
