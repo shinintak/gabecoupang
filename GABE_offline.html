@@ -9160,6 +9160,7 @@ function _lotteRenderBaseList(){
     listEl.innerHTML='<div style="font-size:12px;color:#A0AEC0;padding:10px 0;">검색 결과가 없습니다.</div>';
     return;
   }
+  const cum=_lotteCumulativeByProduct();
   let html='<table class="lotte-tbl"><thead><tr>'
     +'<th style="text-align:left;">상품바코드(EAN13)</th>'
     +'<th style="text-align:left;">상품코드</th>'
@@ -9169,6 +9170,7 @@ function _lotteRenderBaseList(){
     +'<th>공급가(vat제외)</th>'
     +'<th style="text-align:left;">상품코드(업체코드)</th>'
     +'<th>입수</th>'
+    +'<th title="센터별 데이터추출에 업로드된 전체 발주서(오산+김해) 누적, 입수×주문량 기준">누적 발주수량</th>'
     +'<th style="text-align:left;">작업박스</th>'
     +'<th style="text-align:left;white-space:nowrap;"><input type="checkbox" id="lotte-label-sel-all" onchange="toggleLotteLabelSelAll(this.checked)" title="전체 선택" style="width:14px;height:14px;vertical-align:middle;margin:0 4px 0 0;cursor:pointer;">물류바코드</th>'
     +'<th>관리</th></tr></thead><tbody>';
@@ -9182,6 +9184,7 @@ function _lotteRenderBaseList(){
       <td>${Math.round(p.priceNoVat||0).toLocaleString()}</td>
       <td style="text-align:left;">${esc(p.vendorCode)}</td>
       <td>${(p.packQty||0).toLocaleString()}</td>
+      <td style="font-weight:700;color:${cum[barcode]?'#4318FF':'#A0AEC0'};">${cum[barcode]?cum[barcode].qty.toLocaleString():'-'}</td>
       <td style="text-align:left;">${esc(p.workBox)}</td>
       <td style="text-align:left;white-space:nowrap;">
         ${p.logisticsBarcode?esc(p.logisticsBarcode):'<span style="color:#A0AEC0;">없음</span>'}
@@ -9952,6 +9955,140 @@ function _lotteMonthAgg(hist, year, center){
     return {label:mLabel, amt, box, weight, hasData};
   });
 }
+// 날짜별 hist 레코드 → 상품(바코드)별 {qty(입수×주문량), box(주문량), amt}
+// 금액 단가는 업로드 당시 erpRows 스냅샷(SPEC 기준) 우선, 없으면 현재 기본데이터 공급가
+function _lotteRecProducts(rec, db){
+  const out={};
+  if(!rec||!rec.rows) return out;
+  const specPrice={};
+  ((rec.result&&rec.result.erpRows)||[]).forEach(r=>{ if(r.SPEC!=null&&specPrice[r.SPEC]==null) specPrice[r.SPEC]=r.price||0; });
+  rec.rows.forEach(r=>{
+    const code=r.productCode; if(!code) return;
+    const base=db[code];
+    const qty=(r.packQty||0)*(r.orderQty||0);
+    let price=0;
+    if(base){ price=specPrice[base.spec]!=null?specPrice[base.spec]:Math.round(base.priceVat||0); }
+    const o=out[code]||(out[code]={qty:0, box:0, amt:0, name:r.productName||''});
+    o.qty+=qty; o.box+=(r.orderQty||0); o.amt+=price*qty;
+  });
+  return out;
+}
+// 전체 이력(오산+김해) 상품별 누적 — 데이터업로드 페이지 기본데이터 리스트용
+function _lotteCumulativeByProduct(){
+  const hist=lotteHistoryLoad(), db=lotteBaseLoad(), acc={};
+  Object.values(hist).forEach(day=>{
+    ['osan','gimhae'].forEach(c=>{
+      const m=_lotteRecProducts(day&&day[c], db);
+      Object.entries(m).forEach(([code,v])=>{
+        const a=acc[code]||(acc[code]={qty:0, box:0, amt:0});
+        a.qty+=v.qty; a.box+=v.box; a.amt+=v.amt;
+      });
+    });
+  });
+  return acc;
+}
+// 선택 연도 상품별 월별 집계 → [{code,spec,name,months:[{qty,amt}×12],qty,amt}]
+function _lotteProductMonthAgg(hist, year, center){
+  const db=lotteBaseLoad(), map={};
+  Object.keys(hist).filter(d=>d.startsWith(year+'-')).forEach(d=>{
+    const mi=parseInt(d.slice(5,7),10)-1;
+    if(!(mi>=0&&mi<12)) return;
+    const centers=center==='total'?['osan','gimhae']:[center];
+    centers.forEach(c=>{
+      Object.entries(_lotteRecProducts(hist[d][c], db)).forEach(([code,v])=>{
+        let p=map[code];
+        if(!p){
+          const base=db[code];
+          p=map[code]={code, spec:base?base.spec:'', name:(base&&base.displayName)||v.name, months:MONTHS.map(()=>({qty:0,amt:0})), qty:0, amt:0};
+        }
+        p.months[mi].qty+=v.qty; p.months[mi].amt+=v.amt;
+        p.qty+=v.qty; p.amt+=v.amt;
+      });
+    });
+  });
+  return Object.values(map).sort((a,b)=>b.amt-a.amt||String(a.spec).localeCompare(String(b.spec)));
+}
+function lotteProdSelCenter(c){
+  localStorage.setItem('lotte_prod_sel_center', c);
+  _lotteRenderProductMonthSection();
+}
+function _lotteRenderProductMonthSection(){
+  const wrap=document.getElementById('lotte-prod-month');
+  if(!wrap) return;
+  const hist=lotteHistoryLoad();
+  const years=Array.from(new Set(Object.keys(hist).map(d=>d.slice(0,4)))).sort();
+  let selYear=localStorage.getItem('lotte_delivery_sel_year');
+  if(!selYear||!years.includes(selYear)) selYear=years[years.length-1];
+  let center=localStorage.getItem('lotte_prod_sel_center')||'total';
+  if(!['total','osan','gimhae'].includes(center)) center='total';
+  const btns=[['total','오산+김해'],['osan','오산'],['gimhae','김해']].map(([k,l])=>{
+    const on=k===center;
+    return `<button onclick="lotteProdSelCenter('${k}')" style="font-size:11.5px;padding:4px 12px;border-radius:6px;cursor:pointer;font-weight:700;${on?'border:none;background:#2D1660;color:#fff;':'border:1px solid #C3CBFF;background:#fff;color:#2D1660;'}">${l}</button>`;
+  }).join('');
+  const q=(document.getElementById('lotte-prod-search')||{}).value||'';
+  wrap.innerHTML=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 10px;">
+      <span style="font-size:15px;font-weight:800;color:#1E2530;">📦 상품별 월별 발주현황 (${selYear}년)</span>
+      <span style="display:flex;gap:4px;margin-left:6px;">${btns}</span>
+      <input id="lotte-prod-search" type="text" placeholder="바코드·상품코드·상품명 검색" oninput="_lotteRenderProductMonthTable()" style="margin-left:auto;width:240px;max-width:100%;box-sizing:border-box;height:32px;padding:0 12px;font-size:12px;border:1.5px solid #E0E5FF;border-radius:8px;outline:none;">
+    </div>
+    <div style="font-size:11px;color:#8A94A6;margin-bottom:6px;">수량 = 입수×주문량(EA), 금액 = 수량×공급가 · 합계 행은 검색 결과 기준</div>
+    <div id="lotte-prod-month-table"></div>`;
+  document.getElementById('lotte-prod-search').value=q;
+  wrap._data=_lotteProductMonthAgg(hist, selYear, center);
+  _lotteRenderProductMonthTable();
+}
+function _lotteRenderProductMonthTable(){
+  const wrap=document.getElementById('lotte-prod-month');
+  const el=document.getElementById('lotte-prod-month-table');
+  if(!wrap||!el) return;
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const q=((document.getElementById('lotte-prod-search')||{}).value||'').trim().toLowerCase();
+  const list=(wrap._data||[]).filter(p=>!q||p.code.toLowerCase().includes(q)||String(p.spec).toLowerCase().includes(q)||String(p.name).toLowerCase().includes(q));
+  if(!list.length){
+    el.innerHTML=`<div class="lotte-card" style="color:#A0AEC0;font-size:12px;">${(wrap._data||[]).length?'검색 결과가 없습니다.':'해당 연도에 발주 데이터가 없습니다.'}</div>`;
+    return;
+  }
+  const th='padding:6px 8px;white-space:nowrap;color:#fff;font-size:11px;font-weight:700;border-right:1px solid #5A40C0;';
+  const stickyL='position:sticky;left:0;z-index:1;';
+  let html=`<div style="overflow:auto;max-height:620px;border-radius:8px;border:1px solid #dde3ee;background:#fff;">
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead style="position:sticky;top:0;z-index:2;">
+        <tr style="background:#2D1660;">
+          <th rowspan="2" style="${th}${stickyL}background:#2D1660;text-align:left;min-width:180px;">상품</th>
+          ${MONTHS.map(m=>`<th colspan="2" style="${th}text-align:center;">${m}</th>`).join('')}
+          <th colspan="2" style="${th}text-align:center;background:#1B0E40;">합계</th>
+        </tr>
+        <tr style="background:#3A2380;">
+          ${MONTHS.map(()=>`<th style="${th}text-align:right;">수량</th><th style="${th}text-align:right;">금액</th>`).join('')}
+          <th style="${th}text-align:right;background:#1B0E40;">수량</th><th style="${th}text-align:right;background:#1B0E40;">금액</th>
+        </tr>
+      </thead><tbody>`;
+  const colTot=MONTHS.map(()=>({qty:0,amt:0})); let gQty=0, gAmt=0;
+  list.forEach((p,i)=>{
+    const bg=i%2===0?'#fff':'#f7f9fc';
+    html+=`<tr style="background:${bg};border-bottom:1px solid #e8edf5;">
+      <td style="${stickyL}background:${bg};padding:6px 8px;text-align:left;border-right:1px solid #e8edf5;white-space:nowrap;">
+        <div style="font-weight:700;color:#1B2559;">${esc(p.name)||'<span style="color:#A0AEC0;">(상품명 없음)</span>'}</div>
+        <div style="font-size:10px;color:#8A94A6;">${esc(p.spec)||'<span style="color:#E53E3E;">기본데이터 없음</span>'} · ${esc(p.code)}</div>
+      </td>`;
+    p.months.forEach((m,mi)=>{
+      colTot[mi].qty+=m.qty; colTot[mi].amt+=m.amt;
+      const has=m.qty||m.amt;
+      html+=`<td style="padding:6px 8px;text-align:right;color:${has?'#333':'#ccc'};font-weight:600;">${has?m.qty.toLocaleString():'-'}</td>
+        <td style="padding:6px 8px;text-align:right;color:${has?'#C62828':'#ccc'};border-right:1px solid #f0f3f8;">${has?m.amt.toLocaleString():'-'}</td>`;
+    });
+    gQty+=p.qty; gAmt+=p.amt;
+    html+=`<td style="padding:6px 8px;text-align:right;font-weight:700;color:#1B2559;background:#EEF0FF;">${p.qty.toLocaleString()}</td>
+      <td style="padding:6px 8px;text-align:right;font-weight:700;color:#C62828;background:#FFFDE7;">${p.amt.toLocaleString()}</td></tr>`;
+  });
+  html+=`<tr style="background:#e8edf8;border-top:2px solid #4F2FA8;">
+    <td style="${stickyL}background:#e8edf8;padding:7px 8px;font-weight:700;color:#1B2559;border-right:1px solid #c5cfe8;">합계 (${list.length}개 상품)</td>
+    ${colTot.map(c=>`<td style="padding:7px 8px;text-align:right;font-weight:700;color:#1B2559;">${c.qty?c.qty.toLocaleString():'-'}</td><td style="padding:7px 8px;text-align:right;font-weight:700;color:#C62828;border-right:1px solid #d0d8ea;">${c.amt?c.amt.toLocaleString():'-'}</td>`).join('')}
+    <td style="padding:7px 8px;text-align:right;font-weight:800;color:#1B2559;">${gQty.toLocaleString()}</td>
+    <td style="padding:7px 8px;text-align:right;font-weight:800;color:#C62828;background:#FFFDE7;">${gAmt.toLocaleString()}원</td>
+  </tr></tbody></table></div>`;
+  el.innerHTML=html;
+}
 function lotteDeliverySelYear(y){
   localStorage.setItem('lotte_delivery_sel_year', y);
   _lotteRenderDeliveryCharts();
@@ -10047,9 +10184,11 @@ function _lotteRenderDeliveryCharts(){
       <div style="${titleStyle}">③ 오산+김해 합계 그래프</div>
       <canvas id="lotte-chart-total-13" style="width:100%;" height="190"></canvas>
     </div>
-  </div>`;
+  </div>
+  <div id="lotte-prod-month" style="margin-top:24px;"></div>`;
 
   el.innerHTML=html;
+  _lotteRenderProductMonthSection();
 
   requestAnimationFrame(()=>{
     const pOsan=monthsOsan.filter(m=>m.hasData), pGimhae=monthsGimhae.filter(m=>m.hasData), pTotal=monthsTotal.filter(m=>m.hasData);
