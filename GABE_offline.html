@@ -1211,10 +1211,10 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
       <div class="card" style="flex:1;min-width:320px;margin-bottom:0;">
         <p class="sec-label">2</p>
         <p class="sec-title">마진율 데이터</p>
-        <p style="font-size:12px;color:#A0AEC0;margin-bottom:.6rem;">SKU ID별 마진율(단종 여부 포함) 시트가 담긴 파일</p>
+        <p style="font-size:12px;color:#A0AEC0;margin-bottom:.6rem;">SKU ID별 마진율(발주상태 포함) 시트가 담긴 파일</p>
         <div class="drop-zone" id="basedata-margin-dz" onclick="document.getElementById('basedata-margin-fi').click()">
           <p id="basedata-margin-dz-text">클릭하여 파일 선택</p>
-          <small>.xlsx, .xls — SKU ID · 상태(단종) · 마진율 컬럼 자동 인식</small>
+          <small>.xlsx, .xls — SKU ID · 발주상태(I열, 정상 외 회색) · 마진율 컬럼 자동 인식</small>
         </div>
         <input type="file" id="basedata-margin-fi" accept=".xlsx,.xls" style="display:none">
         <div id="basedata-margin-summary" style="font-size:12px;color:#4A5568;margin-top:10px;"></div>
@@ -2968,6 +2968,8 @@ let eprQtyMap={};    // SPEC(문자열) → PDA수량 합산 (EPR 재고)
 let eprNameMap={};   // 품명(B열) → PDA수량 (한글명 세트구성 폴백용)
 let eprSpecSet=new Set(); // EPR에 등록된 SPEC 집합
 let discontinuedSet=new Set(); // 단종 SKU ID 집합
+let discontinuedStatusMap={}; // SKU ID → 발주상태 텍스트(단종·불가·일시중단·품절중 등), 마진율 칸 표기용
+function discLabel(id,map){ return ((map||discontinuedStatusMap)[id])||'단종'; }
 let skuTotalQtyMap={}; // SKU ID → 전체 발주수량 합산
 let printSkuSet=new Set(); // 출력상품 SKU ID 집합
 let setComponentMap={}; // 세트 SPEC(모) → [구성품 SPEC, ...]
@@ -3016,10 +3018,11 @@ function basedataRefLoad(){ try{ return JSON.parse(localStorage.getItem(BASEDATA
 
 // 기초데이터 마진율(최신 업로드 파일 값) — 발주파일 마진율 시트·세션 저장값보다 우선 적용
 let _bdMarginMap={};
-function basedataMarginSave(fileName, mMap, discList){
+function basedataMarginSave(fileName, mMap, discList, discStatus){
   const snapshot={
     marginMap:Object.assign({},mMap||marginMap),
     discontinuedList:discList?[...discList]:[...discontinuedSet],
+    discontinuedStatus:Object.assign({},discStatus||discontinuedStatusMap),
     fileName, savedAt:new Date().toISOString()
   };
   try{ localStorage.setItem(BASEDATA_MARGIN_KEY,JSON.stringify(snapshot)); }catch(e){ alert('저장 용량이 초과되었습니다.'); }
@@ -3046,6 +3049,7 @@ function applyBaseDataToMaps(){
   if(mg){
     Object.assign(marginMap, mg.marginMap||{});
     (mg.discontinuedList||[]).forEach(id=>discontinuedSet.add(id));
+    Object.assign(discontinuedStatusMap, mg.discontinuedStatus||{});
   }
 }
 
@@ -3258,13 +3262,13 @@ function parseAllInOne(buf, file){
 
   const wb=XLSX.read(buf,{type:'array',cellNF:true});
 
-  // ── 1. 마진율 시트: A=SKU ID, B=마진율 or "단종" ──
-  // 시트가 이번 파일에 없으면 기존 marginMap/discontinuedSet을 유지(초기화 안 함)
+  // ── 1. 마진율 시트: A=SKU ID, B=마진율 ──
+  // 시트가 이번 파일에 없으면 기존 marginMap을 유지(초기화 안 함)
   // — 마진율은 "기초데이터 업로드"에서 별도로 저장해둔 값을 계속 쓸 수 있도록
+  // 단종(회색) 여부는 기초데이터 마진율 파일의 발주상태(I열)로만 판단 — 여기서는 discontinuedSet을 건드리지 않음
   const mn=wb.SheetNames.find(n=>n.includes('마진율'))||'';
   if(mn){
     marginMap={};
-    discontinuedSet=new Set(); // 단종 SKU ID 집합
     const ws=wb.Sheets[mn];
     const rng=XLSX.utils.decode_range(ws['!ref']||'A1');
     for(let R=1;R<=rng.e.r;R++){
@@ -3273,11 +3277,6 @@ function parseAllInOne(buf, file){
       if(!cA) continue;
       const id=normId(cA.v); if(!id) continue;
       if(!cB||cB.t==='e') continue; // #N/A 등 오류셀 스킵
-      // B열이 "단종" 문자열이면 단종 처리
-      if(String(cB.v||'').trim()==='단종'){
-        discontinuedSet.add(id);
-        continue;
-      }
       const val=_normMargin(cB.v);
       if(!isNaN(val)) marginMap[id]=val;
     }
@@ -3961,6 +3960,7 @@ function saveCurrentSession(){
     outAmtOverrides: outAmtOverrides,
     marginMap: marginMap,
     discontinuedSet: [...discontinuedSet],
+    discontinuedStatusMap: discontinuedStatusMap,
     skuErpMap: skuErpMap,
     eprQtyMap: eprQtyMap,
     eprSpecSet: [...eprSpecSet],
@@ -4031,6 +4031,7 @@ function loadSession(dateKey){
   extraPoRowKeys   = new Set();
   marginMap        = rec.marginMap||{};
   discontinuedSet  = new Set(rec.discontinuedSet||[]);
+  discontinuedStatusMap = rec.discontinuedStatusMap||{};
   skuErpMap        = rec.skuErpMap||{};
   eprQtyMap        = rec.eprQtyMap||{};
   eprNameMap       = rec.eprNameMap||{}; // 구형 세션 호환
@@ -5520,7 +5521,7 @@ function reloadLastFile(){
 
 function clearAll(){
   if(!confirm('초기화할까요?')) return;
-  marginMap={}; skuErpMap={}; skuNameMap={}; eprQtyMap={}; eprNameMap={}; eprSpecSet=new Set(); discontinuedSet=new Set(); skuTotalQtyMap={}; setComponentMap={}; setComponentQtyMap={}; skuIdSetComponents={}; milkRunCenterSet=new Set(); autoMilkRunCenterSet=new Set(); milkRunCenterOverrides={}; poDeliveryMap={}; manualReasonMap={}; barcodeSheetRaw={}; skuBarcodeMap={}; barcodeAttachMap={}; specBoxQtyMap={}; colFilters={};
+  marginMap={}; skuErpMap={}; skuNameMap={}; eprQtyMap={}; eprNameMap={}; eprSpecSet=new Set(); discontinuedSet=new Set(); discontinuedStatusMap={}; skuTotalQtyMap={}; setComponentMap={}; setComponentQtyMap={}; skuIdSetComponents={}; milkRunCenterSet=new Set(); autoMilkRunCenterSet=new Set(); milkRunCenterOverrides={}; poDeliveryMap={}; manualReasonMap={}; barcodeSheetRaw={}; skuBarcodeMap={}; barcodeAttachMap={}; specBoxQtyMap={}; colFilters={};
   processed=[]; withNo=[]; extraPoRowKeys=new Set();
   document.getElementById('margin-saved-bar').style.display='none';
   document.getElementById('file-ok').style.display='none';
@@ -5872,7 +5873,7 @@ function renderTable(){
     const reasonLabel=isManualNormal?'재고사용가능 ✎':reason+(isManual?' ✎':'');
 
     const mgCell=isGray
-      ?'<td style="color:#bbb;font-size:11px;">단종</td>'
+      ?'<td style="color:#bbb;font-size:11px;">'+discLabel(skuId)+'</td>'
       :pct===null
         ?(isOrange?'<td style="background:#FFB300;font-weight:600;font-size:11px;" title="마진율 미표기 → 마진율 미달">미표기</td>':'<td style="color:#bbb;font-size:11px;">-</td>')
         :'<td style="'+(isOrange?'background:#FFB300;font-weight:600;':'color:#4A5568;')+'">'+pct+'%</td>';
@@ -6797,7 +6798,7 @@ function downloadXLSX(){
       [price,   null, false, false, true,  false],             // K: 매입가
       [amt,     null, false, false, true,  false],             // L: 총발주매입금
       [out,     null, false, false, true,  false],             // M: 출고매입가
-      [isGray?'단종':pct!==null?pct+'%':'', isOrange?'FFB300':null, isOrange, false, false, false], // N: 마진율
+      [isGray?discLabel(skuId):pct!==null?pct+'%':'', isOrange?'FFB300':null, isOrange, false, false, false], // N: 마진율
     ];
     defs.forEach(([v,fill,bold,white,isNum,ctr],c)=>{
       const sty=mkS(fill,bold,white,isNum,isFirst,isLast,c,ctr);
@@ -6879,7 +6880,7 @@ function downloadXLSX(){
         [price, null,                              false, false,            true,  false],
         [amt,   null,                              false, false,            true,  false],
         [0,     null,                              false, false,            true,  false],
-        [isGr?'단종':pct!==null?pct+'%':'',isOr?'FFB300':null,isOr,false,false,false],
+        [isGr?discLabel(sid):pct!==null?pct+'%':'',isOr?'FFB300':null,isOr,false,false,false],
       ];
       defs.forEach(([v,fill,bold,white,isNum,ctr],c)=>{
         const sty=mkS(fill,bold,white,isNum,isFirst,isLast,c,ctr);
@@ -8962,34 +8963,39 @@ document.getElementById('basedata-margin-fi').addEventListener('change',function
         const hn=h.replace(/\s/g,'').toUpperCase();
         if(hn==='SKUID') idCol=c;                              // "SKU ID" 정확히 일치하는 열 최우선
         else if(idCol<0&&hn.includes('SKUID')) idCol=c;
-        if(statusCol<0&&h==='상태') statusCol=c;
+        if(statusCol<0&&hn==='발주상태') statusCol=c;
         if(!marginHdrIsRate&&h.includes('마진율')){ marginCol=c; marginHdrIsRate=true; } // "마진율" 헤더 최우선
         else if(marginCol<0&&h.includes('마진')) marginCol=c;  // "마진율" 헤더가 없을 때만 "마진" 포함 열 사용
       }
       if(idCol<0){ for(let c=0;c<=rng.e.c;c++){ const cell=ws[XLSX.utils.encode_cell({r:hr,c})]; if(cell&&String(cell.v||'').includes('SKU')){ idCol=c; break; } } }
       if(idCol<0) idCol=0;
+      if(statusCol<0&&rng.e.c>=8) statusCol=8; // "발주상태" 헤더가 없으면 I열 사용
       if(marginCol<0){ alert('마진율 컬럼("마진"이 포함된 헤더)을 찾지 못했습니다.'); return; }
       // 이번 파일 값만으로 새로 구성 — 예전 업로드/발주파일에서 남은 옛 마진율이 섞여 저장되지 않도록
-      const newMargin={}, newDisc=new Set();
+      // 발주상태가 "정상"이 아닌 값(단종·불가·일시중단·품절중 등)은 회색(단종) 처리, 상태 텍스트는 마진율 칸에 표기
+      const newMargin={}, newDisc=new Set(), newDiscStatus={}, fileIds=new Set();
       for(let R=hr+1;R<=rng.e.r;R++){
         const cId=ws[XLSX.utils.encode_cell({r:R,c:idCol})];
         if(!cId) continue;
         const id=normId(cId.v); if(!id) continue;
+        fileIds.add(id);
         const status=statusCol>=0?String((ws[XLSX.utils.encode_cell({r:R,c:statusCol})]||{}).v||'').trim():'';
-        if(status.includes('단종')){ newDisc.add(id); delete newMargin[id]; continue; }
+        if(status&&status!=='정상'){ newDisc.add(id); newDiscStatus[id]=status; delete newMargin[id]; continue; }
         const cM=ws[XLSX.utils.encode_cell({r:R,c:marginCol})];
         if(cM && cM.t!=='e' && cM.v!==''){
           const val=_normMargin(cM.v);
           if(!isNaN(val)) newMargin[id]=val;
         }
       }
-      Object.keys(newMargin).forEach(id=>{ marginMap[id]=newMargin[id]; discontinuedSet.delete(id); });
+      Object.keys(newMargin).forEach(id=>{ marginMap[id]=newMargin[id]; });
+      fileIds.forEach(id=>{ if(!newDisc.has(id)){ discontinuedSet.delete(id); delete discontinuedStatusMap[id]; } }); // 이번 파일에서 "정상"이면 회색 해제
       newDisc.forEach(id=>discontinuedSet.add(id));
+      Object.assign(discontinuedStatusMap,newDiscStatus);
       _bdMarginMap=newMargin;
       const cnt=Object.keys(newMargin).length, dcnt=newDisc.size;
-      basedataMarginSave(file.name, newMargin, newDisc);
+      basedataMarginSave(file.name, newMargin, newDisc, newDiscStatus);
       renderBaseDataSummary();
-      alert('✅ 마진율 데이터 저장 완료\n마진율 '+cnt+'개 · 단종 '+dcnt+'개');
+      alert('✅ 마진율 데이터 저장 완료\n마진율 '+cnt+'개 · 발주불가(정상 외) '+dcnt+'개');
     }catch(err){ alert('파일 처리 중 오류: '+err.message); }
     e.target.value='';
   };
@@ -12182,7 +12188,7 @@ function downloadOrderListPopupXLSX(){
       [price,null,false,false,true,false],
       [amt,null,false,false,true,false],
       [out,null,false,false,true,false],
-      [isGray?'단종':pct!==null?pct+'%':'',isOrange?'FFB300':null,isOrange,false,false,false],
+      [isGray?discLabel(id,rec.discontinuedStatusMap||{}):pct!==null?pct+'%':'',isOrange?'FFB300':null,isOrange,false,false,false],
     ];
     defs.forEach(([v,fill,bold,white,isNum,ctr],c)=>{ws[cl(c)+(R+1)]=mc(v,mkS(fill,bold,white,isNum,isFirst,isLast,c,ctr));});
     R++;
@@ -12306,7 +12312,7 @@ function _buildOrderListHTML(rec, onlyMissing=false){
     const rsStyle=rc?`background:${rc.bg};color:${rc.fg};font-weight:600;font-size:11px;text-align:center;white-space:nowrap;padding:5px 8px;border-right:1px solid #f0f3f8;`:'font-size:11px;text-align:center;padding:5px 8px;border-right:1px solid #f0f3f8;color:#ccc;';
     const skuNameStyle=rc?`background:${rc.bg};color:${rc.fg};`:'';
     const td=(v,align='center',extra='')=>`<td style="padding:5px 8px;text-align:${align};${extra}">${v}</td>`;
-    const mgCell=isGray?`<td style="color:#bbb;font-size:11px;text-align:center;padding:5px 8px;">단종</td>`:
+    const mgCell=isGray?`<td style="color:#bbb;font-size:11px;text-align:center;padding:5px 8px;">${discLabel(id,rec.discontinuedStatusMap||{})}</td>`:
       pct===null?`<td style="color:#bbb;font-size:11px;text-align:center;padding:5px 8px;">-</td>`:
       `<td style="padding:5px 8px;text-align:right;${isOrange?'background:#FFB300;font-weight:600;':''}">${pct}%</td>`;
     const numFmt=v=>(parseFloat(String(v||'').replace(/,/g,''))||0).toLocaleString('ko-KR');
