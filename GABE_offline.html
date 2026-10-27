@@ -705,6 +705,19 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
   </div>
 </div>
 
+<div id="lotte-prod-detail-modal" onclick="if(event.target===this)closeLotteProdDetail()" style="display:none;position:fixed;inset:0;z-index:3200;background:rgba(27,37,89,.5);align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;width:620px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(27,37,89,0.22);">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 20px;border-bottom:1px solid #E0E5FF;">
+      <div>
+        <div id="lotte-prod-detail-title" style="font-size:15px;font-weight:800;color:#1B2559;"></div>
+        <div id="lotte-prod-detail-sub" style="font-size:11px;color:#8A94A6;margin-top:2px;"></div>
+      </div>
+      <button onclick="closeLotteProdDetail()" style="width:28px;height:28px;flex-shrink:0;border-radius:50%;border:none;background:#F4F6F9;cursor:pointer;font-size:13px;">✕</button>
+    </div>
+    <div id="lotte-prod-detail-body" style="padding:14px 20px 18px;overflow:auto;"></div>
+  </div>
+</div>
+
 <div id="lotte-product-modal" style="display:none;position:fixed;inset:0;z-index:3200;background:rgba(27,37,89,.5);align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:16px;width:440px;max-width:94vw;max-height:88vh;overflow-y:auto;box-shadow:0 16px 48px rgba(27,37,89,0.22);">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #E0E5FF;">
@@ -10211,11 +10224,11 @@ function _lotteRenderProductMonthTable(){
     p.months.forEach((m,mi)=>{
       colTot[mi].qty+=m.qty; colTot[mi].amt+=m.amt;
       const has=m.qty||m.amt;
-      html+=`<td style="padding:6px 8px;text-align:right;color:${has?'#333':'#ccc'};font-weight:600;">${has?m.qty.toLocaleString():'-'}</td>
+      html+=`<td ${has?`onclick="openLotteProdDetail(${i},${mi})" title="발주일별 상세 보기"`:''} style="padding:6px 8px;text-align:right;color:${has?'#333':'#ccc'};font-weight:600;${has?'cursor:pointer;text-decoration:underline dotted #A0AEC0;':''}">${has?m.qty.toLocaleString():'-'}</td>
         <td style="padding:6px 8px;text-align:right;color:${has?'#C62828':'#ccc'};border-right:1px solid #f0f3f8;">${has?m.amt.toLocaleString():'-'}</td>`;
     });
     gQty+=p.qty; gAmt+=p.amt;
-    html+=`<td style="padding:6px 8px;text-align:right;font-weight:700;color:#1B2559;background:#EEF0FF;">${p.qty.toLocaleString()}</td>
+    html+=`<td onclick="openLotteProdDetail(${i},-1)" title="발주일별 상세 보기" style="padding:6px 8px;text-align:right;font-weight:700;color:#1B2559;background:#EEF0FF;cursor:pointer;text-decoration:underline dotted #A0AEC0;">${p.qty.toLocaleString()}</td>
       <td style="padding:6px 8px;text-align:right;font-weight:700;color:#C62828;background:#FFFDE7;">${p.amt.toLocaleString()}</td></tr>`;
   });
   html+=`<tr style="background:#e8edf8;border-top:2px solid #4F2FA8;">
@@ -10225,6 +10238,72 @@ function _lotteRenderProductMonthTable(){
     <td style="padding:7px 8px;text-align:right;font-weight:800;color:#C62828;background:#FFFDE7;">${gAmt.toLocaleString()}원</td>
   </tr></tbody></table></div>`;
   el.innerHTML=html;
+  el._list=list;
+}
+// 상품별 월별 발주현황 수량 클릭 → 발주일(센터·발주번호)별 수량·금액 팝업. mi=-1이면 연간 전체
+function openLotteProdDetail(idx, mi){
+  const wrap=document.getElementById('lotte-prod-month');
+  const el=document.getElementById('lotte-prod-month-table');
+  const p=el&&el._list&&el._list[idx];
+  if(!wrap||!p) return;
+  const {year, center}=wrap._meta||{};
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const hist=lotteHistoryLoad(), db=lotteBaseLoad();
+  const centers=center==='total'?['osan','gimhae']:[center];
+  const cLabel={osan:'오산', gimhae:'김해'};
+  const prefix=mi>=0?`${year}-${String(mi+1).padStart(2,'0')}`:`${year}-`;
+  const lines=[];
+  Object.keys(hist).filter(d=>d.startsWith(prefix)).sort().forEach(d=>{
+    centers.forEach(c=>{
+      const rec=hist[d]&&hist[d][c];
+      if(!rec||!rec.rows) return;
+      // 단가 결정은 _lotteRecProducts와 동일(업로드 당시 SPEC별 단가 스냅샷 우선)
+      const specPrice={};
+      ((rec.result&&rec.result.erpRows)||[]).forEach(r=>{ if(r.SPEC!=null&&specPrice[r.SPEC]==null) specPrice[r.SPEC]=r.price||0; });
+      const base=db[p.code];
+      const price=base?(specPrice[base.spec]!=null?specPrice[base.spec]:Math.round(base.priceVat||0)):0;
+      const byOrder={};
+      rec.rows.filter(r=>r.productCode===p.code).forEach(r=>{
+        const k=r.orderNo||'';
+        const o=byOrder[k]||(byOrder[k]={date:d, center:c, orderNo:k, box:0, qty:0, amt:0, price});
+        const qty=(r.packQty||0)*(r.orderQty||0);
+        o.box+=(r.orderQty||0); o.qty+=qty; o.amt+=price*qty;
+      });
+      lines.push(...Object.values(byOrder));
+    });
+  });
+  const tq=lines.reduce((a,l)=>a+l.qty,0), ta=lines.reduce((a,l)=>a+l.amt,0), tb=lines.reduce((a,l)=>a+l.box,0);
+  document.getElementById('lotte-prod-detail-title').textContent=p.name||p.code;
+  document.getElementById('lotte-prod-detail-sub').textContent=`${p.spec||'기본데이터 없음'} · ${p.code} · ${mi>=0?`${year}년 ${mi+1}월`:`${year}년 전체`} · ${center==='total'?'오산+김해':cLabel[center]}`;
+  const th='padding:7px 8px;color:#fff;font-size:11px;font-weight:700;white-space:nowrap;';
+  const td='padding:6px 8px;border-bottom:1px solid #e8edf5;white-space:nowrap;';
+  let html=`<table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <thead style="position:sticky;top:0;"><tr style="background:#2D1660;">
+      <th style="${th}text-align:left;">발주일</th><th style="${th}text-align:center;">센터</th><th style="${th}text-align:left;">발주번호</th>
+      <th style="${th}text-align:right;">주문량(박스)</th><th style="${th}text-align:right;">수량(EA)</th><th style="${th}text-align:right;">단가</th><th style="${th}text-align:right;">금액</th>
+    </tr></thead><tbody>`;
+  if(!lines.length) html+=`<tr><td colspan="7" style="${td}text-align:center;color:#A0AEC0;">발주 내역이 없습니다.</td></tr>`;
+  lines.forEach((l,i)=>{
+    html+=`<tr style="background:${i%2?'#f7f9fc':'#fff'};">
+      <td style="${td}color:#1B2559;font-weight:600;">${esc(l.date)}</td>
+      <td style="${td}text-align:center;">${cLabel[l.center]}</td>
+      <td style="${td}color:#4A5568;">${esc(l.orderNo)||'-'}</td>
+      <td style="${td}text-align:right;">${l.box.toLocaleString()}</td>
+      <td style="${td}text-align:right;font-weight:700;color:#1B2559;">${l.qty.toLocaleString()}</td>
+      <td style="${td}text-align:right;color:#8A94A6;">${l.price.toLocaleString()}</td>
+      <td style="${td}text-align:right;color:#C62828;">${l.amt.toLocaleString()}</td></tr>`;
+  });
+  html+=`<tr style="background:#e8edf8;border-top:2px solid #4F2FA8;">
+      <td colspan="3" style="padding:7px 8px;font-weight:700;color:#1B2559;">합계 (${lines.length}건)</td>
+      <td style="padding:7px 8px;text-align:right;font-weight:700;">${tb.toLocaleString()}</td>
+      <td style="padding:7px 8px;text-align:right;font-weight:800;color:#1B2559;">${tq.toLocaleString()}</td>
+      <td></td>
+      <td style="padding:7px 8px;text-align:right;font-weight:800;color:#C62828;">${ta.toLocaleString()}원</td></tr></tbody></table>`;
+  document.getElementById('lotte-prod-detail-body').innerHTML=html;
+  document.getElementById('lotte-prod-detail-modal').style.display='flex';
+}
+function closeLotteProdDetail(){
+  document.getElementById('lotte-prod-detail-modal').style.display='none';
 }
 function lotteDeliverySelYear(y){
   localStorage.setItem('lotte_delivery_sel_year', y);
