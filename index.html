@@ -9075,9 +9075,39 @@ function lotteBaseSave(d){
   _sharedWrite(LOTTE_BASE_KEY,d);
 }
 function lotteHistoryLoad(){ try{ return JSON.parse(localStorage.getItem(LOTTE_HISTORY_KEY)||'{}'); }catch(e){ return {}; } }
-function lotteHistorySave(d){
+// 같은 날짜·센터에 발주서가 여러 건이면 이전 기록을 덮어쓰지 않고 합침
+// (발주번호+상품코드가 같은 행은 새 업로드로 교체 → 같은 파일 재업로드해도 중복 집계 안 됨)
+function _lotteMergeRec(oldRec,newRec){
+  if(!oldRec||!oldRec.rows) return newRec;
+  if(!newRec||!newRec.rows) return oldRec;
+  const key=r=>(r.orderNo||'')+'|'+(r.productCode||'');
+  const newKeys=new Set(newRec.rows.map(key));
+  const rows=oldRec.rows.filter(r=>!newKeys.has(key(r))).concat(newRec.rows);
+  if(rows.length===newRec.rows.length) return newRec;
+  const files=Array.from(new Set(String(oldRec.fileName||'').split(', ').concat(String(newRec.fileName||'').split(', ')).filter(Boolean)));
+  const uploadedAt=(oldRec.uploadedAt||'')>(newRec.uploadedAt||'')?oldRec.uploadedAt:newRec.uploadedAt;
+  return { uploadedAt, fileName:files.join(', '), rows, result:_lotteComputeCenterResult(rows) };
+}
+function _lotteMergeHist(base,add){
+  const out=Object.assign({},base);
+  Object.keys(add||{}).forEach(d=>{
+    out[d]=Object.assign({},out[d]);
+    ['osan','gimhae'].forEach(c=>{ if(add[d]&&add[d][c]) out[d][c]=_lotteMergeRec(out[d][c],add[d][c]); });
+  });
+  return out;
+}
+async function lotteHistorySave(d){
   try{ localStorage.setItem(LOTTE_HISTORY_KEY, JSON.stringify(d)); }catch(e){ alert('저장 용량이 초과되었습니다.'); }
-  _sharedWrite(LOTTE_HISTORY_KEY,d);
+  // 다른 PC에서 올린 기록이 아직 동기화 전이면 통째로 덮어써서 사라지므로, 서버 최신본과 합친 뒤 저장
+  let merged=d;
+  if(_serverConnected){
+    const remote=await _sharedRead(LOTTE_HISTORY_KEY);
+    if(remote&&typeof remote==='object'){
+      merged=_lotteMergeHist(remote,d);
+      try{ localStorage.setItem(LOTTE_HISTORY_KEY, JSON.stringify(merged)); }catch(e){}
+    }
+  }
+  _sharedWrite(LOTTE_HISTORY_KEY,merged);
 }
 function lotteCenterLoad(center){ try{ return JSON.parse(localStorage.getItem(LOTTE_CENTER_KEYS[center])||'null'); }catch(e){ return null; } }
 function lotteCenterSave(center,d){
@@ -9781,7 +9811,7 @@ function _lotteSaveOrderResult(center,fileName,rows){
   const dateKey=(rows[0]&&rows[0].orderDate)||new Date().toISOString().slice(0,10);
   const hist=lotteHistoryLoad();
   if(!hist[dateKey]) hist[dateKey]={};
-  hist[dateKey][center]=record;
+  hist[dateKey][center]=_lotteMergeRec(hist[dateKey][center],record);
   lotteHistorySave(hist);
 }
 
