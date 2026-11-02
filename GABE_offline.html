@@ -1149,6 +1149,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
     <div id="smt-result" style="display:none;">
       <div class="stats-row" id="smt-stats" style="margin-bottom:12px;"></div>
       <!-- 월별 필터 탭 -->
+      <div id="smt-year-tabs" style="margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap;"></div>
       <div id="smt-filter-bar" style="margin-bottom:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
         <span style="font-size:11px;color:#A0AEC0;white-space:nowrap;">입고예정일 기준</span>
         <div id="smt-month-tabs" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
@@ -2001,6 +2002,8 @@ async function _sharedSyncAll() {
         try { localStorage.setItem(k, JSON.stringify(d)); } catch(e) {}
         // 판매데이터는 IndexedDB(_salesCache)가 실제 데이터 소스라 localStorage만으론 화면에 반영 안 됨 → 별도 반영
         if (k === 'gabe_sales_v1' && typeof _ingestSyncedSales === 'function') _ingestSyncedSales(d);
+        // 정산데이터: localStorage 용량 초과로 setItem이 실패해도 메모리(smtDB)는 서버 최신본으로 갱신
+        if (k === 'gabe_settlement_v1' && typeof smtIngestSynced === 'function') smtIngestSynced(d);
       }
       meta[k] = remoteMeta[k];
     }
@@ -13048,20 +13051,51 @@ let smtDB = { orders:{}, settlements:{}, savedAt:'' };
 let smtOrderData = null;
 let smtSettleData = null;
 let smtSelectedMonth = '전체';
+let smtSelectedYear = '';
 
 // 정산데이터 페이지 재렌더링 캐시 — 관련 데이터가 실제로 바뀌었을 때만 다시 그림
 let _settlementPageDirty=true;
 function _markSettlementDirty(){ _settlementPageDirty=true; }
 
+// localStorage(브라우저 전체 약 5MB 공유)가 용량 초과로 저장에 실패하면 옛 데이터가 남아있게 되는데,
+// 예전엔 그 옛 데이터로 메모리를 덮어쓴 뒤 새 월을 합쳐 서버에 통째로 저장해서 직전 월(9월 등)이 사라지는 문제가 있었음.
+// → 저장 시각(savedAt)이 메모리보다 오래된 localStorage 값으로는 덮어쓰지 않음
 function smtLoadDB(){
-  try{ const raw=localStorage.getItem(SMT_LS_KEY); if(raw) smtDB=JSON.parse(raw); }catch(e){}
+  try{
+    const raw=localStorage.getItem(SMT_LS_KEY);
+    if(raw){ const d=JSON.parse(raw); if(!smtDB.savedAt||(d.savedAt||'')>=smtDB.savedAt) smtDB=d; }
+  }catch(e){}
   if(!smtDB.orders) smtDB.orders={};
   if(!smtDB.settlements) smtDB.settlements={};
 }
-function smtSaveDB(){ smtDB.savedAt=new Date().toISOString(); localStorage.setItem(SMT_LS_KEY,JSON.stringify(smtDB)); _sharedWrite(SMT_LS_KEY,smtDB); _markSettlementDirty(); }
+function smtIngestSynced(d){
+  if(!d||typeof d!=='object') return;
+  if(!smtDB.savedAt||(d.savedAt||'')>=smtDB.savedAt) smtDB=d;
+  if(!smtDB.orders) smtDB.orders={};
+  if(!smtDB.settlements) smtDB.settlements={};
+}
+// 두 DB를 합침(발주번호·계산서번호 단위 합집합, 겹치면 b 우선)
+function smtUnionDB(a,b){
+  const out={orders:{...((a&&a.orders)||{})},settlements:{}};
+  Object.entries((a&&a.settlements)||{}).forEach(([po,inv])=>{ out.settlements[po]={...inv}; });
+  Object.entries((b&&b.orders)||{}).forEach(([po,d])=>{ out.orders[po]={...d}; });
+  Object.entries((b&&b.settlements)||{}).forEach(([po,inv])=>{ out.settlements[po]={...(out.settlements[po]||{}),...inv}; });
+  return out;
+}
+function smtSaveDB(){
+  smtDB.savedAt=new Date().toISOString();
+  try{ localStorage.setItem(SMT_LS_KEY,JSON.stringify(smtDB)); }
+  catch(e){ console.warn('[정산데이터] 브라우저 저장공간 초과 — 서버에만 저장됩니다.', e.message); }
+  _sharedWrite(SMT_LS_KEY,smtDB); _markSettlementDirty();
+}
 
-function smtMergeAndSave(){
+async function smtMergeAndSave(){
   if(!canEdit('settlement_view')){ alert('정산데이터 저장 권한이 없습니다.'); return; }
+  // 저장 직전 서버 최신본과 병합 — 이 PC의 데이터가 오래됐어도 서버에 있는 기존 월이 지워지지 않게 함
+  if(_serverConnected){
+    const remote=await _sharedRead(SMT_LS_KEY);
+    if(remote&&typeof remote==='object'){ const u=smtUnionDB(remote,smtDB); smtDB.orders=u.orders; smtDB.settlements=u.settlements; }
+  }
   if(smtOrderData){ Object.entries(smtOrderData).forEach(([po,d])=>{
     if(!smtDB.orders[po]) smtDB.orders[po]={...d};
     else{ if(d.입고예정일) smtDB.orders[po].입고예정일=d.입고예정일; smtDB.orders[po].입고금액합계=d.입고금액합계; }
@@ -13085,7 +13119,7 @@ function smtMergeAndSave(){
 function smtClearDB(){
   if(!confirm('저장된 정산 데이터를 모두 삭제하시겠습니까?')) return;
   smtDB={orders:{},settlements:{},savedAt:''}; localStorage.removeItem(SMT_LS_KEY);
-  smtOrderData=null; smtSettleData=null; smtSelectedMonth='전체';
+  smtOrderData=null; smtSettleData=null; smtSelectedMonth='전체'; smtSelectedYear='';
   document.getElementById('smt-save-bar').style.display='none';
   document.getElementById('smt-order-text').textContent='클릭하여 파일 선택';
   document.getElementById('smt-settle-text').textContent='클릭하여 파일 선택';
@@ -13117,13 +13151,19 @@ function smtMergedData(){
   return {orders,settlements};
 }
 
-function smtGetMonths(orders){
+function smtGetYears(orders){
   const s=new Set();
-  Object.values(orders).forEach(o=>{ const dt=smtNormalizeDate(o.입고예정일||''); if(dt&&dt.length>=7) s.add(dt.substring(0,7)); });
+  Object.values(orders).forEach(o=>{ const dt=smtNormalizeDate(o.입고예정일||''); if(/^\d{4}/.test(dt)) s.add(dt.substring(0,4)); });
+  return [...s].sort();
+}
+function smtGetMonths(orders,year){
+  const s=new Set();
+  Object.values(orders).forEach(o=>{ const dt=smtNormalizeDate(o.입고예정일||''); if(dt&&dt.length>=7&&(!year||dt.startsWith(year))) s.add(dt.substring(0,7)); });
   return ['전체',...[...s].sort()];
 }
-function smtFmtYM(ym){ return ym&&ym.length>=7?`${ym.substring(0,4)}년 ${parseInt(ym.substring(5,7))}월`:ym; }
+function smtFmtYM(ym){ return ym&&ym.length>=7?`${parseInt(ym.substring(5,7))}월`:ym; }
 function smtSetMonth(m){ smtSelectedMonth=m; smtRenderPage(); }
+function smtSetYear(y){ smtSelectedYear=y; smtSelectedMonth='전체'; smtRenderPage(); }
 
 function smtRenderPage(){
   const {orders,settlements}=smtMergedData();
@@ -13142,14 +13182,26 @@ function smtRenderPage(){
   }
   document.getElementById('smt-empty').style.display='none';
   document.getElementById('smt-result').style.display='block';
-  const months=smtGetMonths(orders);
+  const years=smtGetYears(orders);
+  if(!years.includes(smtSelectedYear)) smtSelectedYear=years.length?years[years.length-1]:'';
+  document.getElementById('smt-year-tabs').innerHTML=years.map(y=>{
+    const active=y===smtSelectedYear;
+    return `<button onclick="smtSetYear('${y}')" style="font-size:13px;padding:5px 16px;border-radius:8px;border:1.5px solid ${active?'#2D1660':'#ddd'};background:${active?'#2D1660':'#fff'};color:${active?'#fff':'#555'};cursor:pointer;font-weight:700;">${y}년</button>`;
+  }).join('');
+  // 선택한 연도의 발주만 대상으로 집계·표시 (입고예정일 없는 발주는 최신 연도에 포함)
+  const latestYear=years.length?years[years.length-1]:'';
+  const yearPOs=Object.keys(orders).filter(po=>{
+    const dt=smtNormalizeDate((orders[po]||{}).입고예정일||'');
+    return /^\d{4}/.test(dt)?dt.startsWith(smtSelectedYear):smtSelectedYear===latestYear;
+  });
+  const months=smtGetMonths(orders,smtSelectedYear);
   if(!months.includes(smtSelectedMonth)) smtSelectedMonth='전체';
   document.getElementById('smt-month-tabs').innerHTML=months.map(m=>{
     const active=m===smtSelectedMonth;
-    return `<button onclick="smtSetMonth('${m}')" style="font-size:12px;padding:4px 12px;border-radius:100px;border:1.5px solid ${active?'#2D1660':'#ddd'};background:${active?'#2D1660':'#fff'};color:${active?'#fff':'#555'};cursor:pointer;font-weight:${active?700:400};">${m==='전체'?'전체':smtFmtYM(m)}</button>`;
+    return `<button onclick="smtSetMonth('${m}')" style="font-size:12px;padding:4px 12px;border-radius:100px;border:1.5px solid ${active?'#2D1660':'#ddd'};background:${active?'#2D1660':'#fff'};color:${active?'#fff':'#555'};cursor:pointer;font-weight:${active?700:400};">${m==='전체'?`${smtSelectedYear}년 전체`:smtFmtYM(m)}</button>`;
   }).join('');
   let tExp=0,tSet=0,nNoInv=0;
-  Object.keys(orders).forEach(po=>{
+  yearPOs.forEach(po=>{
     tExp+=(orders[po]||{}).입고금액합계||0;
     const inv=settlements[po]||{};
     Object.values(inv).forEach(v=>{ tSet+=v.금액합||0; });
@@ -13158,15 +13210,15 @@ function smtRenderPage(){
   const fmt=n=>Math.round(n).toLocaleString('ko-KR')+'원';
   const totDiff=tExp-tSet;
   document.getElementById('smt-stats').innerHTML=`
-    <div class="stat"><div class="sl">전체 발주</div><div class="sv">${Object.keys(orders).length}건</div></div>
+    <div class="stat"><div class="sl">${smtSelectedYear}년 발주</div><div class="sv">${yearPOs.length}건</div></div>
     <div class="stat"><div class="sl">예상 정산금액</div><div class="sv" style="font-size:13px;">${fmt(tExp)}</div></div>
     <div class="stat"><div class="sl">발행 계산서금액</div><div class="sv" style="font-size:13px;">${fmt(tSet)}</div></div>
     <div class="stat"><div class="sl">차액 합계</div><div class="sv" style="font-size:12px;color:${totDiff>0?'#E74C3C':totDiff<0?'#4318FF':'#059669'}">${fmt(totDiff)}</div></div>
     <div class="stat"><div class="sl">미정산</div><div class="sv" style="color:#E74C3C;">${nNoInv}건</div></div>`;
-  let filteredPOs=Object.keys(orders);
+  let filteredPOs=yearPOs.slice();
   if(smtSelectedMonth!=='전체') filteredPOs=filteredPOs.filter(po=>{ const dt=smtNormalizeDate((orders[po]||{}).입고예정일||''); return dt.startsWith(smtSelectedMonth); });
   filteredPOs.sort((a,b)=>{ const da=smtNormalizeDate((orders[a]||{}).입고예정일||'')||'9999',db=smtNormalizeDate((orders[b]||{}).입고예정일||'')||'9999'; return da.localeCompare(db)||a.localeCompare(b); });
-  document.getElementById('smt-count').textContent=`${smtSelectedMonth==='전체'?'전체':'해당월'} ${filteredPOs.length}건`;
+  document.getElementById('smt-count').textContent=`${smtSelectedMonth==='전체'?smtSelectedYear+'년 전체':'해당월'} ${filteredPOs.length}건`;
   // 필터된 합계 계산
   const fExp=filteredPOs.reduce((s,po)=>s+((orders[po]||{}).입고금액합계||0),0);
   const fSet=filteredPOs.reduce((s,po)=>s+Object.values(settlements[po]||{}).reduce((ss,v)=>ss+(v.금액합||0),0),0);
