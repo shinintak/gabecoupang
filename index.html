@@ -1337,7 +1337,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
           <span>📋 작업지시서 생성</span>
           <button onclick="downloadLotteWorkOrder()" style="height:30px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">📥 작업지시서 다운로드 (.xlsx)</button>
         </div>
-        <div style="font-size:11.5px;color:#8A94A6;">오산·김해 센터별로 시트를 나눠서 작업지시서(SPEC·바코드·상품명·수량·박스번호·입수량·작업수량(박스)) 엑셀 1개로 내려받습니다. A4 인쇄에 맞춰 열·행 크기가 설정되어 있습니다.</div>
+        <div style="font-size:11.5px;color:#8A94A6;">오산·김해 센터별로 시트를 나눠서 작업지시서(SPEC·바코드·물류바코드·상품명·수량·박스번호·입수량·작업수량(박스)) 엑셀 1개로 내려받습니다. A4 인쇄에 맞춰 열·행 크기가 설정되어 있습니다.</div>
       </div>
       <div class="lotte-centers-row" style="margin-top:20px;">
         <div class="lotte-center-col">
@@ -9762,6 +9762,15 @@ async function downloadLotteLabelsBulk(){
 function _lotteParseOrderHtml(text){
   const doc=new DOMParser().parseFromString(text,'text/html');
   const trs=[...doc.querySelectorAll('tr[bgcolor="white"]')];
+  // 상단 "예약시간" 칸 옆에 적힌 날짜(예: 2026-11-04 14:30) → 작업지시서 납기일로 사용
+  let reserveDate='';
+  const resvCell=[...doc.querySelectorAll('td,th')].find(td=>td.textContent.replace(/\s+/g,'')==='예약시간');
+  if(resvCell){
+    let sib=resvCell.nextElementSibling;
+    while(sib&&!sib.textContent.trim()) sib=sib.nextElementSibling;
+    const m=sib&&sib.textContent.match(/\d{4}-\d{2}-\d{2}/);
+    if(m) reserveDate=m[0];
+  }
   const rows=[];
   trs.forEach(tr=>{
     const tds=[...tr.children].map(td=>td.textContent.replace(/\s+/g,' ').trim());
@@ -9772,7 +9781,8 @@ function _lotteParseOrderHtml(text){
       packQty:parseFloat(tds[6].replace(/,/g,''))||0,
       orderQty:parseFloat(tds[7].replace(/,/g,''))||0,
       receiveQty:parseFloat(tds[8].replace(/,/g,''))||0,
-      unit:tds[9]
+      unit:tds[9],
+      reserveDate
     });
   });
   return rows;
@@ -9907,13 +9917,15 @@ function downloadLotteWorkOrder(){
 
   sheetDefs.forEach(({label,data},sheetIdx)=>{
     const rows=data.rows;
-    const deliveryDate=(rows[0]&&rows[0].orderDate)||'';
+    // 납기일 = 발주서의 "예약시간" 날짜 (예약시간 파싱 이전에 업로드된 발주서는 주문일자로 대체)
+    const deliveryDate=(rows.find(r=>r.reserveDate)||{}).reserveDate||(rows[0]&&rows[0].orderDate)||'';
 
     const items=rows.map(r=>{
       const base=db[r.productCode];
       return {
         spec:base?base.spec:'',
         barcode:r.productCode,
+        logiBarcode:base?base.logisticsBarcode||'':'',
         name:r.productName,
         qty:r.packQty*r.orderQty,
         packQty:r.packQty,
@@ -9927,48 +9939,49 @@ function downloadLotteWorkOrder(){
     let R=0;
     const centerParen=label.includes('오산')?'(오산)':label.includes('김해')?'(김해)':'';
     ws[ec(R,0)]=cs('롯데마트 작업지시서',S_TITLE);
-    for(let c=1;c<5;c++) ws[ec(R,c)]=cs('',S_TITLE);
-    merges.push({s:{r:R,c:0},e:{r:R,c:4}});
-    ws[ec(R,5)]=cs(centerParen,S_TITLE_RED);
-    ws[ec(R,6)]=cs('',S_TITLE_RED);
-    merges.push({s:{r:R,c:5},e:{r:R,c:6}});
+    for(let c=1;c<6;c++) ws[ec(R,c)]=cs('',S_TITLE);
+    merges.push({s:{r:R,c:0},e:{r:R,c:5}});
+    ws[ec(R,6)]=cs(centerParen,S_TITLE_RED);
+    ws[ec(R,7)]=cs('',S_TITLE_RED);
+    merges.push({s:{r:R,c:6},e:{r:R,c:7}});
     rowHeights[R]={hpt:43.5}; R++;
 
     ws[ec(R,0)]=cs('센터명',S_LBL);
-    ws[ec(R,1)]=cs(label,S_VAL); ws[ec(R,2)]=cs('',S_VAL);
-    ws[ec(R,3)]=cs('납기일',S_LBL);
-    ws[ec(R,4)]=cs(deliveryDate,S_VAL); ws[ec(R,5)]=cs('',S_VAL); ws[ec(R,6)]=cs('',S_VAL);
-    merges.push({s:{r:R,c:1},e:{r:R,c:2}});
-    merges.push({s:{r:R,c:4},e:{r:R,c:6}});
+    ws[ec(R,1)]=cs(label,S_VAL); ws[ec(R,2)]=cs('',S_VAL); ws[ec(R,3)]=cs('',S_VAL);
+    ws[ec(R,4)]=cs('납기일',S_LBL);
+    ws[ec(R,5)]=cs(deliveryDate,S_VAL); ws[ec(R,6)]=cs('',S_VAL); ws[ec(R,7)]=cs('',S_VAL);
+    merges.push({s:{r:R,c:1},e:{r:R,c:3}});
+    merges.push({s:{r:R,c:5},e:{r:R,c:7}});
     rowHeights[R]={hpt:20.1}; R++;
 
     const headerRow=R;
-    ['SPEC','바코드','상품명','수량','작업박스','입수량','작업수량(박스)'].forEach((h,c)=>{ ws[ec(R,c)]=cs(h,S_HDR); });
+    ['SPEC','바코드','물류바코드','상품명','수량','작업박스','입수량','작업수량(박스)'].forEach((h,c)=>{ ws[ec(R,c)]=cs(h,S_HDR); });
     rowHeights[R]={hpt:37.5}; R++;
 
     items.forEach(item=>{
       ws[ec(R,0)]=cs(item.spec,S_C);
       ws[ec(R,1)]=cs(item.barcode,S_C);
-      ws[ec(R,2)]=cs(item.name,S_L);
-      ws[ec(R,3)]=cn(item.qty,S_C);
-      ws[ec(R,4)]=cs(item.workBox,S_C); // 작업박스 — 기본데이터의 작업박스 값을 바코드로 매칭
-      ws[ec(R,5)]=cn(item.packQty,S_C);
-      ws[ec(R,6)]=cn(item.boxQty,S_C);
+      ws[ec(R,2)]=cs(item.logiBarcode,S_C); // 물류바코드 — 기본데이터의 물류바코드 값을 바코드로 매칭
+      ws[ec(R,3)]=cs(item.name,S_L);
+      ws[ec(R,4)]=cn(item.qty,S_C);
+      ws[ec(R,5)]=cs(item.workBox,S_C); // 작업박스 — 기본데이터의 작업박스 값을 바코드로 매칭
+      ws[ec(R,6)]=cn(item.packQty,S_C);
+      ws[ec(R,7)]=cn(item.boxQty,S_C);
       rowHeights[R]={hpt:24}; R++;
     });
 
     ws[ec(R,0)]=cs('합계',S_SUM);
-    ws[ec(R,1)]=cs('',S_SUM); ws[ec(R,2)]=cs('',S_SUM);
-    merges.push({s:{r:R,c:0},e:{r:R,c:2}});
-    ws[ec(R,3)]=cn(items.reduce((s,it)=>s+(it.qty||0),0),S_SUM);
-    ws[ec(R,4)]=cs('',S_SUM);
+    ws[ec(R,1)]=cs('',S_SUM); ws[ec(R,2)]=cs('',S_SUM); ws[ec(R,3)]=cs('',S_SUM);
+    merges.push({s:{r:R,c:0},e:{r:R,c:3}});
+    ws[ec(R,4)]=cn(items.reduce((s,it)=>s+(it.qty||0),0),S_SUM);
     ws[ec(R,5)]=cs('',S_SUM);
-    ws[ec(R,6)]=cn(items.reduce((s,it)=>s+(it.boxQty||0),0),S_SUM);
+    ws[ec(R,6)]=cs('',S_SUM);
+    ws[ec(R,7)]=cn(items.reduce((s,it)=>s+(it.boxQty||0),0),S_SUM);
     rowHeights[R]={hpt:24}; R++;
 
     ws['!merges']=merges;
-    ws['!ref']=`A1:G${R}`;
-    ws['!cols']=[{wch:10.86},{wch:17},{wch:40.29},{wch:9.86},{wch:9.86},{wch:9.86},{wch:9.86}];
+    ws['!ref']=`A1:H${R}`;
+    ws['!cols']=[{wch:10.86},{wch:16},{wch:17},{wch:32},{wch:8.5},{wch:9},{wch:8.5},{wch:9.86}];
     ws['!rows']=rowHeights;
 
     // A4 세로 인쇄에 맞춰 여백·배율 설정 (참고 양식 파일과 동일하게 85% 축소 인쇄)
