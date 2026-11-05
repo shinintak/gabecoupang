@@ -1349,9 +1349,11 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
           <div id="lotte-result-gimhae"></div>
         </div>
       </div>
+      <div id="lotte-order-mgr-centers" style="margin-top:20px;"></div>
     </div>
 
     <div id="lotte-sec-delivery" style="display:none;">
+      <div id="lotte-order-mgr-delivery" style="margin-bottom:18px;"></div>
       <div id="lotte-delivery-content"></div>
     </div>
 
@@ -1794,6 +1796,7 @@ const _SHARED_KEYS = [
   'gabe_lotte_gimhae_v1',    // 롯데마트 김해센터
   'gabe_lotte_osan_v1',      // 롯데마트 오산센터
   'gabe_lotte_history_v1',   // 롯데마트 날짜별 납품데이터 이력
+  'gabe_lotte_history_del_v1', // 롯데마트 납품이력 삭제기록(다른 PC 병합 시 되살아남 방지)
   'gabe_basedata_ref_v1',    // 기초데이터: SKU ID·세트구성·바코드
   'gabe_basedata_margin_v1', // 기초데이터: 마진율
   'gabe_michulgo_criteria_v1', // 출고리스트: 미출고 기준값
@@ -2807,6 +2810,7 @@ const _DATA_KEYS = [
   'gabe_lotte_gimhae_v1',    // 롯데마트 김해센터
   'gabe_lotte_osan_v1',      // 롯데마트 오산센터
   'gabe_lotte_history_v1',   // 롯데마트 날짜별 납품데이터 이력
+  'gabe_lotte_history_del_v1', // 롯데마트 납품이력 삭제기록(다른 PC 병합 시 되살아남 방지)
   'gabe_basedata_ref_v1',    // 기초데이터: SKU ID·세트구성·바코드
   'gabe_basedata_margin_v1', // 기초데이터: 마진율
   'gabe_michulgo_criteria_v1', // 출고리스트: 미출고 기준값
@@ -9029,6 +9033,7 @@ document.getElementById('basedata-margin-fi').addEventListener('change',function
 const LOTTE_BASE_KEY='gabe_lotte_base_v1';
 const LOTTE_CENTER_KEYS={ gimhae:'gabe_lotte_gimhae_v1', osan:'gabe_lotte_osan_v1' };
 const LOTTE_HISTORY_KEY='gabe_lotte_history_v1';
+const LOTTE_HISTORY_DEL_KEY='gabe_lotte_history_del_v1';
 
 function switchBrand(brand){
   const stack=document.getElementById('sb-menu-stack');
@@ -9073,6 +9078,7 @@ function openLotteCentersPage(){
   setLotteSidebarActive('centers');
   _lotteRenderCenterPage('gimhae');
   _lotteRenderCenterPage('osan');
+  _lotteRenderOrderMgr('lotte-order-mgr-centers');
 }
 
 function openLotteDeliveryPage(){
@@ -9082,6 +9088,7 @@ function openLotteDeliveryPage(){
   document.getElementById('lotte-sec-centers').style.display='none';
   document.getElementById('lotte-sec-delivery').style.display='block';
   setLotteSidebarActive('delivery');
+  _lotteRenderOrderMgr('lotte-order-mgr-delivery');
   _lotteRenderDeliveryCharts();
 }
 
@@ -9092,17 +9099,30 @@ function lotteBaseSave(d){
 }
 function lotteHistoryLoad(){ try{ return JSON.parse(localStorage.getItem(LOTTE_HISTORY_KEY)||'{}'); }catch(e){ return {}; } }
 // 같은 날짜·센터에 발주서가 여러 건이면 이전 기록을 덮어쓰지 않고 합침
-// (발주번호+상품코드가 같은 행은 새 업로드로 교체 → 같은 파일 재업로드해도 중복 집계 안 됨)
+// (발주번호+상품코드가 같은 행은 수정시각(_mt)이 더 최근인 쪽으로 교체 → 재업로드해도 중복 집계 안 됨, 앱에서 수정한 값도 유지)
+function _lotteRowKey(r){ return (r.orderNo||'')+'|'+(r.productCode||''); }
+// 행 수량이 바뀌어 결과를 다시 계산할 때, 단가는 업로드 당시 스냅샷(SPEC별)을 유지
+function _lotteRecompute(rows, prevResults){
+  const res=_lotteComputeCenterResult(rows);
+  const pm={};
+  (prevResults||[]).forEach(pr=>{ ((pr&&pr.erpRows)||[]).forEach(e=>{ if(e.SPEC!=null&&pm[e.SPEC]==null) pm[e.SPEC]=e.price; }); });
+  res.erpRows.forEach(e=>{ if(pm[e.SPEC]!=null) e.price=pm[e.SPEC]; });
+  return res;
+}
 function _lotteMergeRec(oldRec,newRec){
   if(!oldRec||!oldRec.rows) return newRec;
   if(!newRec||!newRec.rows) return oldRec;
-  const key=r=>(r.orderNo||'')+'|'+(r.productCode||'');
-  const newKeys=new Set(newRec.rows.map(key));
-  const rows=oldRec.rows.filter(r=>!newKeys.has(key(r))).concat(newRec.rows);
-  if(rows.length===newRec.rows.length) return newRec;
+  const stamp=rec=>rec.rows.map(r=>r._mt?r:Object.assign({},r,{_mt:rec.uploadedAt||''}));
+  const map=new Map();
+  stamp(oldRec).forEach(r=>map.set(_lotteRowKey(r),r));
+  stamp(newRec).forEach(r=>{
+    const k=_lotteRowKey(r), p=map.get(k);
+    if(!p||(r._mt||'')>=(p._mt||'')) map.set(k,r);
+  });
+  const rows=[...map.values()];
   const files=Array.from(new Set(String(oldRec.fileName||'').split(', ').concat(String(newRec.fileName||'').split(', ')).filter(Boolean)));
   const uploadedAt=(oldRec.uploadedAt||'')>(newRec.uploadedAt||'')?oldRec.uploadedAt:newRec.uploadedAt;
-  return { uploadedAt, fileName:files.join(', '), rows, result:_lotteComputeCenterResult(rows) };
+  return { uploadedAt, fileName:files.join(', '), rows, result:_lotteRecompute(rows,[newRec.result,oldRec.result]) };
 }
 function _lotteMergeHist(base,add){
   const out=Object.assign({},base);
@@ -9112,18 +9132,53 @@ function _lotteMergeHist(base,add){
   });
   return out;
 }
+// ── 삭제기록(tombstone): { "날짜|센터|발주번호|상품코드": 삭제시각ISO }
+// 저장 시 서버 최신본과 병합하기 때문에, 삭제한 행을 기록해두지 않으면 서버/다른 PC 사본에서 다시 살아남.
+// 삭제 이후에 같은 발주서를 다시 업로드하면(_mt가 더 최근) 정상 등록됨.
+function lotteTombLoad(){ try{ return JSON.parse(localStorage.getItem(LOTTE_HISTORY_DEL_KEY)||'{}')||{}; }catch(e){ return {}; } }
+function _lotteMergeTomb(a,b){
+  const out=Object.assign({},a||{});
+  Object.keys(b||{}).forEach(k=>{ if(!out[k]||b[k]>out[k]) out[k]=b[k]; });
+  return out;
+}
+function _lotteApplyTomb(hist,tomb){
+  const out={};
+  Object.keys(hist||{}).forEach(d=>{
+    const day=hist[d]; if(!day) return;
+    ['osan','gimhae'].forEach(c=>{
+      const rec=day[c]; if(!rec||!rec.rows) return;
+      const rows=rec.rows.filter(r=>{ const t=tomb[d+'|'+c+'|'+_lotteRowKey(r)]; return !t||(r._mt||rec.uploadedAt||'')>t; });
+      if(!rows.length) return;
+      if(!out[d]) out[d]={};
+      out[d][c]=rows.length===rec.rows.length?rec:Object.assign({},rec,{rows,result:_lotteRecompute(rows,[rec.result])});
+    });
+  });
+  return out;
+}
 async function lotteHistorySave(d){
-  try{ localStorage.setItem(LOTTE_HISTORY_KEY, JSON.stringify(d)); }catch(e){ alert('저장 용량이 초과되었습니다.'); }
+  let tomb=lotteTombLoad();
+  let merged=_lotteApplyTomb(d,tomb);
+  try{ localStorage.setItem(LOTTE_HISTORY_KEY, JSON.stringify(merged)); }catch(e){ alert('저장 용량이 초과되었습니다.'); }
   // 다른 PC에서 올린 기록이 아직 동기화 전이면 통째로 덮어써서 사라지므로, 서버 최신본과 합친 뒤 저장
-  let merged=d;
   if(_serverConnected){
-    const remote=await _sharedRead(LOTTE_HISTORY_KEY);
-    if(remote&&typeof remote==='object'){
-      merged=_lotteMergeHist(remote,d);
-      try{ localStorage.setItem(LOTTE_HISTORY_KEY, JSON.stringify(merged)); }catch(e){}
-    }
+    const [remote,rtomb]=await Promise.all([_sharedRead(LOTTE_HISTORY_KEY),_sharedRead(LOTTE_HISTORY_DEL_KEY)]);
+    if(rtomb&&typeof rtomb==='object') tomb=_lotteMergeTomb(rtomb,lotteTombLoad());
+    // 서버 응답 대기 중에 이 PC에서 또 저장했을 수 있으므로 로컬 최신본 기준으로 병합
+    const local=lotteHistoryLoad();
+    merged=_lotteApplyTomb((remote&&typeof remote==='object')?_lotteMergeHist(remote,local):local, tomb);
+    try{ localStorage.setItem(LOTTE_HISTORY_KEY, JSON.stringify(merged)); }catch(e){}
+    try{ localStorage.setItem(LOTTE_HISTORY_DEL_KEY, JSON.stringify(tomb)); }catch(e){}
+    _sharedWrite(LOTTE_HISTORY_DEL_KEY,tomb);
   }
   _sharedWrite(LOTTE_HISTORY_KEY,merged);
+  if(typeof _lotteRefreshAfterHistSync==='function') _lotteRefreshAfterHistSync();
+}
+// 행 삭제 → 삭제기록 남기고 이력에서 제거
+function _lotteTombAdd(entries){
+  const tomb=lotteTombLoad(), now=new Date().toISOString();
+  entries.forEach(k=>{ tomb[k]=now; });
+  try{ localStorage.setItem(LOTTE_HISTORY_DEL_KEY, JSON.stringify(tomb)); }catch(e){}
+  // 서버 반영은 바로 뒤 lotteHistorySave()가 서버 삭제기록과 병합해서 저장
 }
 function lotteCenterLoad(center){ try{ return JSON.parse(localStorage.getItem(LOTTE_CENTER_KEYS[center])||'null'); }catch(e){ return null; } }
 function lotteCenterSave(center,d){
@@ -9816,7 +9871,7 @@ function handleLotteOrderUpload(center,e){
       const rows=_lotteParseOrderHtml(ev.target.result);
       if(!rows.length){ alert('발주 항목을 찾을 수 없습니다. 파일 형식을 확인해주세요.'); return; }
       _lotteSaveOrderResult(center,file.name,rows);
-      _lotteRenderCenterPage(center);
+      _lotteRefreshAll();
     }catch(err){ alert('파일 처리 중 오류: '+err.message); }
     e.target.value='';
   };
@@ -9831,10 +9886,12 @@ function _lotteDetectCenter(rows,fileName){
 }
 
 function _lotteSaveOrderResult(center,fileName,rows){
+  const uploadedAt=new Date().toISOString();
+  rows=rows.map(r=>Object.assign({},r,{_mt:uploadedAt}));
   const result=_lotteComputeCenterResult(rows);
-  const record={ uploadedAt:new Date().toISOString(), fileName, rows, result };
-  lotteCenterSave(center,record);
-  const dateKey=(rows[0]&&rows[0].orderDate)||new Date().toISOString().slice(0,10);
+  const dateKey=(rows[0]&&rows[0].orderDate)||uploadedAt.slice(0,10);
+  const record={ uploadedAt, fileName, rows, result };
+  lotteCenterSave(center,Object.assign({histDate:dateKey},record));
   const hist=lotteHistoryLoad();
   if(!hist[dateKey]) hist[dateKey]={};
   hist[dateKey][center]=_lotteMergeRec(hist[dateKey][center],record);
@@ -9848,10 +9905,7 @@ function handleLotteOrderUploadMulti(e){
   let pending=files.length;
   const done=()=>{
     pending--;
-    if(pending===0){
-      _lotteRenderCenterPage('osan');
-      _lotteRenderCenterPage('gimhae');
-    }
+    if(pending===0) _lotteRefreshAll();
   };
   files.forEach(file=>{
     const reader=new FileReader();
@@ -9872,9 +9926,209 @@ function handleLotteOrderUploadMulti(e){
 
 function deleteLotteCenterOrder(center){
   if(!canEdit('lotte_upload')){ alert('롯데마트 데이터 업로드 권한이 없습니다.'); return; }
-  if(!confirm('업로드한 발주서를 삭제할까요? ERP 등록용 추출 결과도 함께 사라집니다.')) return;
+  const cr=lotteCenterLoad(center);
+  if(!cr) return;
+  if(!confirm('업로드한 발주서를 삭제할까요?\n\nERP 등록용 추출 결과와 납품데이터(날짜별 이력)에서 함께 삭제됩니다.')) return;
+  // 이력 날짜키 = 업로드 당시 발주서 첫 행의 주문일자 (histDate가 없는 예전 기록도 같은 규칙으로 찾음)
+  const date=cr.histDate||(cr.rows&&cr.rows[0]&&cr.rows[0].orderDate);
   lotteCenterSave(center,null);
-  _lotteRenderCenterPage(center);
+  if(date&&cr.rows&&cr.rows.length){
+    _lotteTombAdd(cr.rows.map(r=>date+'|'+center+'|'+_lotteRowKey(r)));
+    lotteHistorySave(lotteHistoryLoad());
+  }
+  _lotteRefreshAll();
+}
+
+// ══ 날짜별 발주서 관리 (센터별 데이터추출 / 납품데이터 페이지 공용) ══
+let _lotteMgrDate=null;
+const _LOTTE_CENTER_LABEL={osan:'오산센터',gimhae:'김해센터'};
+const _LOTTE_MGR_IDS=['lotte-order-mgr-centers','lotte-order-mgr-delivery'];
+function _lotteEsc(v){ return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function _lotteJsArg(v){ return "decodeURIComponent('"+encodeURIComponent(String(v==null?'':v)).replace(/'/g,'%27')+"')"; }
+function _lotteMgrCanEdit(){
+  if(!canEdit('lotte_upload')){ alert('롯데마트 데이터 업로드 권한이 없습니다.'); return false; }
+  return true;
+}
+function _lotteRefreshAll(){
+  _LOTTE_MGR_IDS.forEach(id=>_lotteRenderOrderMgr(id));
+  _lotteRenderCenterPage('osan');
+  _lotteRenderCenterPage('gimhae');
+  const del=document.getElementById('lotte-sec-delivery');
+  if(del&&del.style.display!=='none') _lotteRenderDeliveryCharts();
+}
+// 서버 병합 저장이 끝난 뒤 다른 PC 기록이 합쳐졌을 수 있으므로 다시 그림 (수정 중인 입력값이 있으면 건드리지 않음)
+function _lotteRefreshAfterHistSync(){
+  if(document.querySelector('.lotte-mgr-inp.dirty')) return;
+  _LOTTE_MGR_IDS.forEach(id=>_lotteRenderOrderMgr(id));
+  const del=document.getElementById('lotte-sec-delivery');
+  if(del&&del.style.display!=='none') _lotteRenderDeliveryCharts();
+}
+function lotteMgrSelDate(d){ _lotteMgrDate=d; _LOTTE_MGR_IDS.forEach(id=>_lotteRenderOrderMgr(id)); }
+function lotteMgrStepDate(step){
+  const hist=lotteHistoryLoad();
+  const dates=Object.keys(hist).filter(d=>hist[d]&&(hist[d].osan||hist[d].gimhae)).sort();
+  const i=dates.indexOf(_lotteMgrDate);
+  const n=dates[i+step];
+  if(n) lotteMgrSelDate(n);
+}
+function _lotteOrderGroups(rec){
+  const g=new Map();
+  (rec&&rec.rows||[]).forEach(r=>{ const k=r.orderNo||'(발주번호 없음)'; if(!g.has(k)) g.set(k,[]); g.get(k).push(r); });
+  return g;
+}
+function _lotteRenderOrderMgr(id){
+  const el=document.getElementById(id);
+  if(!el) return;
+  const hist=lotteHistoryLoad();
+  const dates=Object.keys(hist).filter(d=>hist[d]&&(hist[d].osan||hist[d].gimhae)).sort().reverse();
+  const head=`<div class="t" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;"><span>🗓 날짜별 발주서 관리</span>`;
+  if(!dates.length){
+    el.innerHTML=`<div class="lotte-card">${head}</div><div style="font-size:12px;color:#8A94A6;">저장된 발주서가 없습니다.</div></div>`;
+    return;
+  }
+  if(!_lotteMgrDate||!dates.includes(_lotteMgrDate)) _lotteMgrDate=dates[0];
+  const d=_lotteMgrDate, day=hist[d];
+  const btn='height:28px;padding:0 12px;font-size:11.5px;font-weight:700;border-radius:7px;cursor:pointer;white-space:nowrap;';
+  const bPri=btn+'border:none;background:#2D1660;color:#fff;';
+  const bSub=btn+'border:1.5px solid #E0E5FF;background:#fff;color:#4318FF;';
+  const bDel=btn+'border:1.5px solid #FCA5A5;background:#fff;color:#DC2626;';
+  const opts=dates.map(x=>{
+    const parts=['osan','gimhae'].filter(c=>hist[x][c]).map(c=>`${c==='osan'?'오산':'김해'} ${_lotteOrderGroups(hist[x][c]).size}건`);
+    return `<option value="${x}"${x===d?' selected':''}>${x}  (${parts.join(' · ')})</option>`;
+  }).join('');
+  let html=`<div class="lotte-card">${head}
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <button onclick="lotteMgrStepDate(-1)" style="${bSub}" title="이전 날짜">◀</button>
+      <select onchange="lotteMgrSelDate(this.value)" style="height:30px;padding:0 8px;font-size:12px;font-weight:700;border:1.5px solid #E0E5FF;border-radius:8px;color:#1B2559;">${opts}</select>
+      <button onclick="lotteMgrStepDate(1)" style="${bSub}" title="다음 날짜">▶</button>
+      <button onclick="lotteMgrDeleteDate('${d}')" style="${bDel}">🗑 이 날짜 전체 삭제</button>
+    </div></div>
+    <div style="font-size:11.5px;color:#8A94A6;margin-bottom:10px;">주문일자별로 저장된 발주서를 확인·수정·삭제합니다. 미출고·취소된 발주서는 삭제하고, 일부만 출고되면 주문량/입고(박스)를 고친 뒤 <b>수정 저장</b>을 누르세요. 납품데이터 집계와 센터별 추출 결과에 함께 반영됩니다.</div>
+    <div class="lotte-centers-row">`;
+  ['osan','gimhae'].forEach(c=>{
+    const rec=day[c];
+    html+=`<div class="lotte-center-col"><div style="font-size:13.5px;font-weight:800;color:#1E2530;margin:2px 0 8px;">🏭 ${_LOTTE_CENTER_LABEL[c]}</div>`;
+    if(!rec){
+      html+=`<div style="font-size:12px;color:#A0AEC0;padding:14px;border:1px dashed #E0E5FF;border-radius:10px;text-align:center;">이 날짜에 등록된 발주서가 없습니다.</div></div>`;
+      return;
+    }
+    const groups=_lotteOrderGroups(rec);
+    const amt=rec.result.erpRows.reduce((s,r)=>s+(r.price||0)*(r.qty||0),0);
+    const cr=lotteCenterLoad(c);
+    const loaded=cr&&(cr.histDate||(cr.rows&&cr.rows[0]&&cr.rows[0].orderDate))===d;
+    html+=`<div style="font-size:11.5px;color:#475467;margin-bottom:8px;">발주 <b>${groups.size}</b>건 · 박스 <b>${rec.result.totalBox.toLocaleString()}</b> · 무게 <b>${rec.result.totalWeightKg.toLocaleString(undefined,{maximumFractionDigits:1})}</b>kg · 금액 <b>${amt.toLocaleString()}</b>원${loaded?' · <span style="color:#4318FF;font-weight:700;">센터별 추출에 표시 중</span>':''}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+        <button onclick="lotteMgrSave('${id}','${c}')" style="${bPri}">💾 수정 저장</button>
+        <button onclick="lotteMgrLoadToCenter('${d}','${c}')" style="${bSub}">⬆ 센터별 추출로 불러오기</button>
+        <button onclick="lotteMgrDeleteCenter('${d}','${c}')" style="${bDel}">🗑 ${_LOTTE_CENTER_LABEL[c]} 삭제</button>
+      </div>`;
+    groups.forEach((rows,no)=>{
+      const box=rows.reduce((s,r)=>s+(r.receiveQty||0),0);
+      const resv=(rows.find(r=>r.reserveDate)||{}).reserveDate;
+      html+=`<details style="border:1px solid #E0E5FF;border-radius:10px;margin-bottom:8px;background:#fff;">
+        <summary style="cursor:pointer;padding:8px 10px;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <b style="color:#1B2559;">발주번호 ${_lotteEsc(no)}</b>
+          <span style="color:#8A94A6;">${rows.length}품목 · ${box.toLocaleString()}박스${resv?' · 납기 '+resv:''}</span>
+          <button onclick="event.preventDefault();event.stopPropagation();lotteMgrDeleteOrder('${d}','${c}',${_lotteJsArg(no)})" style="${bDel}margin-left:auto;height:24px;">🗑 발주서 삭제</button>
+        </summary>
+        <div style="overflow-x:auto;padding:0 8px 8px;">
+          <table class="lotte-tbl"><thead><tr><th>상품코드</th><th>상품명</th><th>입수</th><th>주문량</th><th>수량</th><th>입고(박스)</th><th></th></tr></thead><tbody>`;
+      rows.forEach(r=>{
+        const k=_lotteRowKey(r);
+        const inp=(f,v)=>`<input class="lotte-mgr-inp" data-c="${c}" data-k="${_lotteEsc(k)}" data-f="${f}" value="${v}" oninput="this.classList.add('dirty');this.style.background='#FFF7E6';" style="width:58px;height:24px;text-align:right;font-size:12px;border:1px solid #E0E5FF;border-radius:5px;padding:0 5px;">`;
+        html+=`<tr><td style="white-space:nowrap;">${_lotteEsc(r.productCode)}</td><td style="text-align:left;">${_lotteEsc(r.productName)}</td>
+          <td>${inp('packQty',r.packQty)}</td><td>${inp('orderQty',r.orderQty)}</td>
+          <td>${((r.packQty||0)*(r.orderQty||0)).toLocaleString()}</td><td>${inp('receiveQty',r.receiveQty)}</td>
+          <td><button onclick="lotteMgrDeleteRow('${d}','${c}',${_lotteJsArg(k)})" title="이 품목 삭제" style="border:none;background:none;color:#DC2626;cursor:pointer;font-size:13px;">✕</button></td></tr>`;
+      });
+      html+=`</tbody></table></div></details>`;
+    });
+    html+=`</div>`;
+  });
+  html+=`</div></div>`;
+  el.innerHTML=html;
+}
+
+// 이력에서 행 삭제(삭제기록 남김) + 센터별 추출 데이터에 같은 행이 있으면 함께 제거
+function _lotteDeleteHistRows(date, center, keys){
+  if(!keys.size) return;
+  _lotteTombAdd([...keys].map(k=>date+'|'+center+'|'+k));
+  const cr=lotteCenterLoad(center);
+  if(cr&&cr.rows){
+    const left=cr.rows.filter(r=>!keys.has(_lotteRowKey(r)));
+    if(left.length!==cr.rows.length) lotteCenterSave(center, left.length?Object.assign({},cr,{rows:left,result:_lotteRecompute(left,[cr.result])}):null);
+  }
+  lotteHistorySave(lotteHistoryLoad()); // 삭제기록이 적용되며 해당 행이 빠짐
+}
+function _lotteHistRec(date,center){ const h=lotteHistoryLoad(); return h[date]&&h[date][center]; }
+function lotteMgrDeleteRow(date,center,key){
+  if(!_lotteMgrCanEdit()) return;
+  const rec=_lotteHistRec(date,center); if(!rec) return;
+  const r=rec.rows.find(x=>_lotteRowKey(x)===key);
+  if(!confirm(`${date} ${_LOTTE_CENTER_LABEL[center]}\n${r?r.productName:key}\n\n이 품목을 삭제할까요?`)) return;
+  _lotteDeleteHistRows(date,center,new Set([key]));
+  _lotteRefreshAll();
+}
+function lotteMgrDeleteOrder(date,center,orderNo){
+  if(!_lotteMgrCanEdit()) return;
+  const rec=_lotteHistRec(date,center); if(!rec) return;
+  const rows=rec.rows.filter(r=>(r.orderNo||'(발주번호 없음)')===orderNo);
+  if(!confirm(`${date} ${_LOTTE_CENTER_LABEL[center]}\n발주번호 ${orderNo} (${rows.length}품목)\n\n이 발주서를 삭제할까요? 납품데이터 집계에서 빠집니다.`)) return;
+  _lotteDeleteHistRows(date,center,new Set(rows.map(_lotteRowKey)));
+  _lotteRefreshAll();
+}
+function lotteMgrDeleteCenter(date,center){
+  if(!_lotteMgrCanEdit()) return;
+  const rec=_lotteHistRec(date,center); if(!rec) return;
+  if(!confirm(`${date} ${_LOTTE_CENTER_LABEL[center]} 발주서 ${_lotteOrderGroups(rec).size}건을 모두 삭제할까요?`)) return;
+  _lotteDeleteHistRows(date,center,new Set(rec.rows.map(_lotteRowKey)));
+  _lotteRefreshAll();
+}
+function lotteMgrDeleteDate(date){
+  if(!_lotteMgrCanEdit()) return;
+  const h=lotteHistoryLoad(); if(!h[date]) return;
+  if(!confirm(`${date} 날짜의 오산·김해 발주서를 모두 삭제할까요?`)) return;
+  ['osan','gimhae'].forEach(c=>{ if(h[date][c]) _lotteDeleteHistRows(date,c,new Set(h[date][c].rows.map(_lotteRowKey))); });
+  _lotteRefreshAll();
+}
+function lotteMgrSave(id,center){
+  if(!_lotteMgrCanEdit()) return;
+  const date=_lotteMgrDate;
+  const hist=lotteHistoryLoad();
+  const rec=hist[date]&&hist[date][center];
+  if(!rec) return;
+  const byKey=new Map(rec.rows.map(r=>[_lotteRowKey(r),r]));
+  const now=new Date().toISOString();
+  const changed=new Set(); let bad=false;
+  document.querySelectorAll(`#${id} .lotte-mgr-inp[data-c="${center}"]`).forEach(inp=>{
+    const r=byKey.get(inp.dataset.k); if(!r) return;
+    const v=parseFloat(String(inp.value).replace(/,/g,'').trim());
+    if(isNaN(v)||v<0){ bad=true; return; }
+    if(r[inp.dataset.f]!==v){ r[inp.dataset.f]=v; r._mt=now; changed.add(inp.dataset.k); }
+  });
+  if(bad){ alert('숫자가 아닌 값이 있습니다. 0 이상의 숫자로 입력해주세요.'); return; }
+  if(!changed.size){ alert('변경된 내용이 없습니다.'); return; }
+  rec.result=_lotteRecompute(rec.rows,[rec.result]);
+  // 센터별 추출 데이터에 같은 발주서가 올라가 있으면 같은 값으로 맞춤
+  const cr=lotteCenterLoad(center);
+  if(cr&&cr.rows){
+    let hit=false;
+    cr.rows=cr.rows.map(r=>{ const k=_lotteRowKey(r); if(!changed.has(k)) return r; hit=true; const s=byKey.get(k); return Object.assign({},r,{packQty:s.packQty,orderQty:s.orderQty,receiveQty:s.receiveQty,_mt:now}); });
+    if(hit){ cr.result=_lotteRecompute(cr.rows,[cr.result]); lotteCenterSave(center,cr); }
+  }
+  lotteHistorySave(hist);
+  _lotteRefreshAll();
+  alert(`${date} ${_LOTTE_CENTER_LABEL[center]} — ${changed.size}개 품목 수정 저장했습니다.`);
+}
+// 과거 날짜 발주서를 센터별 데이터추출 화면으로 불러와 ERP 엑셀·작업지시서를 다시 만들 수 있게 함
+function lotteMgrLoadToCenter(date,center){
+  if(!_lotteMgrCanEdit()) return;
+  const rec=_lotteHistRec(date,center); if(!rec) return;
+  const cr=lotteCenterLoad(center);
+  if(cr&&!confirm(`센터별 데이터추출의 현재 ${_LOTTE_CENTER_LABEL[center]} 데이터를 ${date} 발주서로 바꿀까요?\n(납품데이터 이력은 그대로 유지됩니다)`)) return;
+  lotteCenterSave(center,{ histDate:date, uploadedAt:rec.uploadedAt, fileName:rec.fileName, rows:rec.rows, result:rec.result });
+  _lotteRefreshAll();
+  alert(`${date} ${_LOTTE_CENTER_LABEL[center]} 발주서를 센터별 데이터추출로 불러왔습니다.\nERP 엑셀·작업지시서 다운로드에 사용됩니다.`);
 }
 
 function downloadLotteErpAll(){
@@ -10031,7 +10285,7 @@ function _lotteRenderCenterPage(center){
         <button onclick="deleteLotteCenterOrder('${center}')" style="height:30px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:1.5px solid #FCA5A5;background:#fff;color:#DC2626;cursor:pointer;">🗑 삭제</button>
       </div>
     </div>
-    <div style="font-size:11px;color:#8A94A6;margin-bottom:8px;">${fileName} · ${dtStr} 업로드</div>
+    <div style="font-size:11px;color:#8A94A6;margin-bottom:8px;">${(data.histDate||(data.rows&&data.rows[0]&&data.rows[0].orderDate))?'주문일자 '+(data.histDate||data.rows[0].orderDate)+' · ':''}${fileName} · ${dtStr} 업로드</div>
     <div style="overflow-x:auto;">
       <table class="lotte-tbl">
         <thead><tr><th>SPEC</th><th>수량</th><th>단가</th><th>금액</th><th>매출구분</th></tr></thead>
