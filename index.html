@@ -1339,6 +1339,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
         </div>
         <div style="font-size:11.5px;color:#8A94A6;">오산·김해 센터별로 시트를 나눠서 작업지시서(SPEC·바코드·물류바코드·상품명·수량·박스번호·입수량·작업수량(박스)) 엑셀 1개로 내려받습니다. A4 인쇄에 맞춰 열·행 크기가 설정되어 있습니다.</div>
       </div>
+      <div id="lotte-label-export" style="margin-top:20px;"></div>
       <div class="lotte-centers-row" style="margin-top:20px;">
         <div class="lotte-center-col">
           <div style="font-size:15px;font-weight:800;color:#1E2530;margin:4px 0 10px;">🏭 오산센터</div>
@@ -1601,6 +1602,7 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script>
 /*
   통합 파일 시트 구조:
@@ -9079,6 +9081,7 @@ function openLotteCentersPage(){
   _lotteRenderCenterPage('gimhae');
   _lotteRenderCenterPage('osan');
   _lotteRenderOrderMgr('lotte-order-mgr-centers');
+  _lotteRenderLabelExport();
 }
 
 function openLotteDeliveryPage(){
@@ -9687,10 +9690,11 @@ function saveLotteLabelSettings(thenPrint){
 
 // 상품 1개의 물류바코드 PDF를 준비 (업로드 PDF 또는 설정대로 생성)
 // 반환: {ok:true, filename, blob} / {ok:false, reason, openModal}
-async function _lotteBuildLabelPdf(barcode){
+// opts: {copies, start} — 발주서 기준 출력처럼 장수를 지정할 때 설정값 대신 사용
+async function _lotteBuildLabelPdf(barcode, opts){
   const p=lotteBaseLoad()[barcode];
   if(!p) return {ok:false, reason:'상품 정보 없음'};
-  const cfg=_lotteLabelCfg(barcode);
+  const cfg=Object.assign(_lotteLabelCfg(barcode), opts||{});
   const safe=s=>String(s||'').replace(/[\\/:*?"<>|]/g,'_').trim();
   const fromUpload=async()=>{
     const dataUrl=await _lotteLabelPdfLoad(barcode);
@@ -9951,6 +9955,7 @@ function _lotteMgrCanEdit(){
 }
 function _lotteRefreshAll(){
   _LOTTE_MGR_IDS.forEach(id=>_lotteRenderOrderMgr(id));
+  _lotteRenderLabelExport();
   _lotteRenderCenterPage('osan');
   _lotteRenderCenterPage('gimhae');
   const del=document.getElementById('lotte-sec-delivery');
@@ -9960,6 +9965,7 @@ function _lotteRefreshAll(){
 function _lotteRefreshAfterHistSync(){
   if(document.querySelector('.lotte-mgr-inp.dirty')) return;
   _LOTTE_MGR_IDS.forEach(id=>_lotteRenderOrderMgr(id));
+  _lotteRenderLabelExport();
   const del=document.getElementById('lotte-sec-delivery');
   if(del&&del.style.display!=='none') _lotteRenderDeliveryCharts();
 }
@@ -10142,6 +10148,220 @@ function downloadLotteErpAll(){
 }
 
 // 작업자용 작업지시서 — 오산·김해 업로드 발주서 원본(rows)을 센터별 시트로 나눠 SPEC/바코드/상품명/수량/박스번호/입수량/작업수량(박스) 표로 정리
+// ══════════════════════════════════════
+// 발주서 기준 물류바코드 PDF 추출 (센터별 데이터추출 페이지)
+// 주문일자별 발주서의 상품마다 입고(박스) × 3장씩, 데이터업로드 페이지의 물류바코드 설정(생성 라벨 또는 업로드 PDF)을 그대로 사용
+// ══════════════════════════════════════
+const LOTTE_LABELS_PER_BOX=3;
+let _lotteLblDate=null;
+
+function _lotteLblDates(hist){
+  return Object.keys(hist).filter(d=>hist[d]&&(hist[d].osan||hist[d].gimhae)).sort().reverse();
+}
+// 같은 상품이 여러 발주서에 있으면 박스 수를 합쳐 한 번에 출력
+function _lotteLblItems(rec){
+  const db=lotteBaseLoad(), map=new Map();
+  ((rec&&rec.rows)||[]).forEach(r=>{
+    const code=r.productCode;
+    if(!map.has(code)) map.set(code,{barcode:code, name:r.productName, box:0});
+    map.get(code).box+=r.receiveQty||0;
+  });
+  return [...map.values()].map(it=>{
+    const p=db[it.barcode];
+    const cfg=p?_lotteLabelCfg(it.barcode):null;
+    let src='', warn='';
+    if(!p) warn='기본데이터에 없음';
+    else if(cfg.mode==='pdf'&&p.labelPdf) src='업로드 PDF';
+    else if(p.logisticsBarcode) src='라벨 생성';
+    else if(p.labelPdf) src='업로드 PDF';
+    else warn='물류바코드 미설정';
+    return Object.assign(it,{spec:p?p.spec:'', displayName:p?p.displayName:'', sheets:it.box*LOTTE_LABELS_PER_BOX, src, warn});
+  });
+}
+
+function _lotteRenderLabelExport(){
+  const el=document.getElementById('lotte-label-export');
+  if(!el) return;
+  const hist=lotteHistoryLoad();
+  const dates=_lotteLblDates(hist);
+  const head=`<div class="t" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;"><span>🏷 물류바코드 파일 다운로드</span>`;
+  if(!dates.length){
+    el.innerHTML=`<div class="lotte-card">${head}</div><div style="font-size:11.5px;color:#8A94A6;">저장된 발주서가 없습니다. 발주서를 업로드하면 주문일자별로 물류바코드 PDF를 받을 수 있습니다.</div></div>`;
+    return;
+  }
+  if(!_lotteLblDate||!dates.includes(_lotteLblDate)) _lotteLblDate=dates[0];
+  const d=_lotteLblDate, day=hist[d];
+  const db=lotteBaseLoad();
+  const btn='height:28px;padding:0 12px;font-size:11.5px;font-weight:700;border-radius:7px;cursor:pointer;white-space:nowrap;';
+  const bPri=btn+'border:none;background:#2D1660;color:#fff;';
+  const bSub=btn+'border:1.5px solid #E0E5FF;background:#fff;color:#4318FF;';
+  const opts=dates.map(x=>{
+    const parts=['osan','gimhae'].filter(c=>hist[x][c]).map(c=>`${c==='osan'?'오산':'김해'} ${hist[x][c].result?hist[x][c].result.totalBox:0}박스`);
+    return `<option value="${x}"${x===d?' selected':''}>${x}  (${parts.join(' · ')})</option>`;
+  }).join('');
+  let html=`<div class="lotte-card">${head}
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <button onclick="lotteLblStepDate(-1)" style="${bSub}" title="이전 날짜">◀</button>
+      <select onchange="lotteLblSelDate(this.value)" style="height:30px;padding:0 8px;font-size:12px;font-weight:700;border:1.5px solid #E0E5FF;border-radius:8px;color:#1B2559;">${opts}</select>
+      <button onclick="lotteLblStepDate(1)" style="${bSub}" title="다음 날짜">▶</button>
+      <button id="lotte-lbl-btn-all" onclick="downloadLotteOrderLabelsAll()" style="${bPri}">📦 전체 다운로드 (.zip)</button>
+    </div></div>
+    <div style="font-size:11.5px;color:#8A94A6;margin-bottom:10px;">선택한 주문일자의 발주서 기준으로, 상품별 <b>입고(박스) × ${LOTTE_LABELS_PER_BOX}장</b>씩 물류바코드 PDF를 센터별 1개 파일로 만듭니다. A4 라벨지(12칸)에 빈칸 없이 이어서 배치하고, 상품이 바뀌는 자리에는 다음 상품명을 적은 구분 칸 1칸이 들어갑니다. 라벨 모양·업로드 PDF는 데이터업로드 페이지의 물류바코드 설정을 그대로 사용합니다.</div>
+    <div class="lotte-centers-row">`;
+  ['osan','gimhae'].forEach(c=>{
+    const rec=day[c];
+    html+=`<div class="lotte-center-col"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 8px;"><span style="font-size:13.5px;font-weight:800;color:#1E2530;">🏭 ${_LOTTE_CENTER_LABEL[c]}</span>`;
+    if(!rec){
+      html+=`</div><div style="font-size:12px;color:#A0AEC0;padding:14px;border:1px dashed #E0E5FF;border-radius:10px;text-align:center;">이 날짜에 등록된 발주서가 없습니다.</div></div>`;
+      return;
+    }
+    const items=_lotteLblItems(rec);
+    const totalSheets=items.filter(i=>!i.warn).reduce((s,i)=>s+i.sheets,0);
+    html+=`<button id="lotte-lbl-btn-${c}" onclick="downloadLotteOrderLabels('${c}')" style="${bPri}">⬇ ${_LOTTE_CENTER_LABEL[c]} PDF (${totalSheets.toLocaleString()}장)</button></div>`;
+    const warnN=items.filter(i=>i.warn).length;
+    if(warnN) html+=`<div style="font-size:11.5px;color:#DC2626;margin-bottom:6px;">⚠ ${warnN}개 상품은 물류바코드가 없어 제외됩니다. 데이터업로드 페이지에서 설정해주세요.</div>`;
+    html+=`<div style="overflow-x:auto;"><table class="lotte-tbl"><thead><tr><th>SPEC</th><th>상품코드</th><th>상품명</th><th>입고(박스)</th><th>출력 장수</th><th>물류바코드</th></tr></thead><tbody>`;
+    items.forEach(i=>{
+      const setBtn=db[i.barcode]?` <button onclick="openLotteLabelModal(${_lotteJsArg(i.barcode)})" style="border:1px solid #E0E5FF;background:#fff;color:#4318FF;border-radius:6px;font-size:11px;cursor:pointer;">설정</button>`:'';
+      html+=`<tr${i.warn?' style="background:#FFF5F5;"':''}><td style="white-space:nowrap;">${_lotteEsc(i.spec)}</td><td style="white-space:nowrap;">${_lotteEsc(i.barcode)}</td><td style="text-align:left;">${_lotteEsc(i.displayName||i.name)}</td>
+        <td>${i.box.toLocaleString()}</td><td><b>${i.warn?'-':i.sheets.toLocaleString()}</b></td>
+        <td style="white-space:nowrap;">${i.warn?`<span style="color:#DC2626;">${i.warn}</span>${setBtn}`:`<span style="color:#4318FF;">${i.src}</span>`}</td></tr>`;
+    });
+    html+=`<tr style="background:#F4F6F9;font-weight:700;"><td colspan="3">합계</td><td>${items.reduce((s,i)=>s+i.box,0).toLocaleString()}</td><td>${totalSheets.toLocaleString()}</td><td></td></tr>`;
+    html+=`</tbody></table></div></div>`;
+  });
+  html+=`</div></div>`;
+  el.innerHTML=html;
+}
+function lotteLblSelDate(d){ _lotteLblDate=d; _lotteRenderLabelExport(); }
+function lotteLblStepDate(step){
+  const dates=_lotteLblDates(lotteHistoryLoad()).reverse();
+  const n=dates[dates.indexOf(_lotteLblDate)+step];
+  if(n) lotteLblSelDate(n);
+}
+
+// 상품이 바뀌는 자리에 넣는 구분 칸: 다음 상품의 상품명(한글)·SPEC·장수 표기
+function _lotteDrawLabelDivider(cv, it, pxPerMm){
+  const W=Math.round(LOTTE_LABEL_W*pxPerMm), H=Math.round(LOTTE_LABEL_H*pxPerMm);
+  cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+  const m=3*pxPerMm;
+  ctx.strokeStyle='#888'; ctx.lineWidth=0.4*pxPerMm; ctx.setLineDash([2*pxPerMm,1.5*pxPerMm]);
+  ctx.strokeRect(m,m,W-m*2,H-m*2); ctx.setLineDash([]);
+  ctx.fillStyle='#111'; ctx.textAlign='center'; ctx.textBaseline='top';
+  const f=s=>`bold ${s*pxPerMm}px "Malgun Gothic",Arial,sans-serif`;
+  const lines=[];
+  ctx.font=f(4.2);
+  const nameLines=_lotteWrapText(ctx, it.displayName||it.name||'', W-m*2-4*pxPerMm).slice(0,4);
+  lines.push({t:'▼ 다음 상품', s:3.2});
+  nameLines.forEach(t=>lines.push({t, s:4.2}));
+  if(it.spec) lines.push({t:`SPEC : ${it.spec}`, s:3.2});
+  lines.push({t:`${it.box.toLocaleString()}박스 · ${it.sheets.toLocaleString()}장`, s:3.2});
+  const total=lines.reduce((s,l)=>s+l.s*1.45,0)*pxPerMm;
+  let y=(H-total)/2;
+  lines.forEach(l=>{ ctx.font=f(l.s); ctx.fillText(l.t, W/2, y); y+=l.s*1.45*pxPerMm; });
+}
+
+// 센터 1곳의 물류바코드 PDF 생성 → {blob, filename, sheets, fails}
+// 생성 라벨은 A4(V3310 12칸)에 상품이 바뀌어도 빈칸 없이 이어서 배치하고, 상품이 바뀌는 자리에 구분 칸 1칸을 넣음
+// 업로드 PDF 상품은 칸 배치를 할 수 없어 새 페이지에서 파일 전체를 장수만큼 반복
+async function _lotteBuildOrderLabelPdf(date, center, onProgress){
+  if(!window.PDFLib) throw new Error('PDF 라이브러리(pdf-lib)를 불러오지 못했습니다. 인터넷 연결을 확인해주세요.');
+  const rec=(lotteHistoryLoad()[date]||{})[center];
+  if(!rec) return null;
+  const items=_lotteLblItems(rec);
+  const db=lotteBaseLoad();
+  const out=await PDFLib.PDFDocument.create();
+  const fails=[];
+  const L=LOTTE_LABEL_SHEET, per=L.cols*L.rows;
+  const PT=72/25.4, A4W=210, A4H=297;
+  const mx=(A4W-LOTTE_LABEL_W*L.cols-L.gapX*(L.cols-1))/2;
+  const my=(A4H-LOTTE_LABEL_H*L.rows-L.gapY*(L.rows-1))/2;
+  let page=null, slot=per, placed=0;
+  const place=img=>{
+    if(slot>=per){ page=out.addPage([A4W*PT, A4H*PT]); slot=0; }
+    const c=slot%L.cols, r=Math.floor(slot/L.cols);
+    const x=mx+c*(LOTTE_LABEL_W+L.gapX), yTop=my+r*(LOTTE_LABEL_H+L.gapY);
+    page.drawImage(img, {x:x*PT, y:(A4H-yTop-LOTTE_LABEL_H)*PT, width:LOTTE_LABEL_W*PT, height:LOTTE_LABEL_H*PT});
+    slot++;
+  };
+  const canvasPng=async cv=>out.embedPng(await (await new Promise(res=>cv.toBlob(res,'image/png'))).arrayBuffer());
+  const fail=(it,msg)=>fails.push(`${it.spec||it.barcode} ${it.displayName||it.name} : ${String(msg).split('\n')[0]}`);
+  let sheets=0, n=0;
+  for(const it of items){
+    if(onProgress) onProgress(++n, items.length);
+    if(it.warn){ fail(it, it.warn); continue; }
+    if(!it.sheets) continue;
+    if(it.src==='업로드 PDF'){
+      let r;
+      try{ r=await _lotteBuildLabelPdf(it.barcode, {copies:it.sheets, start:1}); }catch(e){ r={ok:false, reason:e.message}; }
+      if(!r.ok){ fail(it, r.reason); continue; }
+      const src=await PDFLib.PDFDocument.load(await r.blob.arrayBuffer(), {ignoreEncryption:true});
+      const idx=src.getPageIndices();
+      for(let k=0;k<it.sheets;k++){
+        const pages=await out.copyPages(src, idx);
+        pages.forEach(pg=>out.addPage(pg));
+      }
+      slot=per; // 다음 생성 라벨은 새 페이지에서 시작
+      placed++; sheets+=it.sheets;
+      continue;
+    }
+    const cv=document.createElement('canvas');
+    const err=_lotteDrawLabel(cv, _lotteLabelCfg(it.barcode), (db[it.barcode]||{}).logisticsBarcode||'', 12);
+    if(err){ fail(it, err); continue; }
+    const img=await canvasPng(cv);
+    if(placed){
+      const dv=document.createElement('canvas');
+      _lotteDrawLabelDivider(dv, it, 12);
+      place(await canvasPng(dv));
+    }
+    for(let k=0;k<it.sheets;k++) place(img);
+    placed++; sheets+=it.sheets;
+  }
+  if(!out.getPageCount()) return {blob:null, sheets:0, fails};
+  const bytes=await out.save();
+  return { blob:new Blob([bytes],{type:'application/pdf'}), filename:`롯데마트_물류바코드_${_LOTTE_CENTER_LABEL[center]}_${date}.pdf`, sheets, fails };
+}
+
+async function downloadLotteOrderLabels(center){
+  const d=_lotteLblDate;
+  const btn=document.getElementById('lotte-lbl-btn-'+center);
+  const label=btn?btn.textContent:'';
+  if(btn) btn.disabled=true;
+  try{
+    const r=await _lotteBuildOrderLabelPdf(d, center, (i,t)=>{ if(btn) btn.textContent=`⏳ 생성 중... (${i}/${t})`; });
+    if(!r){ alert('해당 날짜의 발주서가 없습니다.'); return; }
+    if(!r.blob){ alert('출력할 수 있는 물류바코드가 없습니다.'+(r.fails.length?'\n\n'+r.fails.join('\n'):'')); return; }
+    _lotteSaveBlob(r.blob, r.filename);
+    if(r.fails.length) alert(`${r.sheets.toLocaleString()}장 생성, ${r.fails.length}개 상품 제외\n\n`+r.fails.join('\n'));
+  }catch(e){ alert('물류바코드 PDF 생성 중 오류: '+e.message); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent=label; } }
+}
+
+async function downloadLotteOrderLabelsAll(){
+  const d=_lotteLblDate;
+  const day=lotteHistoryLoad()[d]||{};
+  const btn=document.getElementById('lotte-lbl-btn-all');
+  const label=btn?btn.textContent:'';
+  if(btn) btn.disabled=true;
+  try{
+    const zip=new JSZip(), fails=[];
+    let files=0;
+    for(const c of ['osan','gimhae']){
+      if(!day[c]) continue;
+      const r=await _lotteBuildOrderLabelPdf(d, c, (i,t)=>{ if(btn) btn.textContent=`⏳ ${_LOTTE_CENTER_LABEL[c]} 생성 중... (${i}/${t})`; });
+      if(!r) continue;
+      r.fails.forEach(f=>fails.push(`[${_LOTTE_CENTER_LABEL[c]}] ${f}`));
+      if(r.blob){ zip.file(r.filename, r.blob); files++; }
+    }
+    if(!files){ alert('출력할 수 있는 물류바코드가 없습니다.'+(fails.length?'\n\n'+fails.join('\n'):'')); return; }
+    _lotteSaveBlob(await zip.generateAsync({type:'blob'}), `롯데마트_물류바코드_${d}.zip`);
+    if(fails.length) alert(`${files}개 파일 생성, ${fails.length}개 상품 제외\n\n`+fails.join('\n'));
+  }catch(e){ alert('물류바코드 PDF 생성 중 오류: '+e.message); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent=label; } }
+}
+
 function downloadLotteWorkOrder(){
   const S=typeof XLSXStyle!=='undefined'?XLSXStyle:XLSX;
   const db=lotteBaseLoad();
