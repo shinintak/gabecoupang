@@ -130,6 +130,10 @@ td.col-qty{padding:6px 9px;}
 .lotte-unmatched{background:#FFF6E5;border:1px solid #F5D98B;border-radius:10px;padding:10px 14px;font-size:11.5px;color:#8A5A00;margin-bottom:14px;line-height:1.7;}
 .lotte-centers-row{display:flex;gap:20px;align-items:flex-start;}
 .lotte-center-col{flex:1;min-width:0;}
+.lotte-info{display:inline-flex;width:16px;height:16px;border-radius:50%;background:#EEF0F5;color:#6B7385;font-size:10px;font-weight:800;align-items:center;justify-content:center;cursor:help;flex-shrink:0;}
+.lotte-dash-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+.lotte-dash-tbl th{padding:8px 14px;background:#F7F8FC;color:#6B7385;font-size:11px;font-weight:700;text-align:left;white-space:nowrap;}
+.lotte-dash-tbl td{padding:10px 14px;border-top:1px solid #EEF0F5;white-space:nowrap;color:#1E2530;text-align:left;}
 @media(max-width:900px){.lotte-centers-row{flex-direction:column;}}
 .smt-inv-badge{font-size:11px;padding:1px 6px;border-radius:10px;background:#E0E5FF;color:#4318FF;font-weight:600;}
 .smt-date-row td{background:#EDF2F7!important;font-size:11px;font-weight:700;color:#4A5568;border-top:2px solid #C3CBFF!important;}
@@ -1323,34 +1327,8 @@ body:not([data-theme="classic"]) ::-webkit-scrollbar-thumb:hover{background:line
     </div>
 
     <div id="lotte-sec-centers" style="display:none;">
-      <div class="lotte-card">
-        <div class="t" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-          <span>📥 발주서 업로드 (오산·김해 동시 등록)</span>
-          <button onclick="downloadLotteErpAll()" style="height:30px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">📥 엑셀 전체 다운로드</button>
-        </div>
-        <div style="font-size:11.5px;color:#8A94A6;margin-bottom:10px;">롯데마트 시스템에서 다운로드한 입고예약 상세내역(.xls) 파일을 오산·김해 두 개를 한 번에 선택(Ctrl/Shift로 다중 선택)하면 자동으로 각 센터에 등록됩니다. 한 개만 선택해도 됩니다.</div>
-        <label class="lotte-drop" for="lotte-file-combined">클릭하여 발주서 파일 선택 (여러 개 선택 가능)</label>
-        <input type="file" id="lotte-file-combined" accept=".xls,.xlsx" multiple style="display:none;" onchange="handleLotteOrderUploadMulti(event)">
-      </div>
-      <div class="lotte-card" style="margin-top:20px;">
-        <div class="t" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-          <span>📋 작업지시서 생성</span>
-          <button onclick="downloadLotteWorkOrder()" style="height:30px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">📥 작업지시서 다운로드 (.xlsx)</button>
-        </div>
-        <div style="font-size:11.5px;color:#8A94A6;">오산·김해 센터별로 시트를 나눠서 작업지시서(SPEC·바코드·물류바코드·상품명·수량·박스번호·입수량·작업수량(박스)) 엑셀 1개로 내려받습니다. A4 인쇄에 맞춰 열·행 크기가 설정되어 있습니다.</div>
-      </div>
-      <div id="lotte-label-export" style="margin-top:20px;"></div>
-      <div class="lotte-centers-row" style="margin-top:20px;">
-        <div class="lotte-center-col">
-          <div style="font-size:15px;font-weight:800;color:#1E2530;margin:4px 0 10px;">🏭 오산센터</div>
-          <div id="lotte-result-osan"></div>
-        </div>
-        <div class="lotte-center-col">
-          <div style="font-size:15px;font-weight:800;color:#1E2530;margin:4px 0 10px;">🏭 김해센터</div>
-          <div id="lotte-result-gimhae"></div>
-        </div>
-      </div>
-      <div id="lotte-order-mgr-centers" style="margin-top:20px;"></div>
+      <input type="file" id="lotte-file-combined" accept=".xls,.xlsx" multiple style="display:none;" onchange="handleLotteOrderUploadMulti(event)">
+      <div id="lotte-order-mgr-centers"></div>
     </div>
 
     <div id="lotte-sec-delivery" style="display:none;">
@@ -9078,10 +9056,7 @@ function openLotteCentersPage(){
   document.getElementById('lotte-sec-centers').style.display='block';
   document.getElementById('lotte-sec-delivery').style.display='none';
   setLotteSidebarActive('centers');
-  _lotteRenderCenterPage('gimhae');
-  _lotteRenderCenterPage('osan');
   _lotteRenderOrderMgr('lotte-order-mgr-centers');
-  _lotteRenderLabelExport();
 }
 
 function openLotteDeliveryPage(){
@@ -9980,9 +9955,6 @@ function _lotteMgrCanEdit(){
 }
 function _lotteRefreshAll(){
   _LOTTE_MGR_IDS.forEach(id=>_lotteRenderOrderMgr(id));
-  _lotteRenderLabelExport();
-  _lotteRenderCenterPage('osan');
-  _lotteRenderCenterPage('gimhae');
   const del=document.getElementById('lotte-sec-delivery');
   if(del&&del.style.display!=='none') _lotteRenderDeliveryCharts();
 }
@@ -9990,7 +9962,6 @@ function _lotteRefreshAll(){
 function _lotteRefreshAfterHistSync(){
   if(document.querySelector('.lotte-mgr-inp.dirty')) return;
   _LOTTE_MGR_IDS.forEach(id=>_lotteRenderOrderMgr(id));
-  _lotteRenderLabelExport();
   const del=document.getElementById('lotte-sec-delivery');
   if(del&&del.style.display!=='none') _lotteRenderDeliveryCharts();
 }
@@ -10049,6 +10020,7 @@ function _lotteEnsureTruckList(){
 }
 
 function _lotteRenderOrderMgr(id){
+  if(id==='lotte-order-mgr-centers') return _lotteRenderCentersDash(id);
   const el=document.getElementById(id);
   if(!el) return;
   _lotteEnsureTruckList();
@@ -10085,15 +10057,29 @@ function _lotteRenderOrderMgr(id){
       html+=`<div style="font-size:12px;color:#A0AEC0;padding:14px;border:1px dashed #E0E5FF;border-radius:10px;text-align:center;">이 날짜에 등록된 발주서가 없습니다.</div></div>`;
       return;
     }
+    html+=_lotteMgrCenterHtml(id,d,c,rec,false);
+    html+=`</div>`;
+  });
+  html+=`</div></div>`;
+  el.innerHTML=html;
+}
+
+function _lotteMgrCenterHtml(id,d,c,rec,dash){
+  const btn='height:28px;padding:0 12px;font-size:11.5px;font-weight:700;border-radius:7px;cursor:pointer;white-space:nowrap;';
+  const bPri=btn+'border:none;background:#2D1660;color:#fff;';
+  const bSub=btn+'border:1.5px solid #E0E5FF;background:#fff;color:#4318FF;';
+  const bDel=btn+'border:1.5px solid #FCA5A5;background:#fff;color:#DC2626;';
+  const bGhost=btn+'border:none;background:none;color:#DC2626;padding:0 6px;';
     const groups=_lotteOrderGroups(rec);
     const amt=rec.result.erpRows.reduce((s,r)=>s+(r.price||0)*(r.qty||0),0);
     const cr=lotteCenterLoad(c);
     const loaded=cr&&(cr.histDate||(cr.rows&&cr.rows[0]&&cr.rows[0].orderDate))===d;
-    html+=`<div style="font-size:11.5px;color:#475467;margin-bottom:8px;">발주 <b>${groups.size}</b>건 · 박스 <b>${rec.result.totalBox.toLocaleString()}</b> · 무게 <b>${rec.result.totalWeightKg.toLocaleString(undefined,{maximumFractionDigits:1})}</b>kg · 금액 <b>${amt.toLocaleString()}</b>원${loaded?' · <span style="color:#4318FF;font-weight:700;">센터별 추출에 표시 중</span>':''}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+    let html='';
+    if(!dash) html+=`<div style="font-size:11.5px;color:#475467;margin-bottom:8px;">발주 <b>${groups.size}</b>건 · 박스 <b>${rec.result.totalBox.toLocaleString()}</b> · 무게 <b>${rec.result.totalWeightKg.toLocaleString(undefined,{maximumFractionDigits:1})}</b>kg · 금액 <b>${amt.toLocaleString()}</b>원${loaded?' · <span style="color:#4318FF;font-weight:700;">센터별 추출에 표시 중</span>':''}</div>`;
+    html+=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
         <button onclick="lotteMgrSave('${id}','${c}')" style="${bPri}">💾 수정 저장</button>
-        <button onclick="lotteMgrLoadToCenter('${d}','${c}')" style="${bSub}">⬆ 센터별 추출로 불러오기</button>
-        <button onclick="lotteMgrDeleteCenter('${d}','${c}')" style="${bDel}">🗑 ${_LOTTE_CENTER_LABEL[c]} 삭제</button>
+        <button onclick="lotteMgrLoadToCenter('${d}','${c}')" style="${bSub}" title="이 발주서를 ERP 엑셀·작업지시서 기준 데이터로 불러옵니다">⬆ ${dash?'추출로 불러오기':'센터별 추출로 불러오기'}</button>
+        ${dash?'<span style="flex:1"></span>':''}<button onclick="lotteMgrDeleteCenter('${d}','${c}')" style="${dash?bGhost:bDel}">🗑 ${_LOTTE_CENTER_LABEL[c]} 삭제</button>
       </div>
       ${_lotteFreightRow(id,d,c,rec)}`;
     groups.forEach((rows,no)=>{
@@ -10104,7 +10090,7 @@ function _lotteRenderOrderMgr(id){
         <summary style="cursor:pointer;padding:8px 10px;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <b style="color:#1B2559;">발주번호 ${_lotteEsc(no)}</b>
           <span style="color:#8A94A6;">${rows.length}품목 · ${box.toLocaleString()}박스${resv?' · 납기 '+resv:''}</span>${miss?`<span style="color:#DC2626;font-weight:700;">미납 ${miss.toLocaleString()}</span>`:''}
-          <button onclick="event.preventDefault();event.stopPropagation();lotteMgrDeleteOrder('${d}','${c}',${_lotteJsArg(no)})" style="${bDel}margin-left:auto;height:24px;">🗑 발주서 삭제</button>
+          <button onclick="event.preventDefault();event.stopPropagation();lotteMgrDeleteOrder('${d}','${c}',${_lotteJsArg(no)})" style="${dash?bGhost:bDel}margin-left:auto;height:24px;">🗑 발주서 삭제</button>
         </summary>
         <div style="overflow-x:auto;padding:0 8px 8px;">
           <table class="lotte-tbl"><thead><tr><th>상품코드</th><th>상품명</th><th>입수</th><th>주문량</th><th>입고(박스)</th><th title="납품하지 못한 주문량(박스). 납품데이터·ERP 집계에서 빠집니다." style="color:#FFB4B4;">미납</th><th>납품수량</th><th></th></tr></thead><tbody>`;
@@ -10119,9 +10105,202 @@ function _lotteRenderOrderMgr(id){
       });
       html+=`</tbody></table></div></details>`;
     });
-    html+=`</div>`;
+    return html;
+}
+
+// ══ 센터별 데이터추출 페이지: 요약 대시보드(날짜 1개 + 센터 요약표) + 접이식 섹션 ══
+let _lotteDashInit=false;
+const _LOTTE_CC={osan:{c:'#D93636',bg:'#FFF1F1'}, gimhae:{c:'#2563EB',bg:'#EEF4FF'}};
+function _lotteInfo(t){ return `<span class="lotte-info" title="${_lotteEsc(t)}">i</span>`; }
+function _lotteBadge(text,kind){
+  const st={ok:'background:#E3F7EC;color:#1E9E63;',warn:'background:#FFF4DB;color:#B7791F;',bad:'background:#FDE8E8;color:#DC2626;',mute:'background:#EEF0F5;color:#6B7385;'}[kind]||'';
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;white-space:nowrap;${st}">${text}</span>`;
+}
+function _lotteDtStr(iso){
+  if(!iso) return '-';
+  const t=new Date(iso); if(isNaN(t)) return '-';
+  return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0')+' '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');
+}
+function _lotteDashSection(key,title,info,badges,right,body){
+  return `<div class="lotte-card" style="padding:0;overflow:hidden;margin-bottom:10px;">
+    <div onclick="lotteToggleFold('${key}')" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 16px;">
+      ${_lotteFoldArrow(key)}<span style="font-size:13px;font-weight:800;color:#1E2530;">${title}</span>${info?_lotteInfo(info):''}${badges||''}
+      <span style="flex:1;"></span><span onclick="event.stopPropagation()" style="display:flex;gap:6px;align-items:center;">${right||''}</span>
+    </div>
+    <div ${_lotteFoldBody(key)}><div style="border-top:1px solid #EEF0F5;padding:12px 16px;">${body}</div></div>
+  </div>`;
+}
+function _lotteDashCenterBox(c,inner){
+  const cc=_LOTTE_CC[c];
+  return `<div class="lotte-center-col" style="border:1px solid #E3E8F4;border-left:4px solid ${cc.c};border-radius:10px;padding:10px 12px;background:#fff;">
+    <div style="font-size:13px;font-weight:800;color:${cc.c};margin-bottom:8px;">● ${_LOTTE_CENTER_LABEL[c]}</div>${inner}</div>`;
+}
+const _lotteDashEmpty=t=>`<div style="font-size:12px;color:#A0AEC0;padding:14px;border:1px dashed #E0E5FF;border-radius:10px;text-align:center;">${t}</div>`;
+
+// ERP 등록용 추출 결과 표 (센터별 추출 데이터 기준)
+function _lotteErpTableHtml(center,data){
+  const {result,uploadedAt,fileName}=data;
+  const od=data.histDate||(data.rows&&data.rows[0]&&data.rows[0].orderDate);
+  let html=`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+    <span style="font-size:11px;color:#8A94A6;">${od?'주문일자 <b style="color:#1E2530;">'+od+'</b> · ':''}${_lotteEsc(fileName)} · ${_lotteDtStr(uploadedAt)} 업로드</span>
+    <span style="flex:1;"></span>
+    <button onclick="downloadLotteErp('${center}')" style="height:26px;padding:0 12px;font-size:11.5px;font-weight:700;border-radius:7px;border:none;background:#2D1660;color:#fff;cursor:pointer;">📊 엑셀 다운로드</button>
+    <button onclick="deleteLotteCenterOrder('${center}')" title="ERP 추출 결과와 해당 날짜 납품데이터 이력에서 함께 삭제" style="height:26px;padding:0 6px;font-size:11.5px;font-weight:700;border:none;background:none;color:#DC2626;cursor:pointer;">🗑 삭제</button>
+  </div>`;
+  if(result.unmatched.length){
+    html+=`<div class="lotte-unmatched">⚠ 기본데이터에서 상품코드를 찾지 못한 항목 ${result.unmatched.length}건 (ERP·무게 계산에서 제외됨)<br>`+
+      result.unmatched.map(r=>`· ${_lotteEsc(r.productCode)} — ${_lotteEsc(r.productName)}`).join('<br>')+`</div>`;
+  }
+  html+=`<div style="overflow-x:auto;"><table class="lotte-tbl">
+    <thead><tr><th>SPEC</th><th>수량</th><th>단가</th><th>금액</th><th>매출구분</th></tr></thead>
+    <tbody>${result.erpRows.map(r=>`<tr><td>${r.SPEC}</td><td>${r.qty.toLocaleString()}</td><td>${r.price.toLocaleString()}</td><td>${(r.qty*r.price).toLocaleString()}</td><td>${r.saleType}</td></tr>`).join('')}</tbody>
+    <tfoot><tr style="font-weight:700;background:#f7f9fc;border-top:2px solid #4F2FA8;"><td>합계</td><td>${result.erpRows.reduce((s,r)=>s+r.qty,0).toLocaleString()}</td><td></td><td>${result.erpRows.reduce((s,r)=>s+r.qty*r.price,0).toLocaleString()}</td><td></td></tr></tfoot>
+  </table></div>`;
+  return html;
+}
+// 물류바코드 상품 목록 표
+function _lotteLblItemsHtml(items,db){
+  const warnN=items.filter(i=>i.warn).length;
+  const totalSheets=items.filter(i=>!i.warn).reduce((s,i)=>s+i.sheets,0);
+  let html='';
+  if(warnN) html+=`<div style="font-size:11.5px;color:#DC2626;margin-bottom:6px;">⚠ ${warnN}개 상품은 물류바코드가 없어 제외됩니다. 데이터업로드 페이지에서 설정해주세요.</div>`;
+  html+=`<div style="overflow-x:auto;"><table class="lotte-tbl"><thead><tr><th>SPEC</th><th>상품코드</th><th>상품명</th><th>입고(박스)</th><th>출력 장수</th><th>물류바코드</th></tr></thead><tbody>`;
+  items.forEach(i=>{
+    const setBtn=db[i.barcode]?` <button onclick="openLotteLabelModal(${_lotteJsArg(i.barcode)})" style="border:1px solid #E0E5FF;background:#fff;color:#4318FF;border-radius:6px;font-size:11px;cursor:pointer;">설정</button>`:'';
+    html+=`<tr${i.warn?' style="background:#FFF5F5;"':''}><td style="white-space:nowrap;">${_lotteEsc(i.spec)}</td><td style="white-space:nowrap;">${_lotteEsc(i.barcode)}</td><td style="text-align:left;">${_lotteEsc(i.displayName||i.name)}</td>
+      <td>${i.box.toLocaleString()}</td><td><b>${i.warn?'-':i.sheets.toLocaleString()}</b></td>
+      <td style="white-space:nowrap;">${i.warn?`<span style="color:#DC2626;">${i.warn}</span>${setBtn}`:`<span style="color:#4318FF;">${i.src}</span>`}</td></tr>`;
   });
-  html+=`</div></div>`;
+  html+=`<tr style="background:#F4F6F9;font-weight:700;"><td colspan="3">합계</td><td>${items.reduce((s,i)=>s+i.box,0).toLocaleString()}</td><td>${totalSheets.toLocaleString()}</td><td></td></tr></tbody></table></div>`;
+  return html;
+}
+
+function _lotteRenderCentersDash(id){
+  const el=document.getElementById(id);
+  if(!el) return;
+  _lotteEnsureTruckList();
+  if(!_lotteDashInit){ _lotteOpenFolds.add('dash-mgr'); _lotteDashInit=true; }
+  const hist=lotteHistoryLoad();
+  const dates=_lotteLblDates(hist);
+  const btn='height:30px;padding:0 12px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;box-sizing:border-box;';
+  const bPri=btn+'border:none;background:#2D1660;color:#fff;';
+  const bOut=btn+'border:1.5px solid #D5D0EE;background:#fff;color:#2D1660;';
+  const bArr=btn+'border:1.5px solid #E0E5FF;background:#fff;color:#4318FF;padding:0 10px;';
+  const bGhost=btn+'border:none;background:none;color:#DC2626;padding:0 6px;';
+  const tools=`<label for="lotte-file-combined" style="${bOut}" title="롯데마트 시스템에서 받은 입고예약 상세내역(.xls) 파일을 오산·김해 두 개 한 번에 선택(Ctrl/Shift 다중 선택)하면 자동으로 각 센터에 등록됩니다.">📥 발주서 업로드</label>
+    <button onclick="downloadLotteWorkOrder()" style="${bOut}" title="오산·김해 센터별 시트로 나눈 작업지시서 엑셀 1개 (ERP 추출 데이터 기준, A4 인쇄용)">📋 작업지시서</button>
+    <button id="lotte-lbl-btn-all" onclick="downloadLotteOrderLabelsAll()" style="${bOut}" title="선택한 주문일자의 오산·김해 물류바코드 PDF를 zip으로"${dates.length?'':' disabled'}>📦 바코드 .zip</button>
+    <button onclick="downloadLotteErpAll()" style="${bPri}" title="오산·김해 ERP 등록용 엑셀 모두 다운로드">📥 ERP 엑셀 전체</button>`;
+  if(!dates.length){
+    el.innerHTML=`<div class="lotte-card"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;"><span style="font-size:13px;font-weight:800;color:#1E2530;">🗓 주문일자</span><span style="font-size:12px;color:#8A94A6;">저장된 발주서가 없습니다.</span><span style="flex:1;"></span>${tools}</div>
+      <label class="lotte-drop" for="lotte-file-combined">클릭하여 발주서 파일 선택 (오산·김해 여러 개 동시 선택 가능)</label></div>`;
+    return;
+  }
+  if(!_lotteMgrDate||!dates.includes(_lotteMgrDate)) _lotteMgrDate=dates[0];
+  const d=_lotteMgrDate, day=hist[d];
+  _lotteLblDate=d; // 물류바코드 PDF도 같은 날짜 기준
+  const db=lotteBaseLoad();
+  const opts=dates.map(x=>{
+    const parts=['osan','gimhae'].filter(c=>hist[x][c]).map(c=>`${c==='osan'?'오산':'김해'} ${hist[x][c].result?hist[x][c].result.totalBox:0}박스`);
+    return `<option value="${x}"${x===d?' selected':''}>${x}  (${parts.join(' · ')})</option>`;
+  }).join('');
+
+  // 센터별 요약값
+  const C=['osan','gimhae'], info={};
+  C.forEach(c=>{
+    const rec=day[c];
+    const cr=lotteCenterLoad(c);
+    const crDate=cr&&(cr.histDate||(cr.rows&&cr.rows[0]&&cr.rows[0].orderDate));
+    if(!rec){ info[c]={rec:null,cr,crDate}; return; }
+    const items=_lotteLblItems(rec);
+    info[c]={rec, cr, crDate, loaded:!!cr&&crDate===d,
+      orders:_lotteOrderGroups(rec).size,
+      box:rec.result.totalBox, kg:rec.result.totalWeightKg,
+      amt:rec.result.erpRows.reduce((s,r)=>s+(r.price||0)*(r.qty||0),0),
+      erp:rec.result.erpRows.length, unmatched:rec.result.unmatched.length,
+      items, sheets:items.filter(i=>!i.warn).reduce((s,i)=>s+i.sheets,0), lblWarn:items.filter(i=>i.warn).length,
+      miss:rec.rows.reduce((s,r)=>s+(r.missQty||0),0),
+      freight:rec.freight||{}};
+  });
+  const has=C.filter(c=>info[c].rec);
+  const sum=k=>has.reduce((s,c)=>s+(info[c][k]||0),0);
+  const kg=v=>v.toLocaleString(undefined,{maximumFractionDigits:1});
+
+  // ── 요약표 ──
+  let rows='';
+  C.forEach(c=>{
+    const x=info[c], cc=_LOTTE_CC[c];
+    const name=`<td style="border-left:4px solid ${cc.c};"><b style="color:${cc.c};font-size:13px;">● ${_LOTTE_CENTER_LABEL[c]}</b>${x.rec&&x.cr&&!x.loaded?`<div style="font-size:10.5px;color:#B7791F;font-weight:600;margin-top:2px;" title="ERP 엑셀·작업지시서는 불러온 발주서 기준으로 만들어집니다">ERP·작업지시서: ${x.crDate||'다른'} 데이터</div>`:''}</td>`;
+    if(!x.rec){ rows+=`<tr>${name}<td colspan="8" style="color:#A0AEC0;">이 날짜에 등록된 발주서가 없습니다.</td></tr>`; return; }
+    const f=x.freight;
+    const fr=(f.cost||f.truck)?`<span style="font-size:12px;">${_lotteEsc(f.truck||'-')} · <b>${(f.cost||0).toLocaleString()}</b>원</span>`:_lotteBadge('미입력','warn');
+    const erpBtn=x.loaded
+      ?`<button onclick="downloadLotteErp('${c}')" style="${bPri}">📊 ERP</button>`
+      :`<button onclick="lotteMgrLoadToCenter('${d}','${c}')" style="${bOut}" title="이 날짜 발주서를 ERP 엑셀·작업지시서 기준 데이터로 불러옵니다">⬆ 불러오기</button>`;
+    rows+=`<tr>${name}
+      <td>${x.orders}건</td>
+      <td><b style="font-size:14px;">${x.box.toLocaleString()}</b>${x.miss?` <span style="color:#DC2626;font-size:11px;font-weight:700;">미납 ${x.miss.toLocaleString()}</span>`:''}</td>
+      <td>${kg(x.kg)}</td><td>${x.amt.toLocaleString()}</td>
+      <td>${x.erp}건${x.unmatched?' '+_lotteBadge('⚠ 미매칭 '+x.unmatched,'bad'):''}</td>
+      <td>${x.sheets.toLocaleString()}장${x.lblWarn?' '+_lotteBadge('⚠ 미설정 '+x.lblWarn,'bad'):''}</td>
+      <td>${fr}</td>
+      <td style="text-align:right;padding:8px 14px;"><span style="display:inline-flex;gap:6px;"><button id="lotte-lbl-btn-${c}" onclick="downloadLotteOrderLabels('${c}')" style="${bPri}" title="박스당 ${LOTTE_LABELS_PER_BOX}장 · A4 12칸 라벨">🏷 PDF</button>${erpBtn}</span></td></tr>`;
+  });
+  const tt='border-top:2px solid #E3E8F4;background:#F7F8FC;font-weight:800;';
+  const frSum=has.reduce((s,c)=>s+((info[c].freight.cost)||0),0);
+  rows+=`<tr><td style="${tt}">합계</td><td style="${tt}">${sum('orders')}건</td><td style="${tt}">${sum('box').toLocaleString()}</td><td style="${tt}">${kg(sum('kg'))}</td><td style="${tt}">${sum('amt').toLocaleString()}</td><td style="${tt}">${sum('erp')}건</td><td style="${tt}">${sum('sheets').toLocaleString()}장</td><td style="${tt}">${frSum?frSum.toLocaleString()+'원':''}</td><td style="${tt}"></td></tr>`;
+
+  let html=`<div class="lotte-card" style="padding:0;overflow:hidden;margin-bottom:10px;">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid #EEF0F5;">
+      <span style="font-size:13px;font-weight:800;color:#1E2530;margin-right:4px;">🗓 주문일자</span>
+      <button onclick="lotteMgrStepDate(-1)" style="${bArr}" title="이전 날짜">◀</button>
+      <select onchange="lotteMgrSelDate(this.value)" style="height:30px;padding:0 8px;font-size:12.5px;font-weight:700;border:1.5px solid #E0E5FF;border-radius:8px;color:#1B2559;">${opts}</select>
+      <button onclick="lotteMgrStepDate(1)" style="${bArr}" title="다음 날짜">▶</button>
+      <span style="flex:1;"></span>${tools}
+    </div>
+    <div style="overflow-x:auto;"><table class="lotte-dash-tbl">
+      <thead><tr><th>센터</th><th>발주</th><th>박스</th><th>무게(kg)</th><th>금액(원)</th><th>ERP</th><th>바코드</th><th>화물비</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+  </div>`;
+
+  // ── ① 발주서 · 화물비 ──
+  const frMissing=has.filter(c=>!(info[c].freight.cost||info[c].freight.truck)).length;
+  const missTotal=sum('miss');
+  html+=_lotteDashSection('dash-mgr','🚚 발주서 · 화물비',
+    '주문일자별로 저장된 발주서를 확인·수정·삭제합니다. 미출고·취소된 발주서는 삭제하고, 일부 미납되면 발주번호를 펼쳐 미납 칸에 미납 주문량을 입력(납품데이터·ERP 집계에서 제외)하거나 주문량/입고(박스)를 고친 뒤 [수정 저장]을 누르세요.',
+    (frMissing?_lotteBadge(`화물비 ${frMissing}곳 미입력`,'warn'):_lotteBadge('화물비 입력 완료','ok'))+(missTotal?' '+_lotteBadge(`미납 ${missTotal.toLocaleString()}`,'bad'):''),
+    `<button onclick="lotteMgrDeleteDate('${d}')" style="${bGhost}">🗑 이 날짜 전체 삭제</button>`,
+    `<div class="lotte-centers-row">${C.map(c=>_lotteDashCenterBox(c, day[c]?_lotteMgrCenterHtml(id,d,c,day[c],true):_lotteDashEmpty('이 날짜에 등록된 발주서가 없습니다.'))).join('')}</div>`);
+
+  // ── ② ERP 등록용 추출 결과 (센터별 추출 데이터) ──
+  const erpBadges=C.map(c=>{
+    const cr=info[c].cr, short=c==='osan'?'오산':'김해';
+    if(!cr) return _lotteBadge(`${short} 없음`,'mute');
+    const other=info[c].crDate!==d;
+    return _lotteBadge(`${short} ${cr.result.erpRows.length}건${other?' ('+(info[c].crDate||'다른 날짜')+')':''}`, other?'warn':(cr.result.unmatched.length?'bad':'ok'));
+  }).join(' ');
+  html+=_lotteDashSection('dash-erp','📊 ERP 등록용 추출 결과',
+    'ERP 엑셀·작업지시서는 마지막으로 업로드했거나 [불러오기]한 발주서 기준입니다. 다른 날짜 데이터로 만들려면 요약표에서 [불러오기]를 누르세요.',
+    erpBadges,'',
+    `<div class="lotte-centers-row">${C.map(c=>_lotteDashCenterBox(c, info[c].cr?_lotteErpTableHtml(c,info[c].cr):_lotteDashEmpty('추출된 데이터가 없습니다.'))).join('')}</div>`);
+
+  // ── ③ 물류바코드 상품 목록 ──
+  const itemN=has.reduce((s,c)=>s+info[c].items.length,0), lblWarnN=sum('lblWarn');
+  html+=_lotteDashSection('dash-lbl','🏷 물류바코드 상품 목록',
+    `선택한 주문일자의 발주서 기준으로 상품별 입고(박스) × ${LOTTE_LABELS_PER_BOX}장씩 물류바코드 PDF를 센터별 1개 파일로 만듭니다. A4 라벨지(12칸)에 이어서 배치하고, 상품이 바뀌는 자리에는 상품명 구분 칸 1칸이 들어갑니다. 라벨 모양·업로드 PDF는 데이터업로드 페이지 설정을 사용합니다.`,
+    _lotteBadge(`${itemN}개 상품 · ${sum('sheets').toLocaleString()}장`,'mute')+(lblWarnN?' '+_lotteBadge(`⚠ 미설정 ${lblWarnN}개`,'bad'):''),'',
+    `<div class="lotte-centers-row">${C.map(c=>_lotteDashCenterBox(c, info[c].rec?_lotteLblItemsHtml(info[c].items,db):_lotteDashEmpty('이 날짜에 등록된 발주서가 없습니다.'))).join('')}</div>`);
+
+  // ── ④ 업로드 파일 정보 ──
+  html+=_lotteDashSection('dash-up','📂 업로드 파일 정보',
+    '이 주문일자로 저장된 발주서 원본 파일과 업로드 시각입니다.',
+    _lotteBadge(`${has.length}개 센터 등록`, has.length===2?'ok':'warn'),
+    `<label for="lotte-file-combined" style="${bOut}height:26px;font-size:11.5px;">📥 발주서 업로드</label>`,
+    `<div class="lotte-centers-row">${C.map(c=>{
+      const r=info[c].rec;
+      return _lotteDashCenterBox(c, r?`<div style="font-size:12px;color:#1E2530;line-height:1.8;">📄 <b>${_lotteEsc(r.fileName||'-')}</b><br><span style="color:#8A94A6;">${_lotteDtStr(r.uploadedAt)} 업로드</span></div>`:_lotteDashEmpty('업로드된 파일이 없습니다.'));
+    }).join('')}</div>`);
+
   el.innerHTML=html;
 }
 
@@ -10254,70 +10433,6 @@ function _lotteLblItems(rec){
     else warn='물류바코드 미설정';
     return Object.assign(it,{spec:p?p.spec:'', displayName:p?p.displayName:'', sheets:it.box*LOTTE_LABELS_PER_BOX, src, warn});
   });
-}
-
-function _lotteRenderLabelExport(){
-  const el=document.getElementById('lotte-label-export');
-  if(!el) return;
-  const hist=lotteHistoryLoad();
-  const dates=_lotteLblDates(hist);
-  const head=`<div class="t" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;"><span>🏷 물류바코드 파일 다운로드</span>`;
-  if(!dates.length){
-    el.innerHTML=`<div class="lotte-card">${head}</div><div style="font-size:11.5px;color:#8A94A6;">저장된 발주서가 없습니다. 발주서를 업로드하면 주문일자별로 물류바코드 PDF를 받을 수 있습니다.</div></div>`;
-    return;
-  }
-  if(!_lotteLblDate||!dates.includes(_lotteLblDate)) _lotteLblDate=dates[0];
-  const d=_lotteLblDate, day=hist[d];
-  const db=lotteBaseLoad();
-  const btn='height:28px;padding:0 12px;font-size:11.5px;font-weight:700;border-radius:7px;cursor:pointer;white-space:nowrap;';
-  const bPri=btn+'border:none;background:#2D1660;color:#fff;';
-  const bSub=btn+'border:1.5px solid #E0E5FF;background:#fff;color:#4318FF;';
-  const opts=dates.map(x=>{
-    const parts=['osan','gimhae'].filter(c=>hist[x][c]).map(c=>`${c==='osan'?'오산':'김해'} ${hist[x][c].result?hist[x][c].result.totalBox:0}박스`);
-    return `<option value="${x}"${x===d?' selected':''}>${x}  (${parts.join(' · ')})</option>`;
-  }).join('');
-  let html=`<div class="lotte-card">${head}
-    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-      <button onclick="lotteLblStepDate(-1)" style="${bSub}" title="이전 날짜">◀</button>
-      <select onchange="lotteLblSelDate(this.value)" style="height:30px;padding:0 8px;font-size:12px;font-weight:700;border:1.5px solid #E0E5FF;border-radius:8px;color:#1B2559;">${opts}</select>
-      <button onclick="lotteLblStepDate(1)" style="${bSub}" title="다음 날짜">▶</button>
-      <button id="lotte-lbl-btn-all" onclick="downloadLotteOrderLabelsAll()" style="${bPri}">📦 전체 다운로드 (.zip)</button>
-    </div></div>
-    <div style="font-size:11.5px;color:#8A94A6;margin-bottom:10px;">선택한 주문일자의 발주서 기준으로, 상품별 <b>입고(박스) × ${LOTTE_LABELS_PER_BOX}장</b>씩 물류바코드 PDF를 센터별 1개 파일로 만듭니다. A4 라벨지(12칸)에 빈칸 없이 이어서 배치하고, 상품이 바뀌는 자리에는 다음 상품명을 적은 구분 칸 1칸이 들어갑니다. 라벨 모양·업로드 PDF는 데이터업로드 페이지의 물류바코드 설정을 그대로 사용합니다.</div>
-    <div class="lotte-centers-row">`;
-  ['osan','gimhae'].forEach(c=>{
-    const rec=day[c];
-    html+=`<div class="lotte-center-col"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 8px;"><span style="font-size:13.5px;font-weight:800;color:#1E2530;">🏭 ${_LOTTE_CENTER_LABEL[c]}</span>`;
-    if(!rec){
-      html+=`</div><div style="font-size:12px;color:#A0AEC0;padding:14px;border:1px dashed #E0E5FF;border-radius:10px;text-align:center;">이 날짜에 등록된 발주서가 없습니다.</div></div>`;
-      return;
-    }
-    const items=_lotteLblItems(rec);
-    const totalSheets=items.filter(i=>!i.warn).reduce((s,i)=>s+i.sheets,0);
-    const fk='lbl-'+c;
-    html+=`<button id="lotte-lbl-btn-${c}" onclick="downloadLotteOrderLabels('${c}')" style="${bPri}">⬇ ${_LOTTE_CENTER_LABEL[c]} PDF (${totalSheets.toLocaleString()}장)</button></div>`;
-    const warnN=items.filter(i=>i.warn).length;
-    html+=`<div onclick="lotteToggleFold('${fk}')" style="cursor:pointer;user-select:none;padding:8px 10px;border:1px solid #E0E5FF;border-radius:10px;background:#fff;font-size:12px;font-weight:700;color:#1B2559;margin-bottom:6px;">${_lotteFoldArrow(fk)} 상품 목록 <span style="color:#8A94A6;font-weight:600;">${items.length}개 상품 · ${items.reduce((s,i)=>s+i.box,0).toLocaleString()}박스 · ${totalSheets.toLocaleString()}장</span>${warnN?` <span style="color:#DC2626;">· ⚠ 미설정 ${warnN}개</span>`:''}</div>`;
-    html+=`<div ${_lotteFoldBody(fk)}>`;
-    if(warnN) html+=`<div style="font-size:11.5px;color:#DC2626;margin-bottom:6px;">⚠ ${warnN}개 상품은 물류바코드가 없어 제외됩니다. 데이터업로드 페이지에서 설정해주세요.</div>`;
-    html+=`<div style="overflow-x:auto;"><table class="lotte-tbl"><thead><tr><th>SPEC</th><th>상품코드</th><th>상품명</th><th>입고(박스)</th><th>출력 장수</th><th>물류바코드</th></tr></thead><tbody>`;
-    items.forEach(i=>{
-      const setBtn=db[i.barcode]?` <button onclick="openLotteLabelModal(${_lotteJsArg(i.barcode)})" style="border:1px solid #E0E5FF;background:#fff;color:#4318FF;border-radius:6px;font-size:11px;cursor:pointer;">설정</button>`:'';
-      html+=`<tr${i.warn?' style="background:#FFF5F5;"':''}><td style="white-space:nowrap;">${_lotteEsc(i.spec)}</td><td style="white-space:nowrap;">${_lotteEsc(i.barcode)}</td><td style="text-align:left;">${_lotteEsc(i.displayName||i.name)}</td>
-        <td>${i.box.toLocaleString()}</td><td><b>${i.warn?'-':i.sheets.toLocaleString()}</b></td>
-        <td style="white-space:nowrap;">${i.warn?`<span style="color:#DC2626;">${i.warn}</span>${setBtn}`:`<span style="color:#4318FF;">${i.src}</span>`}</td></tr>`;
-    });
-    html+=`<tr style="background:#F4F6F9;font-weight:700;"><td colspan="3">합계</td><td>${items.reduce((s,i)=>s+i.box,0).toLocaleString()}</td><td>${totalSheets.toLocaleString()}</td><td></td></tr>`;
-    html+=`</tbody></table></div></div></div>`;
-  });
-  html+=`</div></div>`;
-  el.innerHTML=html;
-}
-function lotteLblSelDate(d){ _lotteLblDate=d; _lotteRenderLabelExport(); }
-function lotteLblStepDate(step){
-  const dates=_lotteLblDates(lotteHistoryLoad()).reverse();
-  const n=dates[dates.indexOf(_lotteLblDate)+step];
-  if(n) lotteLblSelDate(n);
 }
 
 // 상품이 바뀌는 자리에 넣는 구분 칸: 다음 상품의 상품명(한글)·SPEC·장수 표기
@@ -10572,44 +10687,6 @@ function lotteToggleFold(key){
   if(open) _lotteOpenFolds.add(key); else _lotteOpenFolds.delete(key);
   document.querySelectorAll(`[data-fold="${key}"]`).forEach(el=>{ el.style.display=open?'':'none'; });
   document.querySelectorAll(`[data-fold-arrow="${key}"]`).forEach(el=>{ el.style.transform=open?'rotate(90deg)':''; });
-}
-
-function _lotteRenderCenterPage(center){
-  const el=document.getElementById('lotte-result-'+center);
-  if(!el) return;
-  const data=lotteCenterLoad(center);
-  if(!data){ el.innerHTML='<div class="lotte-card" style="color:#8A94A6;font-size:12px;">업로드된 발주서가 없습니다. 위에서 발주서를 업로드하세요.</div>'; return; }
-  const {result, uploadedAt, fileName}=data;
-  const dt=new Date(uploadedAt);
-  const dtStr=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
-  let html=`<div class="lotte-stats">
-    <div class="lotte-stat"><div class="sl">총 박스수</div><div class="sv">${result.totalBox.toLocaleString()} 박스</div></div>
-    <div class="lotte-stat"><div class="sl">총 무게</div><div class="sv">${result.totalWeightKg.toLocaleString(undefined,{maximumFractionDigits:1})} kg</div></div>
-    <div class="lotte-stat"><div class="sl">ERP 등록 대상</div><div class="sv">${result.erpRows.length} 건</div></div>
-  </div>`;
-  if(result.unmatched.length){
-    html+=`<div class="lotte-unmatched">⚠ 기본데이터에서 상품코드를 찾지 못한 항목 ${result.unmatched.length}건 (ERP·무게 계산에서 제외됨)<br>`+
-      result.unmatched.map(r=>`· ${r.productCode} — ${r.productName}`).join('<br>')+`</div>`;
-  }
-  const fk='erp-'+center;
-  html+=`<div class="lotte-card">
-    <div class="t" onclick="lotteToggleFold('${fk}')" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;margin-bottom:0;">
-      <span>${_lotteFoldArrow(fk)} ERP 등록용 추출 결과 <span style="font-size:11px;font-weight:600;color:#8A94A6;">(${result.erpRows.length}건)</span></span>
-      <div style="display:flex;gap:8px;" onclick="event.stopPropagation()">
-        <button onclick="downloadLotteErp('${center}')" style="height:30px;padding:0 16px;font-size:12px;font-weight:700;border-radius:8px;border:none;background:#2D1660;color:#fff;cursor:pointer;">📥 엑셀 다운로드</button>
-        <button onclick="deleteLotteCenterOrder('${center}')" style="height:30px;padding:0 14px;font-size:12px;font-weight:700;border-radius:8px;border:1.5px solid #FCA5A5;background:#fff;color:#DC2626;cursor:pointer;">🗑 삭제</button>
-      </div>
-    </div>
-    <div ${_lotteFoldBody(fk)}><div style="font-size:11px;color:#8A94A6;margin:10px 0 8px;">${(data.histDate||(data.rows&&data.rows[0]&&data.rows[0].orderDate))?'주문일자 '+(data.histDate||data.rows[0].orderDate)+' · ':''}${fileName} · ${dtStr} 업로드</div>
-    <div style="overflow-x:auto;">
-      <table class="lotte-tbl">
-        <thead><tr><th>SPEC</th><th>수량</th><th>단가</th><th>금액</th><th>매출구분</th></tr></thead>
-        <tbody>${result.erpRows.map(r=>`<tr><td>${r.SPEC}</td><td>${r.qty.toLocaleString()}</td><td>${r.price.toLocaleString()}</td><td>${(r.qty*r.price).toLocaleString()}</td><td>${r.saleType}</td></tr>`).join('')}</tbody>
-        <tfoot><tr style="font-weight:700;background:#f7f9fc;border-top:2px solid #4F2FA8;"><td>합계</td><td>${result.erpRows.reduce((s,r)=>s+r.qty,0).toLocaleString()}</td><td></td><td>${result.erpRows.reduce((s,r)=>s+r.qty*r.price,0).toLocaleString()}</td><td></td></tr></tfoot>
-      </table>
-    </div></div>
-  </div>`;
-  el.innerHTML=html;
 }
 
 // 날짜별 hist 레코드 → {amt,box,weight} (없으면 null)
